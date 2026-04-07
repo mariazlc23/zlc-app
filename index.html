@@ -1,0 +1,1872 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ZLC — Project Manager</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+  :root {
+    --bg: #ffffff; --bg2: #f7f7f5; --bg3: #f0eeea;
+    --text: #1a1a18; --text2: #6b6a65; --text3: #9e9c97;
+    --border: rgba(0,0,0,0.1); --border2: rgba(0,0,0,0.18);
+    --blue: #185FA5; --blue-light: #E6F1FB; --blue-mid: #B5D4F4;
+    --green: #3B6D11; --green-light: #EAF3DE; --green-mid: #97C459;
+    --amber: #854F0B; --amber-light: #FAEEDA;
+    --red: #791F1F; --red-light: #FCEBEB; --red-mid: #F09595;
+    --radius: 8px; --radius-lg: 12px;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body { background: var(--bg2); color: var(--text); font-size: 14px; line-height: 1.5; min-height: 100vh; }
+
+  /* Layout */
+  .app { display: flex; flex-direction: column; min-height: 100vh; }
+  .sidebar { width: 220px; background: var(--bg); border-right: 0.5px solid var(--border); padding: 0; flex-shrink: 0; position: fixed; top: 0; left: 0; height: 100vh; display: flex; flex-direction: column; z-index: 100; }
+  .main { margin-left: 220px; padding: 28px 32px; min-height: 100vh; }
+  .logo { padding: 20px 20px 0; font-size: 16px; font-weight: 600; color: var(--text); letter-spacing: -0.3px; }
+  .logo span { color: var(--blue); }
+  .nav-section { padding: 20px 12px 8px; }
+  .nav-label { font-size: 10px; font-weight: 600; color: var(--text3); text-transform: uppercase; letter-spacing: .08em; padding: 0 8px; margin-bottom: 4px; }
+  .nav-item { display: flex; align-items: center; gap: 8px; padding: 7px 8px; border-radius: var(--radius); cursor: pointer; font-size: 13px; color: var(--text2); border: none; background: none; width: 100%; text-align: left; }
+  .nav-item:hover { background: var(--bg2); color: var(--text); }
+  .nav-item.active { background: var(--blue-light); color: var(--blue); font-weight: 500; }
+  .nav-icon { width: 16px; height: 16px; flex-shrink: 0; opacity: 0.7; }
+  .nav-item.active .nav-icon { opacity: 1; }
+  .view { display: none; } .view.active { display: block; }
+
+  /* Page header */
+  .page-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 24px; flex-wrap: wrap; gap: 12px; }
+  .page-title { font-size: 20px; font-weight: 600; color: var(--text); letter-spacing: -0.3px; }
+  .page-subtitle { font-size: 13px; color: var(--text2); margin-top: 2px; }
+
+  /* Metrics */
+  .metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 12px; margin-bottom: 24px; }
+  .metric { background: var(--bg); border: 0.5px solid var(--border); border-radius: var(--radius-lg); padding: 16px 18px; }
+  .metric-label { font-size: 11px; color: var(--text2); font-weight: 500; text-transform: uppercase; letter-spacing: .05em; margin-bottom: 6px; }
+  .metric-value { font-size: 24px; font-weight: 600; color: var(--text); letter-spacing: -0.5px; }
+  .metric-sub { font-size: 11px; color: var(--text3); margin-top: 3px; }
+  .metric-up { font-size: 11px; color: var(--green); margin-top: 3px; }
+
+  /* Cards */
+  .card { background: var(--bg); border: 0.5px solid var(--border); border-radius: var(--radius-lg); padding: 18px 20px; margin-bottom: 16px; }
+  .card-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 14px; flex-wrap: wrap; gap: 8px; }
+  .card-title { font-size: 11px; font-weight: 600; color: var(--text2); text-transform: uppercase; letter-spacing: .07em; }
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px; }
+  .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-bottom: 16px; }
+  @media (max-width: 700px) { .main { margin-left: 0; padding: 16px; } .sidebar { display: none; } .grid-2, .grid-3 { grid-template-columns: 1fr; } }
+
+  /* Tables */
+  .tbl-wrap { overflow-x: auto; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th { text-align: left; padding: 8px 10px; font-size: 11px; font-weight: 600; color: var(--text2); border-bottom: 0.5px solid var(--border); text-transform: uppercase; letter-spacing: .05em; white-space: nowrap; background: var(--bg2); }
+  td { padding: 9px 10px; border-bottom: 0.5px solid var(--border); color: var(--text); vertical-align: middle; }
+  tr:last-child td { border-bottom: none; }
+  tr.clickable:hover td { background: var(--bg2); cursor: pointer; }
+  tr.selected td { background: var(--blue-light); }
+
+  /* Badges */
+  .badge { display: inline-block; font-size: 11px; font-weight: 500; padding: 2px 8px; border-radius: 99px; white-space: nowrap; }
+  .b-green { background: var(--green-light); color: var(--green); }
+  .b-amber { background: var(--amber-light); color: var(--amber); }
+  .b-red { background: var(--red-light); color: var(--red); }
+  .b-blue { background: var(--blue-light); color: var(--blue); }
+  .b-gray { background: var(--bg3); color: var(--text2); }
+  .b-teal { background: #E1F5EE; color: #085041; }
+
+  /* Buttons */
+  .btn { font-size: 12px; font-weight: 500; padding: 6px 14px; border-radius: var(--radius); border: 0.5px solid var(--border2); background: var(--bg); color: var(--text); cursor: pointer; white-space: nowrap; transition: all .15s; }
+  .btn:hover { background: var(--bg2); }
+  .btn-primary { background: var(--blue); color: #fff; border-color: var(--blue); }
+  .btn-primary:hover { background: #0C447C; border-color: #0C447C; }
+  .btn-sm { font-size: 11px; padding: 4px 10px; }
+  .btn-approve { background: var(--green-light); color: var(--green); border-color: var(--green-mid); }
+  .btn-approve:hover { background: #C0DD97; }
+  .btn-deny { background: var(--red-light); color: var(--red); border-color: var(--red-mid); }
+  .btn-deny:hover { background: #F7C1C1; }
+  .btn-ghost { border-color: var(--border); background: transparent; color: var(--text2); }
+  .btn-ghost:hover { background: var(--bg2); color: var(--text); }
+
+  /* Sub-tabs */
+  .sub-tabs { display: flex; gap: 4px; border-bottom: 0.5px solid var(--border); margin-bottom: 14px; flex-wrap: wrap; align-items: center; justify-content: space-between; }
+  .sub-tabs-left { display: flex; gap: 2px; }
+  .stab { font-size: 12px; padding: 6px 12px; cursor: pointer; border: none; border-bottom: 2px solid transparent; color: var(--text2); background: none; white-space: nowrap; }
+  .stab:hover { color: var(--text); }
+  .stab.active { color: var(--blue); border-bottom-color: var(--blue); font-weight: 500; }
+
+  /* Dash tabs */
+  .dash-tabs { display: flex; gap: 4px; margin-bottom: 20px; background: var(--bg3); border-radius: var(--radius); padding: 3px; width: fit-content; }
+  .dtab { font-size: 12px; padding: 5px 14px; border-radius: 6px; cursor: pointer; border: none; background: none; color: var(--text2); font-weight: 500; }
+  .dtab.active { background: var(--bg); color: var(--text); box-shadow: 0 1px 3px rgba(0,0,0,.1); }
+
+  /* Project detail */
+  .proj-detail { background: var(--bg); border: 0.5px solid var(--border); border-radius: var(--radius-lg); padding: 20px; margin-top: 14px; }
+  .pdh { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; margin-bottom: 16px; padding-bottom: 16px; border-bottom: 0.5px solid var(--border); flex-wrap: wrap; }
+  .info-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin-bottom: 16px; }
+  .info-item .lbl { font-size: 11px; color: var(--text2); margin-bottom: 2px; font-weight: 500; text-transform: uppercase; letter-spacing: .05em; }
+  .info-item .val { font-size: 13px; color: var(--text); font-weight: 500; }
+  .info-item .sub { font-size: 11px; color: var(--text3); }
+  .history-item { display: flex; gap: 10px; padding: 8px 0; border-bottom: 0.5px solid var(--border); font-size: 12px; align-items: flex-start; }
+  .history-item:last-child { border-bottom: none; }
+  .h-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; margin-top: 3px; }
+  .h-text { flex: 1; color: var(--text); }
+  .h-date { color: var(--text3); flex-shrink: 0; }
+  .code-bar-row { padding: 10px 0; border-bottom: 0.5px solid var(--border); }
+  .code-bar-row:last-child { border-bottom: none; }
+
+  /* Bar charts */
+  .bar-row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; font-size: 12px; }
+  .bar-lbl { min-width: 24px; color: var(--text2); font-size: 11px; flex-shrink: 0; }
+  .bar-track { flex: 1; height: 7px; background: var(--bg3); border-radius: 4px; overflow: hidden; }
+  .bar-fill { height: 7px; border-radius: 4px; }
+  .bar-val { min-width: 52px; text-align: right; font-weight: 500; font-size: 11px; }
+  .yr-col { background: var(--bg2); border-radius: var(--radius-lg); padding: 14px 16px; }
+  .yr-title { font-size: 13px; font-weight: 600; color: var(--text); margin-bottom: 12px; padding-bottom: 8px; border-bottom: 0.5px solid var(--border); }
+
+  /* Roster */
+  .roster-controls { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px; margin-bottom: 14px; }
+  .month-nav { display: flex; align-items: center; gap: 8px; }
+  .month-nav button { width: 28px; height: 28px; border-radius: var(--radius); border: 0.5px solid var(--border2); background: var(--bg); color: var(--text); font-size: 16px; cursor: pointer; display: flex; align-items: center; justify-content: center; }
+  .month-nav button:hover { background: var(--bg2); }
+  .month-label { font-size: 14px; font-weight: 600; min-width: 130px; text-align: center; color: var(--text); }
+  .view-toggle { display: flex; background: var(--bg3); border-radius: var(--radius); padding: 2px; }
+  .vt-btn { font-size: 12px; padding: 4px 12px; border-radius: 6px; border: none; background: none; color: var(--text2); cursor: pointer; font-weight: 500; }
+  .vt-btn.active { background: var(--bg); color: var(--text); box-shadow: 0 1px 2px rgba(0,0,0,.1); }
+  .filter-tabs { display: flex; gap: 4px; margin-bottom: 12px; flex-wrap: wrap; }
+  .ft { font-size: 12px; padding: 4px 12px; border-radius: var(--radius); border: 0.5px solid var(--border); background: var(--bg); color: var(--text2); cursor: pointer; }
+  .ft:hover { background: var(--bg2); color: var(--text); }
+  .ft.active { background: var(--blue); color: #fff; border-color: var(--blue); }
+  .roster-wrap { overflow-x: auto; border: 0.5px solid var(--border); border-radius: var(--radius-lg); background: var(--bg); }
+  .rt { border-collapse: collapse; font-size: 12px; min-width: 100%; }
+  .rt th { background: var(--bg2); padding: 6px 5px; border: 0.5px solid var(--border); color: var(--text2); font-weight: 600; font-size: 10px; white-space: nowrap; text-align: center; min-width: 30px; text-transform: uppercase; letter-spacing: .04em; }
+  .rt th.ic { text-align: left; padding: 6px 10px; min-width: auto; }
+  .rt td { border: 0.5px solid var(--border); padding: 0; vertical-align: middle; }
+  .rt td.ic { padding: 6px 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 140px; }
+  .trs td { background: var(--bg2); padding: 5px 10px; font-size: 10px; font-weight: 700; color: var(--text2); text-transform: uppercase; letter-spacing: .07em; border: 0.5px solid var(--border); }
+  .day-cell { width: 30px; min-width: 30px; height: 28px; cursor: pointer; text-align: center; }
+  .day-cell:hover { outline: 2px solid var(--blue); z-index: 1; position: relative; }
+  .day-cell.today-col { outline: 2px solid var(--blue); }
+  .day-block { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; font-size: 9px; font-weight: 600; overflow: hidden; padding: 0 1px; }
+  .cert-badge { font-size: 10px; padding: 1px 5px; border-radius: 99px; margin-right: 2px; }
+  .cert-h { background: var(--blue-light); color: var(--blue); }
+  .cert-r { background: var(--green-light); color: var(--green); }
+  .cert-e { background: var(--amber-light); color: var(--amber); }
+  .cert-s { background: #EEEDFE; color: #3C3489; }
+  .cert-c { background: var(--bg3); color: var(--text2); }
+  .s-dot { width: 7px; height: 7px; border-radius: 50%; display: inline-block; }
+  .s-good { background: #3B6D11; }
+  .s-att { background: #BA7517; }
+  .legend { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; font-size: 11px; color: var(--text2); }
+  .li { display: flex; align-items: center; gap: 4px; }
+  .lsq { width: 12px; height: 12px; border-radius: 3px; flex-shrink: 0; }
+
+  /* Modal */
+  .modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 1000; display: flex; align-items: flex-start; justify-content: center; padding: 40px 16px; overflow-y: auto; }
+  .modal { background: var(--bg); border-radius: var(--radius-lg); padding: 24px 26px; width: 100%; max-width: 520px; box-shadow: 0 8px 40px rgba(0,0,0,.15); }
+  .modal-lg { max-width: 580px; }
+  .modal-title { font-size: 16px; font-weight: 600; color: var(--text); margin-bottom: 16px; letter-spacing: -0.2px; }
+  .fg { margin-bottom: 12px; }
+  .fg2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 12px; }
+  .fg label, label.fl { font-size: 12px; color: var(--text2); display: block; margin-bottom: 4px; font-weight: 500; }
+  .fg input, .fg select, .fg textarea, input.fi, select.fi { width: 100%; font-size: 13px; padding: 8px 10px; border-radius: var(--radius); border: 0.5px solid var(--border2); background: var(--bg); color: var(--text); font-family: inherit; }
+  .fg input:focus, .fg select:focus, input.fi:focus { outline: none; border-color: var(--blue); box-shadow: 0 0 0 3px rgba(24,95,165,0.12); }
+  .fg textarea { resize: vertical; min-height: 60px; }
+  .form-actions { display: flex; gap: 8px; justify-content: flex-end; margin-top: 16px; padding-top: 16px; border-top: 0.5px solid var(--border); }
+  .divider { height: 0.5px; background: var(--border); margin: 14px 0; }
+  .code-row-entry { display: flex; gap: 8px; align-items: center; margin-bottom: 8px; }
+  .code-row-entry select, .code-row-entry input { margin-bottom: 0; }
+
+  /* Multi-assign picker */
+  .picker-search { width: 100%; font-size: 13px; padding: 7px 10px; border-radius: var(--radius); border: 0.5px solid var(--border2); background: var(--bg); color: var(--text); margin-bottom: 8px; font-family: inherit; }
+  .picker-search:focus { outline: none; border-color: var(--blue); box-shadow: 0 0 0 3px rgba(24,95,165,.12); }
+  .picker-box { border: 0.5px solid var(--border2); border-radius: var(--radius); padding: 8px; max-height: 260px; overflow-y: auto; background: var(--bg); }
+  .team-group { margin-bottom: 8px; }
+  .team-group-hd { font-size: 10px; font-weight: 700; color: var(--text2); text-transform: uppercase; letter-spacing: .07em; padding: 3px 6px; background: var(--bg2); border-radius: 4px; margin-bottom: 4px; display: flex; align-items: center; gap: 5px; }
+  .person-row { display: flex; align-items: center; gap: 8px; padding: 5px 8px; border-radius: var(--radius); cursor: pointer; border: 0.5px solid transparent; transition: all .1s; }
+  .person-row:hover { background: var(--bg2); }
+  .person-row.checked { background: var(--blue-light); border-color: var(--blue-mid); }
+  .person-row input[type="checkbox"] { width: 14px; height: 14px; flex-shrink: 0; cursor: pointer; accent-color: var(--blue); }
+  .person-name { font-size: 12px; color: var(--text); flex: 1; }
+  .person-tag { font-size: 10px; padding: 1px 6px; border-radius: 99px; background: var(--bg3); color: var(--text2); flex-shrink: 0; }
+  .team-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+  .sel-summary { display: flex; align-items: center; justify-content: space-between; margin-top: 8px; font-size: 12px; color: var(--text2); }
+  .sel-count { font-weight: 600; color: var(--blue); }
+  .chips-wrap { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 8px; min-height: 10px; }
+  .chip { font-size: 11px; padding: 3px 8px; border-radius: 99px; background: var(--blue-light); color: var(--blue); display: flex; align-items: center; gap: 4px; font-weight: 500; }
+  .chip-x { cursor: pointer; font-size: 14px; line-height: 1; opacity: .6; }
+  .chip-x:hover { opacity: 1; color: var(--red); }
+
+  /* Toast */
+  .toast { position: fixed; bottom: 24px; right: 24px; background: #1a1a18; color: #fff; font-size: 13px; font-weight: 500; padding: 10px 16px; border-radius: var(--radius); opacity: 0; transition: opacity .2s; pointer-events: none; z-index: 9999; box-shadow: 0 4px 16px rgba(0,0,0,.2); }
+  .toast.show { opacity: 1; }
+
+  /* Empty state */
+  .empty { text-align: center; padding: 2.5rem; color: var(--text3); font-size: 13px; }
+
+  tr:hover .edit-pencil { opacity: 1 !important; }
+  .edit-pencil { cursor: pointer; }
+  .edit-pencil:hover { color: var(--blue) !important; opacity: 1 !important; }
+  .order-row { display:flex; align-items:flex-start; gap:12px; padding:10px 0; border-bottom:0.5px solid var(--border); }
+  .order-row:last-child { border-bottom:none; }
+  .order-pri { width:6px; border-radius:3px; align-self:stretch; flex-shrink:0; min-height:40px; }
+  .pri-high   { background:#E24B4A; }
+  .pri-medium { background:#BA7517; }
+  .pri-low    { background:#185FA5; }
+  .order-body { flex:1; min-width:0; }
+  .order-title { font-size:13px; font-weight:500; color:var(--text); margin-bottom:3px; }
+  .order-meta  { font-size:11px; color:var(--text2); display:flex; gap:10px; flex-wrap:wrap; }
+  .order-actions { display:flex; gap:4px; flex-shrink:0; }
+  .order-done { text-decoration:line-through; opacity:0.5; }
+  ::-webkit-scrollbar { width: 6px; height: 6px; }
+  ::-webkit-scrollbar-track { background: transparent; }
+  ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 3px; }
+</style>
+</head>
+<body>
+<div class="app">
+
+<!-- SIDEBAR -->
+<div class="sidebar">
+  <div class="logo">ZLC <span>Corp</span></div>
+  <div class="nav-section">
+    <div class="nav-label">Main</div>
+    <button class="nav-item active" onclick="goTab('dashboard',this)">
+      <svg class="nav-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1" y="1" width="6" height="6" rx="1"/><rect x="9" y="1" width="6" height="6" rx="1"/><rect x="1" y="9" width="6" height="6" rx="1"/><rect x="9" y="9" width="6" height="6" rx="1"/></svg>
+      Dashboard
+    </button>
+    <button class="nav-item" onclick="goTab('projects',this)">
+      <svg class="nav-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 4h12M2 8h8M2 12h10"/></svg>
+      Projects
+    </button>
+    <button class="nav-item" onclick="goTab('roster',this)">
+      <svg class="nav-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="6" cy="5" r="2.5"/><path d="M1 13c0-2.76 2.24-5 5-5s5 2.24 5 5"/><circle cx="12" cy="5" r="2"/><path d="M12 9c1.66 0 3 1.34 3 3"/></svg>
+      Staff roster
+    </button>
+  </div>
+  <div style="flex:1"></div>
+  <div style="padding:12px 16px;border-top:0.5px solid var(--border)">
+    <button id="sync-badge" onclick="syncFromSheets()" style="width:100%;font-size:11px;font-weight:600;padding:7px 12px;border-radius:var(--radius);border:0.5px solid var(--border2);cursor:pointer;transition:all .15s;background:#f0eeea;color:#9e9c97">Sync from Sheets</button>
+    <button onclick="testWrite()" style="width:100%;margin-top:6px;font-size:11px;font-weight:600;padding:6px 12px;border-radius:var(--radius);border:0.5px solid var(--border2);cursor:pointer;background:#EAF3DE;color:#27500A">Test Sheet write</button>
+    <div id="write-log" style="font-size:10px;color:var(--text3);margin-top:6px;word-break:break-all;line-height:1.4"></div>
+    <div style="font-size:10px;color:var(--text3);text-align:center;margin-top:6px">ZLC Project Manager v1.1</div>
+  </div>
+</div>
+
+<!-- MAIN -->
+<div class="main">
+<div id="view-dashboard" class="view active">
+  <div class="page-header">
+    <div><div class="page-title">Dashboard</div><div class="page-subtitle">Operations overview</div></div>
+  </div>
+  <div class="dash-tabs">
+    <button class="dtab active" onclick="goDash('analytics',this)">Historical analytics</button>
+    <button class="dtab" onclick="goDash('overview',this)">Overview</button>
+  </div>
+  <div id="dash-overview" style="display:none">
+    <div class="card" style="margin-bottom:16px">
+      <div class="card-header">
+        <span class="card-title">Open orders</span>
+        <button class="btn btn-primary btn-sm" onclick="openModal('order')">+ New order</button>
+      </div>
+      <div id="orders-list"></div>
+    </div>
+    <div class="metrics" id="dash-metrics"></div>
+    <div class="grid-2">
+      <div class="card" style="margin-bottom:0"><div class="card-header"><span class="card-title">Pending change orders</span></div><div id="dash-cos"></div></div>
+      <div class="card" style="margin-bottom:0"><div class="card-header"><span class="card-title">Open RFIs &amp; submittals</span></div><div id="dash-open"></div></div>
+    </div>
+    <div class="card" style="margin-top:16px">
+      <div class="card-header"><span class="card-title">Active projects</span></div>
+      <div class="tbl-wrap"><table><thead><tr>
+        <th style="width:82px">Number</th><th>Name</th><th style="width:120px">Client</th>
+        <th style="width:105px">Base value</th><th style="width:105px">Total value</th>
+        <th style="width:65px">Month</th><th style="width:72px">Status</th>
+      </tr></thead><tbody id="dash-tbody"></tbody></table></div>
+    </div>
+  </div>
+  <div id="dash-analytics">
+    <div style="display:flex;justify-content:flex-end;margin-bottom:14px">
+      <button class="btn btn-primary" onclick="openModal('historical')">+ Add historical year</button>
+    </div>
+    <div class="metrics" id="comp-metrics"></div>
+    <div class="card">
+      <div class="card-header"><span class="card-title">Annual sales comparison</span></div>
+      <div class="legend" id="annual-legend"></div>
+      <div style="position:relative;width:100%;height:260px"><canvas id="annualChart"></canvas></div>
+    </div>
+    <div class="card"><div class="card-header"><span class="card-title">Quarterly breakdown</span></div><div id="quarterly-section"></div></div>
+    <div class="card"><div class="card-header"><span class="card-title">Sales by cost code</span></div><div id="code-breakdown"></div></div>
+  </div>
+</div>
+
+<div id="view-projects" class="view">
+  <div class="page-header">
+    <div><div class="page-title">Projects</div><div class="page-subtitle" id="proj-subtitle">All projects</div></div>
+    <button class="btn btn-primary" onclick="openModal('project')">+ New project</button>
+  </div>
+
+  <div id="proj-detail-area"></div>
+
+  <div id="proj-list-area">
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;margin-bottom:12px">
+      <div style="display:flex;gap:4px;flex-wrap:wrap" id="status-filters">
+        <button class="ft active" onclick="setStatusFilter('',this)">All</button>
+        <button class="ft" onclick="setStatusFilter('Active',this)">Active</button>
+        <button class="ft" onclick="setStatusFilter('Finish',this)">Finish</button>
+        <button class="ft" onclick="setStatusFilter('Pending',this)">Pending</button>
+        <button class="ft" onclick="setStatusFilter('On hold',this)">On hold</button>
+        <button class="ft" onclick="setStatusFilter('Canceled',this)">Canceled</button>
+        <button class="ft" onclick="setStatusFilter('Complete',this)">Complete</button>
+      </div>
+      <span id="proj-count" style="font-size:12px;color:var(--text2)"></span>
+    </div>
+    <div class="card" style="margin-bottom:0">
+      <div class="tbl-wrap"><table><thead><tr>
+        <th style="width:82px">Number</th><th style="width:155px">Name</th>
+        <th style="width:120px">PM</th><th style="width:110px">Client</th>
+        <th style="width:125px">Cost codes</th>
+        <th style="width:105px">Total value</th>
+        <th style="width:65px">Month</th><th style="width:72px">Status</th>
+      </tr></thead><tbody id="proj-tbody"></tbody></table></div>
+    </div>
+  </div>
+</div>
+
+<div id="view-roster" class="view">
+  <div class="page-header">
+    <div><div class="page-title">Staff roster</div><div class="page-subtitle">Monthly schedule by team, equipment &amp; rentals</div></div>
+    <div style="display:flex;gap:8px;flex-wrap:wrap">
+      <button class="btn btn-ghost btn-sm" onclick="openModal('emp')">+ Employee</button>
+      <button class="btn btn-ghost btn-sm" onclick="openModal('extraW')">+ Extra worker</button>
+      <button class="btn btn-primary btn-sm" onclick="openModal('assign')">Assign project</button>
+    </div>
+  </div>
+  <div class="roster-controls">
+    <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+      <div class="month-nav">
+        <button onclick="prevM()">&#8249;</button>
+        <span class="month-label" id="month-lbl"></span>
+        <button onclick="nextM()">&#8250;</button>
+      </div>
+      <div class="view-toggle">
+        <button class="vt-btn active" onclick="setCV('month',this)">Month</button>
+        <button class="vt-btn" onclick="setCV('week',this)">2 weeks</button>
+      </div>
+      <div style="display:flex;align-items:center;gap:8px">
+        <label style="font-size:12px;color:var(--text2);white-space:nowrap;margin:0">Filter by project:</label>
+        <select id="roster-proj-filter" onchange="setRosterProjFilter(this.value)" style="font-size:12px;padding:4px 8px;border-radius:var(--radius);border:0.5px solid var(--border2);background:var(--bg);color:var(--text);min-width:180px">
+          <option value="">— All projects —</option>
+        </select>
+        <button class="btn btn-sm btn-ghost" onclick="setRosterProjFilter('');document.getElementById('roster-proj-filter').value=''" style="font-size:11px;padding:3px 8px">✕ Clear</button>
+      </div>
+    </div>
+  </div>
+  <div class="filter-tabs">
+    <button class="ft active" onclick="setSect('all',this)">All</button>
+    <button class="ft" onclick="setSect('staff',this)">Staff</button>
+    <button class="ft" onclick="setSect('extra',this)">Extra workers</button>
+    <button class="ft" onclick="setSect('equip',this)">Equipment</button>
+    <button class="ft" onclick="setSect('rentals',this)">Rentals</button>
+  </div>
+  <div class="legend" id="roster-legend"></div>
+  <div class="roster-wrap"><table class="rt" id="roster-tbl"></table></div>
+</div>
+</div><!-- end main -->
+</div><!-- end app -->
+
+<div id="modal-area"></div>
+<div class="toast" id="toast"></div>
+
+<script>
+// ─── DATA ───────────────────────────────────────────────────────────────────
+const CODES_MAP={'001':'Hard demo','002':'Soft demo','003':'Excavation','004':'Concrete','005':'Utilities','006':'Paving','000':'Corporate'};
+const CODE_COLORS={'001':'#D85A30','002':'#BA7517','003':'#1D9E75','004':'#378ADD','005':'#7F77DD','006':'#D4537E','000':'#888780'};
+const TEAM_COLORS={Xolos:'#3bccb7',Chingones:'#4a86e8',Poblanos:'#cc00cc',Lobos:'#9900ff','Guerreros Z':'#c9a200',Warehouse:'#888780',Driver:'#D85A30',Joaquin:'#a61c00'};
+const PROJ_COLORS={'25-006':'#cc00cc','26-002':'#009999','25-064':'#3bccb7','25-087':'#4a86e8','24-102':'#9999bb','25-061':'#9900ff','26-006':'#c9a200','25-103':'#7bafd4','25-105':'#a64d79','26-003':'#999999','26-004':'#E33F91','25-036':'#134f5c','25-076':'#f6b26b','25-075':'#A64B3C','24-112':'#00cc00','24-126':'#ead1dc','23-134':'#a61c00','26-001':'#D6D60F','26-005':'#6E2C7B','25-063':'#674ea7','25-081':'#45818e','25-085':'#fff2cc','25-089':'#d0e0e3','25-094':'#4DA44D','25-102':'#d9ead3','OFF':'#cc3333','Warehouse':'#666666'};
+const MONTHS=['January','February','March','April','May','June','July','August','September','October','November','December'];
+const MO=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+const DLBL=['Su','Mo','Tu','We','Th','Fr','Sa'];
+const YEAR_COLORS={2023:'#185FA5',2024:'#1D9E75',2025:'#BA7517',2026:'#D85A30'};
+const CAT_COLORS={staff:'#185FA5',extra:'#BA7517',equip:'#3B6D11',rental:'#888780'};
+
+// ─── GOOGLE SHEETS CONFIG ─────────────────────────────────────────────────────
+const SHEET_ID  = '1Y35oa2ebgCisj3PzVs2dTMUN5dY2Hhci4RIt55Kn44Y';
+const API_KEY   = 'AIzaSyCCuKyfurmT2w-L2dn6-XbvupaOmlHufUE';
+// Paste your Apps Script URL below after following setup instructions:
+let APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbz09_1Ocvd9xAgNI2qAyVEqREzEgFICgLZhb6QW-Pji2UOa0d_QIB4IBQaSdjsnCxrtvQ/exec';
+
+const GIDS = {
+  projects: '1735667570',
+  cos:      '505756042',
+  rfis:     '1446347123',
+  subs:     '429064670',
+};
+
+// ─── SHEETS READ ──────────────────────────────────────────────────────────────
+async function sheetRead(gid) {
+  const url = `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/A:Z?key=${API_KEY}&majorDimension=ROWS`;
+  const sheetUrl = `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/A1:Z2000?key=${API_KEY}`;
+  const byGid = `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}?key=${API_KEY}&includeGridData=false`;
+  // Use named range approach via gid — need to get sheet name first
+  // We'll use the values endpoint with sheetId parameter via ranges
+  const res = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/A:Z?key=${API_KEY}`, {
+    headers: { 'Accept': 'application/json' }
+  });
+  if (!res.ok) throw new Error(`API ${res.status}`);
+  const data = await res.json();
+  return data.values || [];
+}
+
+// Fetch a specific sheet by its gid using the spreadsheets.get + batchGet approach
+async function fetchSheetByGid(gid) {
+  // First get sheet names to map gid → name
+  const metaRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}?key=${API_KEY}&fields=sheets.properties`);
+  if (!metaRes.ok) throw new Error(`Meta API ${metaRes.status}: ${await metaRes.text()}`);
+  const meta = await metaRes.json();
+  const sheet = (meta.sheets||[]).find(s => String(s.properties.sheetId) === String(gid));
+  if (!sheet) throw new Error(`Sheet gid ${gid} not found`);
+  const sheetName = sheet.properties.title;
+  const encName = encodeURIComponent(sheetName);
+  const valRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/${encName}!A:Z?key=${API_KEY}`);
+  if (!valRes.ok) throw new Error(`Values API ${valRes.status}: ${await valRes.text()}`);
+  const val = await valRes.json();
+  return { name: sheetName, rows: val.values || [] };
+}
+
+// ─── SHEETS WRITE ─────────────────────────────────────────────────────────────
+// Uses JSONP script tag injection — works from file:// without any CORS issues
+// Apps Script doGet returns the callback with the result
+let _zlcCbIdx = 0;
+
+function sheetWrite(action, payload) {
+  if (!APPS_SCRIPT_URL) { console.warn('No Apps Script URL'); return; }
+  const log     = document.getElementById('write-log');
+  const cbName  = '_zlcCb' + (++_zlcCbIdx);
+  const body    = JSON.stringify({ action, ...payload });
+  const encoded = encodeURIComponent(body);
+  const url     = APPS_SCRIPT_URL + '?data=' + encoded + '&callback=' + cbName;
+
+  // Define the callback — Apps Script calls it with the result
+  window[cbName] = function(result) {
+    if (log) log.textContent = '✓ ' + action + ' ' + new Date().toLocaleTimeString();
+    console.log('sheetWrite result:', action, result);
+    // Cleanup
+    delete window[cbName];
+    const el = document.getElementById('_zlc_script_' + cbName);
+    if (el) el.remove();
+  };
+
+  // Inject script tag — this is the GET request
+  const script  = document.createElement('script');
+  script.id     = '_zlc_script_' + cbName;
+  script.src    = url;
+  script.onerror = function() {
+    if (log) log.textContent = '✗ ' + action + ' failed';
+    console.error('sheetWrite script error for:', action);
+    delete window[cbName];
+    script.remove();
+  };
+  document.head.appendChild(script);
+
+  // Cleanup after 15s in case callback never fires
+  setTimeout(() => {
+    if (window[cbName]) {
+      delete window[cbName];
+      const el = document.getElementById('_zlc_script_' + cbName);
+      if (el) el.remove();
+      if (log && log.textContent.includes('...')) log.textContent = '? ' + action + ' — check sheet';
+    }
+  }, 15000);
+}
+
+async function testWrite() {
+  const log = document.getElementById('write-log');
+  if (log) log.textContent = 'Sending test...';
+  sheetWrite('addRFI', {
+    projectId:'TEST-PING', projectName:'Connection Test v4',
+    num:'RFI-JSONP', desc:'JSONP test — delete this row', submitted:'4/2/2026'
+  });
+  // Also try a plain fetch to see if cors works
+  const url = APPS_SCRIPT_URL + '?data=' + encodeURIComponent(JSON.stringify({action:'addRFI',projectId:'TEST-FETCH',projectName:'Fetch Test',num:'RFI-FETCH',desc:'Fetch test row',submitted:'4/2/2026'}));
+  try {
+    const res  = await fetch(url);
+    const text = await res.text();
+    if (log) log.textContent = 'fetch OK: ' + text.substring(0,60);
+  } catch(e) {
+    if (log) log.textContent += ' | fetch blocked (using JSONP)';
+  }
+}
+
+// ─── PARSE PROJECTS ───────────────────────────────────────────────────────────
+// Columns (Whole data Won/Approved):
+// A=Status B=Project# C=Email D=PM Name E=Project Name F=Address G=Client
+// H=Cost Code I=Estimated Value J=Month K=Phone L=Process
+function parseProjects(rows) {
+  const map = {};
+  for (let i = 1; i < rows.length; i++) {
+    const r = rows[i];
+    if (!r || r.length < 5) continue;
+    const projNameRaw = (r[4]||'').trim();
+    if (!projNameRaw) continue;
+    const numMatch = projNameRaw.match(/^(\d{2}-\d{3,4}[A-Z]?)/i);
+    if (!numMatch) continue;
+    const pid      = numMatch[1].toUpperCase();
+    const process  = (r[11]||'').trim();
+    const rawStat  = (r[0]||'').trim();
+    let appStatus;
+    if (process === 'Finish') appStatus = 'Finish';
+    else if (['Won','Approved','Active'].includes(rawStat)) appStatus = 'Active';
+    else if (rawStat === 'Cancelled' || rawStat === 'Canceled') appStatus = 'Canceled';
+    else if (rawStat === 'Pending') appStatus = 'Pending';
+    else appStatus = rawStat || 'Active';
+
+    const codeRaw = (r[7]||'').trim();
+    const codeNum = codeRaw.match(/^(\d{3})/)?.[1] || '';
+    const rawVal  = (r[8]||'').replace(/[$,\s]/g,'');
+    const value   = parseFloat(rawVal) || 0;
+    const monthRaw = r[9]||'';
+    const month   = parseMonthStr(monthRaw);
+    // Extract the actual year from column J date (e.g. "1/1/2026" → 2026)
+    const rowYear = extractYear(monthRaw);
+
+    if (!map[pid]) {
+      const cleanName = projNameRaw.replace(/^\d{2}-\d{3,4}[A-Z]?\s*/i,'').trim() || projNameRaw;
+      map[pid] = {
+        id: pid,
+        name: cleanName,
+        pm: (r[3]||'').trim(),
+        pmEmail: (r[2]||'').trim(),
+        address: (r[5]||'').trim(),
+        client: (r[6]||'').trim(),
+        codes: [],
+        month: month,
+        year: rowYear,
+        status: appStatus,
+        notes: '',
+        cos: [], rfis: [], subs: [],
+        history: [{ date: month, text: `Imported from ZLC Outlook — ${rawStat}`, type: 'created' }]
+      };
+    }
+    // accumulate cost codes
+    if (codeNum && value !== 0) {
+      const ex = map[pid].codes.find(c => c.code === codeNum);
+      if (ex) ex.value += value; else map[pid].codes.push({ code: codeNum, value });
+    }
+    // escalate status: Canceled > Pending > Active/Finish
+    if (appStatus === 'Canceled') map[pid].status = 'Canceled';
+  }
+  return Object.values(map).sort((a,b) => b.id.localeCompare(a.id));
+}
+
+// ─── COMPUTE YEAR TOTALS FROM RAW ROWS ───────────────────────────────────────
+// Reads every row in "Whole data Won/Approved":
+//   col I (index 8) = value,  col J (index 9) = date
+// Sums by year of col J — no project ID filtering whatsoever
+function computeYearTotals(rows) {
+  const totals = {};
+  for (let i = 1; i < rows.length; i++) {
+    const r = rows[i];
+    if (!r || r.length < 9) continue;
+    const rawVal = (r[8]||'').replace(/[$,\s]/g,'');
+    const value  = parseFloat(rawVal) || 0;
+    if (!value || value < 0) continue;
+    const yr = extractYear(r[9]||'');
+    if (!yr) continue;
+    totals[yr] = (totals[yr]||0) + value;
+  }
+  return totals;
+}
+
+// ─── COMPUTE APPROVED CO TOTALS BY APPROVAL YEAR ─────────────────────────────
+// Reads "Change Orders / Work Orders" tab.
+// For each Approved CO, extracts the approval date and sums value by year.
+// This ensures approved COs count in the correct year on the dashboard.
+function computeCOYearTotals(rows) {
+  if (!rows || rows.length < 2) return {};
+  const hdr     = rows[0].map(h=>(h||'').toLowerCase().trim());
+  const col     = name => hdr.findIndex(h=>h.includes(name));
+  const cVal    = col('value')>=0 ? col('value') : col('amount')>=0 ? col('amount') : col('total');
+  const cStat   = col('status');
+  const cApprDt = col('approved date')>=0 ? col('approved date') : col('approval')>=0 ? col('approval') : col('date');
+  const totals  = {};
+  for (let i = 1; i < rows.length; i++) {
+    const r = rows[i];
+    if (!r || !r[0]) continue;
+    const status = cStat>=0 ? String(r[cStat]||'').trim() : '';
+    if (status.toLowerCase() !== 'approved') continue;
+    const rawVal = cVal>=0 ? String(r[cVal]||'').replace(/[$,\s]/g,'') : '0';
+    const value  = parseFloat(rawVal) || 0;
+    if (!value || value < 0) continue;
+    const dateRaw = cApprDt>=0 ? String(r[cApprDt]||'') : '';
+    const yr = extractYear(dateRaw) || extractYear(String(r[9]||''));
+    if (!yr) continue;
+    totals[yr] = (totals[yr]||0) + value;
+  }
+  return totals;
+}
+
+// ─── PARSE COs ────────────────────────────────────────────────────────────────
+// CO tab columns vary — we'll read headers to be safe
+function parseCORows(rows) {
+  if (rows.length < 2) return {};
+  const hdr = rows[0].map(h => (h||'').toLowerCase().trim());
+  // Try to find key columns by header name
+  const col = name => hdr.findIndex(h => h.includes(name));
+  const cProjName = col('project');
+  const cNum      = col('co #') >= 0 ? col('co #') : col('co#') >= 0 ? col('co#') : col('number');
+  const cDesc     = col('description') >= 0 ? col('description') : col('scope');
+  const cValue    = col('value') >= 0 ? col('value') : col('amount') >= 0 ? col('amount') : col('total');
+  const cStatus   = col('status');
+  const cCode     = col('cost code') >= 0 ? col('cost code') : col('code');
+  const cDate     = col('date');
+  const byProject = {};
+  for (let i = 1; i < rows.length; i++) {
+    const r = rows[i];
+    if (!r || !r[0]) continue;
+    // Extract project id from project name column or first col
+    const projRaw = cProjName >= 0 ? (r[cProjName]||'') : (r[0]||'');
+    const pidMatch = projRaw.match(/(\d{2}-\d{3,4})/);
+    if (!pidMatch) continue;
+    const pid = pidMatch[1];
+    if (!byProject[pid]) byProject[pid] = [];
+    const rawVal = (cValue >= 0 ? r[cValue] : '') || '';
+    const value = parseFloat(String(rawVal).replace(/[$,\s]/g,'')) || 0;
+    const rawCode = cCode >= 0 ? (r[cCode]||'') : '';
+    const codeNum = rawCode.match(/(\d{3})/)?.[1] || '';
+    const status = cStatus >= 0 ? (r[cStatus]||'Pending').trim() : 'Pending';
+    const num = (cNum >= 0 ? r[cNum] : '') || `CO${byProject[pid].length+1}`;
+    const desc = (cDesc >= 0 ? r[cDesc] : '') || '';
+    const dateRaw = cDate >= 0 ? (r[cDate]||'') : '';
+    const date = parseMonthStr(dateRaw) || '—';
+    byProject[pid].push({ id: 'co'+i, num: String(num).trim(), desc: String(desc).trim(), value, status, code: codeNum, date });
+  }
+  return byProject;
+}
+
+// ─── PARSE RFIs ───────────────────────────────────────────────────────────────
+function parseRFIRows(rows) {
+  if (rows.length < 2) return {};
+  const hdr = rows[0].map(h => (h||'').toLowerCase().trim());
+  const col = name => hdr.findIndex(h => h.includes(name));
+  const cProjName = col('project');
+  const cNum   = col('rfi');
+  const cDesc  = col('question') >= 0 ? col('question') : col('description') >= 0 ? col('description') : col('subject');
+  const cSub   = col('submit') >= 0 ? col('submit') : col('date');
+  const cResp  = col('answer') >= 0 ? col('answer') : col('response');
+  const cStat  = col('status');
+  const byProject = {};
+  for (let i = 1; i < rows.length; i++) {
+    const r = rows[i];
+    if (!r || !r[0]) continue;
+    const projRaw = cProjName >= 0 ? (r[cProjName]||'') : (r[0]||'');
+    const pidMatch = projRaw.match(/(\d{2}-\d{3,4})/);
+    if (!pidMatch) continue;
+    const pid = pidMatch[1];
+    if (!byProject[pid]) byProject[pid] = [];
+    const num = (cNum >= 0 ? r[cNum] : '') || `RFI-${byProject[pid].length+1}`;
+    const desc = (cDesc >= 0 ? r[cDesc] : '') || '';
+    const submitted = parseMonthStr(cSub >= 0 ? (r[cSub]||'') : '') || '—';
+    const response  = parseMonthStr(cResp >= 0 ? (r[cResp]||'') : '') || '—';
+    const status = cStat >= 0 ? (r[cStat]||'Open').trim() : 'Open';
+    byProject[pid].push({ id: 'r'+i, num: String(num).trim(), desc: String(desc).trim(), submitted, response, status });
+  }
+  return byProject;
+}
+
+// ─── PARSE SUBMITTALs ────────────────────────────────────────────────────────
+function parseSubRows(rows) {
+  if (rows.length < 2) return {};
+  const hdr = rows[0].map(h => (h||'').toLowerCase().trim());
+  const col = name => hdr.findIndex(h => h.includes(name));
+  const cProjName = col('project');
+  const cNum   = col('sub#') >= 0 ? col('sub#') : col('submittal');
+  const cMat   = col('material') >= 0 ? col('material') : col('description') >= 0 ? col('description') : col('item');
+  const cCode  = col('cost code') >= 0 ? col('cost code') : col('code');
+  const cSub   = col('submit') >= 0 ? col('submit') : col('date');
+  const cStat  = col('status');
+  const byProject = {};
+  for (let i = 1; i < rows.length; i++) {
+    const r = rows[i];
+    if (!r || !r[0]) continue;
+    const projRaw = cProjName >= 0 ? (r[cProjName]||'') : (r[0]||'');
+    const pidMatch = projRaw.match(/(\d{2}-\d{3,4})/);
+    if (!pidMatch) continue;
+    const pid = pidMatch[1];
+    if (!byProject[pid]) byProject[pid] = [];
+    const num = (cNum >= 0 ? r[cNum] : '') || `SUB-${byProject[pid].length+1}`;
+    const material = (cMat >= 0 ? r[cMat] : '') || '';
+    const rawCode = cCode >= 0 ? (r[cCode]||'') : '';
+    const codeNum = rawCode.match(/(\d{3})/)?.[1] || '';
+    const submitted = parseMonthStr(cSub >= 0 ? (r[cSub]||'') : '') || '—';
+    const status = cStat >= 0 ? (r[cStat]||'Pending review').trim() : 'Pending review';
+    byProject[pid].push({ id: 's'+i, num: String(num).trim(), material: String(material).trim(), code: codeNum, submitted, status });
+  }
+  return byProject;
+}
+
+// ─── HELPERS ──────────────────────────────────────────────────────────────────
+function parseMonthStr(val) {
+  if (!val) return '';
+  const s = String(val).trim();
+  const mo = ['jan','feb','mar','apr','may','jun','jul','aug','sep','oct','nov','dec'];
+  const d = new Date(s);
+  if (!isNaN(d) && d.getFullYear() > 2000) return d.toLocaleDateString('en-US',{month:'short', day:'numeric'});
+  const low = s.toLowerCase();
+  for (const m of mo) { if (low.includes(m)) return m.charAt(0).toUpperCase()+m.slice(1); }
+  return s.length > 10 ? s.substring(0,10) : s;
+}
+
+function extractYear(val) {
+  if (!val) return null;
+  const s = String(val).trim();
+  // Try parsing as a date first — handles "1/1/2026", "2026-01-01", etc.
+  const d = new Date(s);
+  if (!isNaN(d) && d.getFullYear() > 2000) return d.getFullYear();
+  // Try to find a 4-digit year in the string
+  const m = s.match(/\b(20\d{2})\b/);
+  if (m) return parseInt(m[1]);
+  return null;
+}
+
+// ─── SYNC FROM SHEETS ─────────────────────────────────────────────────────────
+let syncStatus = 'idle'; // idle | loading | ok | error
+
+async function syncFromSheets() {
+  syncStatus = 'loading';
+  updateSyncBadge();
+  try {
+    // Fetch all 4 sheets in parallel
+    const [projData, coData, rfiData, subData] = await Promise.all([
+      fetchSheetByGid(GIDS.projects),
+      fetchSheetByGid(GIDS.cos),
+      fetchSheetByGid(GIDS.rfis),
+      fetchSheetByGid(GIDS.subs),
+    ]);
+
+    // Parse projects
+    const projects = parseProjects(projData.rows);
+
+    // Compute year totals DIRECTLY from raw rows (col J = date, col I = value)
+    DB.yearTotals   = computeYearTotals(projData.rows);
+    // Add approved CO totals by approval year on top of base project values
+    DB.coYearTotals = computeCOYearTotals(coData.rows);
+
+    // Parse COs, RFIs, Subs and attach to projects
+    const cosByProj  = parseCORows(coData.rows);
+    const rfisByProj = parseRFIRows(rfiData.rows);
+    const subsByProj = parseSubRows(subData.rows);
+
+    projects.forEach(p => {
+      p.cos  = cosByProj[p.id]  || [];
+      p.rfis = rfisByProj[p.id] || [];
+      p.subs = subsByProj[p.id] || [];
+    });
+
+    // Preserve historical data (already in DB)
+    // Also preserve manually added projects that came from the app
+    const manualProjects = DB.projects.filter(p => p._manual);
+    DB.projects = projects;
+    // Re-merge manual projects (ones created from the app, not from the sheet)
+    manualProjects.forEach(mp => {
+      if (!DB.projects.find(p => p.id === mp.id)) DB.projects.push(mp);
+    });
+
+    syncStatus = 'ok';
+    updateSyncBadge();
+    toast(`Loaded ${projects.length} projects from ZLC Outlook`);
+
+    // Re-render active view
+    renderAnalytics();
+    renderProjTable();
+    if (selProj) renderDetail();
+    if (document.getElementById('view-roster').classList.contains('active')) renderRoster();
+
+  } catch(err) {
+    syncStatus = 'error';
+    updateSyncBadge();
+    console.error('Sync error:', err);
+    toast('Could not load from Sheets — check API key & sharing settings');
+  }
+}
+
+function updateSyncBadge() {
+  const badge = document.getElementById('sync-badge');
+  if (!badge) return;
+  const map = {
+    idle:    { text: 'Sync',         color: '#9e9c97', bg: '#f0eeea' },
+    loading: { text: 'Loading…',     color: '#854F0B', bg: '#FAEEDA' },
+    ok:      { text: '✓ Synced',     color: '#3B6D11', bg: '#EAF3DE' },
+    error:   { text: '⚠ Sync error', color: '#791F1F', bg: '#FCEBEB' },
+  };
+  const s = map[syncStatus] || map.idle;
+  badge.textContent = s.text;
+  badge.style.color = s.color;
+  badge.style.background = s.bg;
+}
+
+// ─── STATIC DB (kept as fallback / historical) ────────────────────────────────
+let DB = {
+  projects: [], // populated from Sheets
+  yearTotals: {}, // { year: total } from col J+I of projects tab
+  coYearTotals: {}, // { year: total } from approved COs by approval date
+  openOrders: [], // { id, title, desc, priority, project, assignee, due, status, createdAt }
+  historical:[
+    {year:2023,total:7430000,quarters:{Q1:1520000,Q2:2856932,Q3:1800000,Q4:1253068},codes:{'001':1200000,'002':980000,'003':850000,'004':1900000,'005':1600000,'006':900000}},
+    {year:2024,total:5566348,quarters:{Q1:900000,Q2:1061022,Q3:1800000,Q4:1805326},codes:{'001':800000,'002':700000,'003':600000,'004':1500000,'005':1200000,'006':766348}},
+    {year:2025,total:9791773,quarters:{Q1:2100000,Q2:1809306,Q3:2800000,Q4:3082467},codes:{'001':1500000,'002':1200000,'003':900000,'004':2500000,'005':2400000,'006':1291773}},
+  ]
+};
+
+// Sync badge will be updated after load
+
+let STAFF=[
+  {id:'e1',name:'Carlos #15',team:'Xolos',certs:['H','RFT','EO'],veh:'Good',a:{},notes:{}},
+  {id:'e2',name:'Victor',team:'Xolos',certs:['EO'],veh:'',a:{},notes:{}},
+  {id:'e3',name:'Juan Alejo',team:'Xolos',certs:['H','RFT'],veh:'',a:{},notes:{}},
+  {id:'e4',name:'Chuy #14',team:'Chingones',certs:['H','RFT','SSO'],veh:'Needs attention',a:{},notes:{}},
+  {id:'e5',name:'Luis',team:'Chingones',certs:[],veh:'',a:{},notes:{}},
+  {id:'e6',name:'Santos',team:'Chingones',certs:['H','RFT'],veh:'',a:{},notes:{}},
+  {id:'e7',name:'JRod #12',team:'Poblanos',certs:['H'],veh:'Needs attention',a:{},notes:{}},
+  {id:'e8',name:'Daniel',team:'Poblanos',certs:[],veh:'',a:{},notes:{}},
+  {id:'e9',name:'Fernando',team:'Poblanos',certs:[],veh:'',a:{},notes:{}},
+  {id:'e10',name:'Temo #9',team:'Guerreros Z',certs:[],veh:'',a:{},notes:{}},
+  {id:'e11',name:'Cabrera',team:'Guerreros Z',certs:[],veh:'Good',a:{},notes:{}},
+  {id:'e12',name:'Rigo',team:'Guerreros Z',certs:[],veh:'',a:{},notes:{}},
+  {id:'e13',name:'Miguel #11',team:'Lobos',certs:[],veh:'',a:{},notes:{}},
+  {id:'e14',name:'Hugo',team:'Lobos',certs:[],veh:'Needs attention',a:{},notes:{}},
+  {id:'e15',name:'Joaquin',team:'Joaquin',certs:[],veh:'Needs attention',a:{},notes:{}},
+  {id:'e16',name:'Hernan',team:'Warehouse',certs:[],veh:'',a:{},notes:{}},
+  {id:'e17',name:'Francisco #5',team:'Driver',certs:['CPR'],veh:'Good',a:{},notes:{}},
+];
+let EXTRA=[
+  {id:'ew1',name:'Lazaro',project:'25-061',a:{},notes:{}},{id:'ew2',name:'Jose Ines',project:'25-103',a:{},notes:{}},
+  {id:'ew3',name:'Alberto',project:'',a:{},notes:{}},{id:'ew4',name:'Catarino',project:'',a:{},notes:{}},
+  {id:'ew5',name:'Dennis',project:'',a:{},notes:{}},{id:'ew6',name:'Concrete laborer 1',project:'',a:{},notes:{}},
+  {id:'ew7',name:'Concrete laborer 2',project:'',a:{},notes:{}},{id:'ew8',name:'Miguel & Joaquin',project:'',a:{},notes:{}},
+];
+const EQUIP=[
+  {id:'ss1',cat:'Skid steer',name:'SS1',status:'Good',note:'#5 or #16',a:{},notes:{}},
+  {id:'ss2',cat:'Skid steer',name:'SS2',status:'Good',note:'#11,#14,#15,#16 on T5',a:{},notes:{}},
+  {id:'ss3',cat:'Skid steer',name:'SS3',status:'Good',note:'#5,#11,#14,#15 or #16 on T5',a:{},notes:{}},
+  {id:'ss4',cat:'Skid steer',name:'SS4',status:'Good',note:'#5,#11,#14,#15 or #16 on T5',a:{},notes:{}},
+  {id:'ex1',cat:'Excavator',name:'EX1 / 2 ton',status:'Good',note:'#4,#9,#11,#14,#15 on T5',a:{},notes:{}},
+  {id:'ex3',cat:'Excavator',name:'EX3 / 5 ton / E50',status:'Good',note:'#5 or #16',a:{},notes:{}},
+  {id:'ex4',cat:'Excavator',name:'EX4 / 15 ton',status:'Good',note:'#16 or Trigo',a:{},notes:{}},
+  {id:'ex7',cat:'Excavator',name:'EX7 / 5 ton / E50',status:'Good',note:'#5 or #16',a:{},notes:{}},
+  {id:'ex8',cat:'Excavator',name:'EX8 / 3 ton / E35',status:'Good',note:'#5,#11,#14,#15 or #16 on T5',a:{},notes:{}},
+];
+const RENTALS=[
+  {id:'r1',cat:'Rental',name:'Scissor lift — Cresco',a:{},notes:{}},
+  {id:'r2',cat:'Rental',name:'Trailer Cresco',a:{},notes:{}},
+  {id:'r3',cat:'Rental',name:'Plates — Trench shoring',a:{},notes:{}},
+  {id:'r4',cat:'Rental',name:'Post shore — Whitecap',a:{},notes:{}},
+  {id:'r5',cat:'Rental',name:'24" Bucket smooth',a:{},notes:{}},
+];
+const PROJECTS_LIST=[
+  {id:'25-006',name:'60 Station Transformer'},{id:'25-036',name:"Driscoll's HQ"},
+  {id:'25-061',name:'2154 MacArthur'},{id:'25-063',name:'830 Bancroft Saw Cutting'},
+  {id:'25-064',name:'Hunters Point (All Hallows Civil)'},{id:'25-075',name:'2600 Stanwell'},
+  {id:'25-076',name:'1300 Crane Menlo Park'},{id:'25-081',name:'Pavona Apartments'},
+  {id:'25-085',name:'1354 Fairmont Excavation'},{id:'25-087',name:'Stender'},
+  {id:'25-089',name:'Xylem TI at 960 Ames'},{id:'25-094',name:'1939 Addison St'},
+  {id:'25-102',name:'RIX Industries'},{id:'25-103',name:'Solano Napa Pet'},
+  {id:'25-105',name:'435 3rd Street Utilities'},{id:'24-102',name:'De Anza Oaks'},
+  {id:'24-112',name:'2140 Mandela Pkwy'},{id:'24-126',name:'Anthro Energy'},
+  {id:'23-134',name:'Arkell ADU'},{id:'26-001',name:'30 Hotaling Cardless TI'},
+  {id:'26-002',name:'Corte Madera Homestore TI'},{id:'26-003',name:'180 Howard St'},
+  {id:'26-004',name:'Moser OMIC TI'},{id:'26-005',name:'2600 Stanwell Trenching'},
+  {id:'26-006',name:'Bank of Italy'},
+  {id:'OFF',name:'OFF / Holiday'},{id:'Warehouse',name:'Warehouse'}
+];
+
+const ALL_ROSTER_ITEMS=()=>[
+  ...STAFF.map(e=>({...e,group:e.team,cat:'staff'})),
+  ...EXTRA.map(e=>({...e,group:'Extra workers',cat:'extra'})),
+  ...EQUIP.map(e=>({...e,group:e.cat,cat:'equip'})),
+  ...RENTALS.map(e=>({...e,group:'Rentals',cat:'rental'})),
+];
+
+let selProj=null, subTab='codes', activeDash='analytics', rosterSect='all';
+let calYear=2026, calMonth=3, calView='month';
+let annualChart=null, codeRowIdx=1;
+let assignSelected=new Set();
+let rosterProjFilter='';
+
+// ─── UTILS ──────────────────────────────────────────────────────────────────
+const fmt=v=>'$'+Math.round(v).toLocaleString();
+const fmtS=v=>v>=1e6?'$'+(v/1e6).toFixed(1)+'M':v>=1e3?'$'+(v/1e3).toFixed(0)+'K':'$'+Math.round(v);
+const todate=()=>new Date().toLocaleDateString('en-US',{month:'short',day:'numeric'});
+const uid=()=>'x'+Math.random().toString(36).slice(2,7);
+const bv=p=>p.codes.reduce((a,c)=>a+c.value,0);
+const coAppr=p=>p.cos.filter(c=>c.status==='Approved').reduce((a,c)=>a+c.value,0);
+const tv=p=>bv(p)+coAppr(p);
+function bc(s){
+  if(!s) return 'b-gray';
+  const sl=s.toLowerCase();
+  if(sl==='approved'||sl==='responded'||sl==='active') return 'b-green';
+  if(sl==='pending'||sl==='under review'||sl==='open'||sl==='pending review') return 'b-amber';
+  if(sl==='canceled'||sl==='rejected') return 'b-red';
+  if(sl==='complete') return 'b-teal';
+  return 'b-gray';
+}
+function toast(m){const t=document.getElementById('toast');t.textContent=m;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2500);}
+function pc(id){if(!id)return '';if(id==='OFF')return '#FCEBEB';return PROJ_COLORS[id]||(()=>{const h=Math.abs([...id].reduce((a,c)=>a*31+c.charCodeAt(0),0)%0xFFFFFF);return '#'+h.toString(16).padStart(6,'0');})();}
+function ptc(bg){if(!bg||bg==='')return '#666';const h=bg.replace('#','');const r=parseInt(h.slice(0,2),16),g=parseInt(h.slice(2,4),16),b=parseInt(h.slice(4,6),16);return(r*299+g*587+b*114)/1000>145?'#2C2C2A':'#F7F7F5';}
+
+// ─── NAV ────────────────────────────────────────────────────────────────────
+function goTab(n,b){
+  document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
+  document.querySelectorAll('.nav-item').forEach(x=>x.classList.remove('active'));
+  document.getElementById('view-'+n).classList.add('active');
+  b.classList.add('active');
+  if(n==='dashboard'){if(activeDash==='analytics')renderAnalytics();else renderOverview();}
+  if(n==='projects'){renderProjTable();if(selProj)renderDetail();}
+  if(n==='roster')renderRoster();
+}
+function goDash(t,b){
+  activeDash=t;
+  document.querySelectorAll('.dtab').forEach(x=>x.classList.remove('active'));b.classList.add('active');
+  document.getElementById('dash-overview').style.display=t==='overview'?'block':'none';
+  document.getElementById('dash-analytics').style.display=t==='analytics'?'block':'none';
+  if(t==='overview')renderOverview();else renderAnalytics();
+}
+
+// ─── DASHBOARD OVERVIEW ──────────────────────────────────────────────────────
+function renderOverview(){
+  renderOrders(); // render open orders first
+  const active=DB.projects.filter(p=>p.status==='Active');
+  const allCOs=DB.projects.flatMap(p=>p.cos.map(c=>({...c,pid:p.id})));
+  const pendCOs=allCOs.filter(c=>c.status==='Pending');
+  const pendVal=pendCOs.reduce((a,c)=>a+c.value,0);
+  const openRFIs=DB.projects.flatMap(p=>p.rfis.filter(r=>r.status==='Open'));
+  const openSubs=DB.projects.flatMap(p=>p.subs.filter(s=>s.status==='Under review'||s.status==='Pending review'));
+  const contracted=active.reduce((a,p)=>a+tv(p),0);
+  const won2026=DB.projects.filter(p=>p.id.startsWith('26-')).reduce((a,p)=>a+tv(p),0);
+  document.getElementById('dash-metrics').innerHTML=`
+    <div class="metric"><div class="metric-label">Active projects</div><div class="metric-value">${active.length}</div></div>
+    <div class="metric"><div class="metric-label">Active contracted</div><div class="metric-value" style="font-size:18px">${fmt(contracted)}</div></div>
+    <div class="metric"><div class="metric-label">2026 won</div><div class="metric-value" style="font-size:18px">${fmt(won2026)}</div><div class="metric-sub">${DB.projects.filter(p=>p.id.startsWith('26-')).length} projects</div></div>
+    <div class="metric"><div class="metric-label">Pending COs</div><div class="metric-value">${pendCOs.length}</div><div class="metric-sub">${fmt(pendVal)} in review</div></div>
+    <div class="metric"><div class="metric-label">Open RFIs</div><div class="metric-value">${openRFIs.length}</div></div>
+    <div class="metric"><div class="metric-label">Subs in review</div><div class="metric-value">${openSubs.length}</div></div>`;
+  document.getElementById('dash-cos').innerHTML=pendCOs.length?pendCOs.map(c=>`
+    <div style="display:flex;justify-content:space-between;padding:9px 0;border-bottom:0.5px solid var(--border);font-size:12px;gap:8px">
+      <div><span style="color:var(--text2)">${c.pid}</span> · <strong>${c.num}</strong><div style="color:var(--text2);font-size:11px;margin-top:1px">${c.desc}</div></div>
+      <div style="text-align:right;flex-shrink:0"><strong>${fmt(c.value)}</strong><br><span class="badge b-amber" style="margin-top:3px">Pending</span></div>
+    </div>`).join(''):'<div class="empty">No pending COs</div>';
+  const items=[...openRFIs.map(r=>({t:'RFI',n:r.num,d:r.desc,cls:'b-blue'})),...openSubs.map(s=>({t:'SUB',n:s.num,d:s.material,cls:'b-amber'}))];
+  document.getElementById('dash-open').innerHTML=items.length?items.map(i=>`
+    <div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:0.5px solid var(--border);font-size:12px">
+      <span class="badge ${i.cls}">${i.t}</span><strong>${i.n}</strong>
+      <span style="color:var(--text2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1">${i.d}</span>
+    </div>`).join(''):'<div class="empty">All clear</div>';
+  document.getElementById('dash-tbody').innerHTML=active.map(p=>`
+    <tr><td><strong>${p.id}</strong></td><td>${p.name}</td><td>${p.client}</td>
+    <td>${fmt(bv(p))}</td><td><strong>${fmt(tv(p))}</strong></td>
+    <td>${p.month}</td><td><span class="badge ${bc(p.status)}">${p.status}</span></td></tr>`).join('');
+}
+
+// ─── OPEN ORDERS ──────────────────────────────────────────────────────────────
+const PRI_ORDER = { High:0, Medium:1, Low:2 };
+const PRI_CLASS = { High:'pri-high', Medium:'pri-medium', Low:'pri-low' };
+const PRI_LABEL = { High:'🔴 High', Medium:'🟡 Medium', Low:'🔵 Low' };
+
+function renderOrders(){
+  const el = document.getElementById('orders-list');
+  if(!el) return;
+  const open = (DB.openOrders||[]).filter(o=>o.status!=='Done');
+  const done = (DB.openOrders||[]).filter(o=>o.status==='Done');
+  // Sort open by priority, then by creation date
+  open.sort((a,b)=>(PRI_ORDER[a.priority]??9)-(PRI_ORDER[b.priority]??9));
+  if(!open.length && !done.length){
+    el.innerHTML='<div class="empty">No open orders. Click "+ New order" to add one.</div>';
+    return;
+  }
+  const renderRow = (o,isDone) => {
+    const proj = DB.projects.find(p=>p.id===o.project);
+    const projLabel = proj ? `${proj.id} — ${proj.name}` : (o.project||'');
+    return `<div class="order-row">
+      <div class="order-pri ${PRI_CLASS[o.priority]||'pri-low'}"></div>
+      <div class="order-body">
+        <div class="order-title${isDone?' order-done':''}">${o.title}</div>
+        <div class="order-meta">
+          <span>${PRI_LABEL[o.priority]||o.priority}</span>
+          ${projLabel?`<span>📋 ${projLabel}</span>`:''}
+          ${o.assignee?`<span>👤 ${o.assignee}</span>`:''}
+          ${o.due?`<span>📅 ${o.due}</span>`:''}
+          ${o.desc?`<span style="color:var(--text3)">${o.desc}</span>`:''}
+        </div>
+      </div>
+      <div class="order-actions">
+        ${!isDone?`<button class="btn btn-sm btn-approve" onclick="markOrderDone('${o.id}')">✓ Done</button>`:''}
+        <button class="btn btn-sm" onclick="editOrder('${o.id}')">✎</button>
+        <button class="btn btn-sm btn-deny" onclick="deleteOrder('${o.id}')">✕</button>
+      </div>
+    </div>`;
+  };
+  let html = open.map(o=>renderRow(o,false)).join('');
+  if(done.length){
+    html += `<div style="font-size:11px;font-weight:600;color:var(--text3);text-transform:uppercase;letter-spacing:.06em;padding:12px 0 4px;margin-top:4px;border-top:0.5px solid var(--border)">Completed (${done.length})</div>`;
+    html += done.map(o=>renderRow(o,true)).join('');
+  }
+  el.innerHTML = html;
+}
+
+function markOrderDone(id){
+  const o=(DB.openOrders||[]).find(x=>x.id===id);
+  if(o){o.status='Done';saveLocal();}
+  renderOrders();
+}
+
+function deleteOrder(id){
+  DB.openOrders=(DB.openOrders||[]).filter(x=>x.id!==id);
+  saveLocal();renderOrders();
+}
+
+function editOrder(id){
+  const o=(DB.openOrders||[]).find(x=>x.id===id);
+  if(!o) return;
+  openModal('order', null, o);
+}
+
+function saveOrder(){
+  const title = document.getElementById('ord-title').value.trim();
+  if(!title){toast('Title required');return;}
+  const id    = document.getElementById('ord-id').value || uid();
+  const o = {
+    id,
+    title,
+    desc:     document.getElementById('ord-desc').value.trim(),
+    priority: document.getElementById('ord-pri').value,
+    project:  document.getElementById('ord-proj').value,
+    assignee: document.getElementById('ord-assignee').value.trim(),
+    due:      document.getElementById('ord-due').value,
+    status:   'Open',
+    createdAt: new Date().toISOString(),
+  };
+  if(!DB.openOrders) DB.openOrders=[];
+  const idx = DB.openOrders.findIndex(x=>x.id===id);
+  if(idx>=0) DB.openOrders[idx]=o; else DB.openOrders.push(o);
+  saveLocal();closeModal();renderOrders();
+  toast(`Order "${title}" saved`);
+}
+
+// ─── ANALYTICS ───────────────────────────────────────────────────────────────
+function renderAnalytics(){
+  const hist = DB.historical;
+
+  // Use year totals computed directly from raw sheet rows (col J date, col I value)
+  // Plus approved CO totals by their approval year
+  // Falls back to counting from projects array if sync hasn't happened yet
+  const baseTot = DB.yearTotals[2026] !== undefined
+    ? DB.yearTotals[2026]
+    : DB.projects.filter(p => {
+        const yr = p.year || parseInt('20'+p.id.slice(0,2));
+        return yr === 2026;
+      }).reduce((a,p) => a+bv(p), 0);
+  const coTot   = DB.coYearTotals ? (DB.coYearTotals[2026]||0) : 0;
+  const appTot  = baseTot + coTot;
+
+  // For the project count badge, still use project list
+  const proj2026 = DB.projects.filter(p => {
+    const yr = p.year || parseInt('20'+p.id.slice(0,2));
+    return yr === 2026;
+  });
+  const appCount = proj2026.length;
+  document.getElementById('comp-metrics').innerHTML=`${hist.map(h=>`<div class="metric"><div class="metric-label">Total ${h.year}</div><div class="metric-value" style="font-size:18px">${fmtS(h.total)}</div></div>`).join('')}
+    <div class="metric"><div class="metric-label">2026 won / approved</div><div class="metric-value" style="font-size:18px">${fmtS(appTot)}</div><div class="metric-sub">${appCount} project${appCount!==1?'s':''}</div></div>`;
+  if(annualChart){annualChart.destroy();annualChart=null;}
+  const labels=[...hist.map(h=>String(h.year)),'2026'];
+  const vals=[...hist.map(h=>h.total),appTot];
+  const bgs=labels.map(y=>YEAR_COLORS[parseInt(y)]||'#888');
+  document.getElementById('annual-legend').innerHTML=labels.map((y,i)=>`<span class="li"><span class="lsq" style="background:${bgs[i]}"></span>${y}: ${fmtS(vals[i])}</span>`).join('');
+  annualChart=new Chart(document.getElementById('annualChart'),{type:'bar',
+    data:{labels,datasets:[{data:vals,backgroundColor:bgs,borderRadius:5,borderSkipped:false}]},
+    options:{responsive:true,maintainAspectRatio:false,plugins:{legend:{display:false},tooltip:{callbacks:{label:c=>' '+fmt(c.parsed.y)}}},
+      scales:{x:{grid:{display:false},border:{display:false},ticks:{color:'#9e9c97',font:{size:12}}},
+        y:{grid:{color:'rgba(0,0,0,0.05)'},border:{display:false},ticks:{color:'#9e9c97',font:{size:11},callback:v=>fmtS(v)}}}}});
+  const qs=['Q1','Q2','Q3','Q4'],qc={Q1:'#185FA5',Q2:'#1D9E75',Q3:'#BA7517',Q4:'#D85A30'};
+  document.getElementById('quarterly-section').innerHTML=hist.length?
+    `<div class="grid-3">${hist.map(h=>{const mx=Math.max(...qs.map(q=>h.quarters[q]||0));return`<div class="yr-col"><div class="yr-title">${h.year} — ${fmtS(h.total)}</div>${qs.map(q=>{const v=h.quarters[q]||0,pct=mx>0?Math.round((v/mx)*100):0;return`<div class="bar-row"><span class="bar-lbl">${q}</span><div class="bar-track"><div class="bar-fill" style="width:${pct}%;background:${qc[q]}"></div></div><span class="bar-val" style="color:var(--text)">${fmtS(v)}</span></div>`;}).join('')}</div>`;}).join('')}</div>`
+    :'<div class="empty">Add historical data to see breakdown</div>';
+  const allCodes=Object.keys(CODES_MAP);
+  let ch=`<div class="tbl-wrap"><table><thead><tr><th style="width:60px">Code</th><th>Name</th>${hist.map(h=>`<th style="width:90px;text-align:right">${h.year}</th>`).join('')}<th style="width:100px;text-align:right">2026 (app)</th></tr></thead><tbody>`;
+  allCodes.forEach(code=>{
+    const av=proj2026.reduce((a,p)=>a+(p.codes.find(c=>c.code===code)?.value||0)+(p.cos.filter(c=>c.code===code&&c.status==='Approved').reduce((s,c)=>s+c.value,0)),0);
+    if(!hist.some(h=>h.codes[code]>0)&&!av)return;
+    const color=CODE_COLORS[code]||'#888';
+    ch+=`<tr><td><span style="display:flex;align-items:center;gap:5px"><span style="width:8px;height:8px;border-radius:2px;background:${color};flex-shrink:0;display:inline-block"></span><strong>${code}</strong></span></td><td>${CODES_MAP[code]}</td>
+    ${hist.map(h=>`<td style="text-align:right">${h.codes[code]?fmtS(h.codes[code]):'—'}</td>`).join('')}
+    <td style="text-align:right;font-weight:600">${av?fmtS(av):'—'}</td></tr>`;
+  });
+  ch+=`</tbody></table></div>`;
+  document.getElementById('code-breakdown').innerHTML=ch;
+}
+
+// ─── PROJECTS ────────────────────────────────────────────────────────────────
+let projStatusFilter = '';
+
+function setStatusFilter(status, btn) {
+  projStatusFilter = status;
+  document.querySelectorAll('#status-filters .ft').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+  renderProjTable();
+}
+
+function renderProjTable(){
+  const filtered = projStatusFilter
+    ? DB.projects.filter(p => p.status === projStatusFilter)
+    : DB.projects;
+  const count = document.getElementById('proj-count');
+  if(count) count.textContent = `${filtered.length} project${filtered.length!==1?'s':''}`;
+  document.getElementById('proj-tbody').innerHTML = filtered.map(p=>`
+    <tr class="clickable${selProj===p.id?' selected':''}" onclick="selProject('${p.id}')">
+      <td><strong>${p.id}</strong></td><td>${p.name}</td>
+      <td title="${p.pmEmail}">${p.pm||'—'}</td><td>${p.client}</td>
+      <td>${p.codes.map(c=>`<span class="badge b-gray" style="margin-right:2px;font-size:10px">${c.code}</span>`).join('')}</td>
+      <td>${fmt(tv(p))}</td><td>${p.month}</td>
+      <td><span class="badge ${bc(p.status)}">${p.status}</span></td>
+    </tr>`).join('');
+}
+
+function selProject(id){
+  selProj = id;
+  subTab = 'codes';
+  renderProjTable();
+  renderDetail();
+  // Scroll detail into view at top of projects area
+  const detail = document.getElementById('proj-detail-area');
+  if(detail && detail.scrollIntoView) detail.scrollIntoView({behavior:'smooth', block:'start'});
+}
+
+function closeDetail(){
+  selProj = null;
+  document.getElementById('proj-detail-area').innerHTML = '';
+  renderProjTable();
+}
+
+function renderDetail(){
+  const p=DB.projects.find(x=>x.id===selProj);
+  if(!p){document.getElementById('proj-detail-area').innerHTML='';return;}
+  const total=tv(p),base=bv(p),diff=total-base;
+  document.getElementById('proj-detail-area').innerHTML=`
+  <div class="proj-detail" style="margin-bottom:20px">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;padding-bottom:10px;border-bottom:0.5px solid var(--border)">
+      <span style="font-size:11px;color:var(--text2);font-weight:500;text-transform:uppercase;letter-spacing:.06em">Project detail</span>
+      <button class="btn btn-ghost" style="font-size:11px;padding:3px 10px" onclick="closeDetail()">✕ Close</button>
+    </div>
+    <div class="pdh">
+      <div><div style="font-size:17px;font-weight:600;letter-spacing:-0.3px">${p.id} — ${p.name}</div><div style="font-size:12px;color:var(--text2);margin-top:3px">${p.address}</div></div>
+      <div style="text-align:right">
+        <div style="font-size:20px;font-weight:700;letter-spacing:-0.5px">${fmt(total)}${diff>0?`<span style="font-size:11px;padding:3px 8px;border-radius:99px;background:var(--green-light);color:var(--green);margin-left:8px;font-weight:600">+${fmt(diff)} COs</span>`:''}</div>
+        <div style="font-size:11px;color:var(--text3);margin-top:2px">Base: ${fmt(base)}</div>
+        <span class="badge ${bc(p.status)}" style="margin-top:5px;display:inline-block">${p.status}</span>
+      </div>
+    </div>
+    <div class="info-grid">
+      <div class="info-item"><div class="lbl">Project manager</div><div class="val">${p.pm}</div><div class="sub">${p.pmEmail}</div></div>
+      <div class="info-item"><div class="lbl">Client</div><div class="val">${p.client}</div></div>
+      <div class="info-item"><div class="lbl">Start month</div><div class="val">${p.month}</div></div>
+      <div class="info-item"><div class="lbl">Status</div><div class="val">
+        <select onchange="changeProjectStatus('${p.id}',this.value)" style="font-size:12px;padding:3px 8px;border-radius:var(--radius);border:0.5px solid var(--border2);background:var(--bg);color:var(--text);cursor:pointer;font-family:inherit">
+          <option value="Active"${p.status==='Active'?' selected':''}>Active</option>
+          <option value="Pending"${p.status==='Pending'?' selected':''}>Pending</option>
+          <option value="Complete"${p.status==='Complete'?' selected':''}>Complete</option>
+          <option value="On hold"${p.status==='On hold'?' selected':''}>On hold</option>
+          <option value="Finish"${p.status==='Finish'?' selected':''}>Finish</option>
+          <option value="Canceled"${p.status==='Canceled'?' selected':''}>Canceled</option>
+        </select>
+      </div></div>
+      ${p.status==='Finish'?`<div class="info-item"><div class="lbl">Reopen project</div><div class="val"><button class="btn btn-approve" onclick="reopenProject('${p.id}')" style="font-size:12px;padding:5px 12px">&#8635; Reopen as Active</button></div></div>`:''}
+    </div>
+    <div class="sub-tabs">
+      <div class="sub-tabs-left">
+        <button class="stab${subTab==='codes'?' active':''}" onclick="goSub('codes')">Code breakdown</button>
+        <button class="stab${subTab==='cos'?' active':''}" onclick="goSub('cos')">Change orders (${p.cos.length})</button>
+        <button class="stab${subTab==='rfis'?' active':''}" onclick="goSub('rfis')">RFIs (${p.rfis.length})</button>
+        <button class="stab${subTab==='subs'?' active':''}" onclick="goSub('subs')">Submittals (${p.subs.length})</button>
+        <button class="stab${subTab==='history'?' active':''}" onclick="goSub('history')">History</button>
+      </div>
+      <div style="display:flex;gap:6px;padding-bottom:8px">
+        ${subTab==='cos'?`<button class="btn btn-sm" onclick="openModal('co','${p.id}')">+ CO</button>`:''}
+        ${subTab==='rfis'?`<button class="btn btn-sm" onclick="openModal('rfi','${p.id}')">+ RFI</button>`:''}
+        ${subTab==='subs'?`<button class="btn btn-sm" onclick="openModal('sub','${p.id}')">+ Submittal</button>`:''}
+      </div>
+    </div>
+    <div id="sub-content">${renderSub(p,subTab)}</div>
+  </div>`;
+}
+
+function renderSub(p,tab){
+  if(tab==='codes'){
+    const base=bv(p);const byCode={};
+    p.cos.filter(c=>c.status==='Approved').forEach(c=>{byCode[c.code]=(byCode[c.code]||0)+c.value;});
+    return p.codes.map(c=>{
+      const extra=byCode[c.code]||0,tot=c.value+extra,pct=base>0?Math.round((c.value/base)*100):0,col=CODE_COLORS[c.code]||'#888';
+      return `<div class="code-bar-row">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:7px;gap:8px">
+          <div style="display:flex;align-items:center;gap:8px">
+            <span style="width:11px;height:11px;border-radius:3px;background:${col};flex-shrink:0;display:inline-block"></span>
+            <strong style="font-size:13px">${c.code}</strong>
+            <span style="font-size:12px;color:var(--text2)">${CODES_MAP[c.code]||''}</span>
+          </div>
+          <div style="text-align:right;flex-shrink:0">
+            <strong style="font-size:14px">${fmt(tot)}</strong>
+            ${extra>0?`<span style="font-size:11px;padding:2px 7px;border-radius:99px;background:var(--green-light);color:var(--green);margin-left:6px;font-weight:600">+${fmt(extra)} CO</span>`:''}
+          </div>
+        </div>
+        <div style="display:flex;align-items:center;gap:10px">
+          <div style="flex:1;height:7px;background:var(--bg3);border-radius:4px"><div style="height:7px;border-radius:4px;background:${col};width:${pct}%"></div></div>
+          <span style="font-size:11px;color:var(--text3);min-width:70px;text-align:right">Base: ${fmt(c.value)} · ${pct}%</span>
+        </div>
+      </div>`;
+    }).join('')+`<div style="display:flex;justify-content:space-between;padding:12px 0 4px;font-size:13px;font-weight:600"><span style="color:var(--text2)">Project total</span><span>${fmt(tv(p))}</span></div>`;
+  }
+  if(tab==='cos'){
+    if(!p.cos.length)return'<div class="empty">No change orders yet.</div>';
+    return`<div class="tbl-wrap"><table><thead><tr><th style="width:62px">CO#</th><th>Description</th><th style="width:58px">Code</th><th style="width:82px">Value</th><th style="width:72px">Date</th><th style="width:78px">Status</th><th style="width:130px">Action</th></tr></thead>
+    <tbody>${p.cos.map(c=>`<tr><td><strong>${c.num}</strong></td><td>${c.desc}</td><td><span class="badge b-gray" style="font-size:10px">${c.code||'—'}</span></td><td>${fmt(c.value)}</td><td>${c.date}</td><td><span class="badge ${bc(c.status)}">${c.status}</span></td>
+    <td>${c.status==='Pending'?`<div style="display:flex;gap:4px"><button class="btn btn-sm btn-approve" onclick="approveCO('${p.id}','${c.id}')">Approve</button><button class="btn btn-sm btn-deny" onclick="denyItem('${p.id}','${c.id}','co')">Cancel</button></div>`:`<span style="font-size:11px;color:var(--text3)">${c.status}</span>`}</td></tr>`).join('')}</tbody></table></div>`;
+  }
+  if(tab==='rfis'){
+    if(!p.rfis.length)return'<div class="empty">No RFIs yet.</div>';
+    return`<div class="tbl-wrap"><table><thead><tr><th style="width:68px">RFI#</th><th>Description</th><th style="width:85px">Submitted</th><th style="width:85px">Response</th><th style="width:78px">Status</th><th style="width:120px">Action</th></tr></thead>
+    <tbody>${p.rfis.map(r=>`<tr><td><strong>${r.num}</strong></td><td>${r.desc}</td><td>${r.submitted}</td><td>${r.response}</td><td><span class="badge ${bc(r.status)}">${r.status}</span></td>
+    <td>${r.status==='Open'?`<div style="display:flex;gap:4px"><button class="btn btn-sm btn-approve" onclick="approveItem('${p.id}','${r.id}','rfi')">Close</button><button class="btn btn-sm btn-deny" onclick="denyItem('${p.id}','${r.id}','rfi')">Cancel</button></div>`:`<span style="font-size:11px;color:var(--text3)">${r.status}</span>`}</td></tr>`).join('')}</tbody></table></div>`;
+  }
+  if(tab==='subs'){
+    if(!p.subs.length)return'<div class="empty">No submittals yet.</div>';
+    return`<div class="tbl-wrap"><table><thead><tr><th style="width:68px">SUB#</th><th>Material / item</th><th style="width:58px">Code</th><th style="width:85px">Submitted</th><th style="width:92px">Status</th><th style="width:130px">Action</th></tr></thead>
+    <tbody>${p.subs.map(s=>`<tr><td><strong>${s.num}</strong></td><td>${s.material}</td><td><span class="badge b-gray" style="font-size:10px">${s.code||'—'}</span></td><td>${s.submitted}</td><td><span class="badge ${bc(s.status)}">${s.status}</span></td>
+    <td>${(s.status==='Under review'||s.status==='Pending review')?`<div style="display:flex;gap:4px"><button class="btn btn-sm btn-approve" onclick="approveItem('${p.id}','${s.id}','sub')">Approve</button><button class="btn btn-sm btn-deny" onclick="denyItem('${p.id}','${s.id}','sub')">Reject</button></div>`:`<span style="font-size:11px;color:var(--text3)">${s.status}</span>`}</td></tr>`).join('')}</tbody></table></div>`;
+  }
+  if(tab==='history'){
+    if(!p.history.length)return'<div class="empty">No history yet.</div>';
+    const hc={created:'#185FA5',co:'#854F0B',rfi:'#0F6E56',sub:'#3B6D11',approved:'#3B6D11',canceled:'#791F1F'};
+    return[...p.history].reverse().map(h=>`<div class="history-item"><div class="h-dot" style="background:${hc[h.type]||'#888'}"></div><div class="h-text">${h.text}</div><div class="h-date">${h.date}</div></div>`).join('');
+  }
+  return'';
+}
+function changeProjectStatus(pid,newStatus){
+  const p=DB.projects.find(x=>x.id===pid);if(!p)return;
+  const old=p.status;p.status=newStatus;
+  p.history.push({date:todate(),text:`Status changed: ${old} → ${newStatus}`,type:'created'});
+  sheetWrite('updateProjectStatus',{projectId:pid,newStatus});
+  saveLocal();
+  toast(`${pid} → ${newStatus}`);
+  renderProjTable();renderDetail();renderOverview();
+}
+function reopenProject(pid){
+  const p=DB.projects.find(x=>x.id===pid);if(!p)return;
+  p.status='Active';
+  p.history.push({date:todate(),text:`Project reopened — status set back to Active`,type:'created'});
+  sheetWrite('updateProjectStatus',{projectId:pid,newStatus:'Active'});
+  saveLocal();
+  toast(`${pid} reopened as Active`);
+  renderProjTable();renderDetail();renderOverview();
+}
+function goSub(tab){subTab=tab;renderDetail();}
+function approveCO(pid,cid){
+  const p=DB.projects.find(x=>x.id===pid),co=p.cos.find(c=>c.id===cid);
+  co.status='Approved';
+  co.approvalDate=todate();
+  p.history.push({date:todate(),text:`${co.num} APPROVED — ${co.desc} (+${fmt(co.value)} · code ${co.code||'—'})`,type:'approved'});
+  // 1. Update CO status in CO sheet (col H)
+  sheetWrite('updateCO',{projectId:pid,pm:p.pm||'',pmEmail:p.pmEmail||'',num:co.num,newStatus:'Approved',approvalDate:co.approvalDate});
+  // 2. Write approved CO value as new row in "Whole data Won/Approved" with approval date in col J
+  const yr=new Date().getFullYear(),mo=new Date().getMonth()+1;
+  sheetWrite('addApprovedCO',{
+    projectId:pid, projectName:p.name, coNum:co.num, desc:co.desc,
+    code:co.code||'', value:co.value, approvalDate:`${mo}/1/${yr}`,
+  });
+  toast(`${co.num} approved — value written to sheet`);
+  renderDetail();renderOverview();
+}
+function approveItem(pid,iid,type){
+  const p=DB.projects.find(x=>x.id===pid),item=(type==='rfi'?p.rfis:p.subs).find(i=>i.id===iid);
+  item.status=type==='rfi'?'Responded':'Approved';
+  const desc=type==='rfi'?item.desc:item.material;
+  p.history.push({date:todate(),text:`${item.num} ${type==='rfi'?'closed':'approved'} — ${desc}`,type:'approved'});
+  sheetWrite(type==='rfi'?'updateRFI':'updateSub',{projectId:pid,num:item.num,newStatus:item.status});
+  toast(`${item.num} ${type==='rfi'?'closed':'approved'}`);renderDetail();renderOverview();
+}
+function denyItem(pid,iid,type){
+  const p=DB.projects.find(x=>x.id===pid),item=(type==='co'?p.cos:type==='rfi'?p.rfis:p.subs).find(i=>i.id===iid);
+  item.status='Canceled';
+  const desc=type==='co'?item.desc:type==='rfi'?item.desc:item.material;
+  p.history.push({date:todate(),text:`${item.num} canceled — ${desc}`,type:'canceled'});
+  sheetWrite(type==='co'?'updateCO':type==='rfi'?'updateRFI':'updateSub',{projectId:pid,num:item.num,newStatus:'Canceled'});
+  toast(`${item.num} canceled`);renderDetail();renderOverview();
+}
+
+// ─── ROSTER ──────────────────────────────────────────────────────────────────
+function dim(y,m){return new Date(y,m+1,0).getDate();}
+function dow(y,m,d){return new Date(y,m,d).getDay();}
+function getVisDays(){
+  const total=dim(calYear,calMonth);
+  if(calView==='month')return Array.from({length:total},(_,i)=>i+1);
+  const t=new Date(),sd=t.getMonth()===calMonth&&t.getFullYear()===calYear?t.getDate():1;
+  const mon=sd-((dow(calYear,calMonth,sd)+6)%7),s=Math.max(1,mon),days=[];
+  for(let i=s;i<=Math.min(s+13,total);i++)days.push(i);
+  return days;
+}
+function getItem(id,type){
+  if(type==='staff')return STAFF.find(e=>e.id===id);
+  if(type==='extra')return EXTRA.find(e=>e.id===id);
+  if(type==='equip')return EQUIP.find(e=>e.id===id);
+  if(type==='rental')return RENTALS.find(e=>e.id===id);
+}
+
+// Returns HTML for a name cell — shows name + pencil icon on hover
+// Double-click anywhere on the cell to edit inline
+function nameCell(id, type) {
+  const item = getItem(id, type);
+  if (!item) return '';
+  const name = item.name || '—';
+  return `<div style="display:flex;align-items:center;gap:4px;cursor:pointer" ondblclick="editName('${id}','${type}')" title="Double-click to rename">
+    <span id="name-${id}" style="font-size:12px;font-weight:600;color:var(--text)">${name}</span>
+    <span class="edit-pencil" style="font-size:10px;color:var(--text3);opacity:0;transition:opacity .15s" onclick="editName('${id}','${type}')">✎</span>
+  </div>`;
+}
+
+// Replaces the name span with an inline input field
+function editName(id, type) {
+  const item = getItem(id, type);
+  if (!item) return;
+  const span = document.getElementById('name-' + id);
+  if (!span) return;
+  const parent = span.parentElement;
+  const oldName = item.name;
+  parent.innerHTML = `<input id="edit-name-${id}" type="text" value="${oldName.replace(/"/g,'&quot;')}"
+    style="font-size:12px;font-weight:600;padding:2px 6px;border-radius:4px;border:1.5px solid var(--blue);background:var(--bg);color:var(--text);width:120px;outline:none"
+    onblur="saveNameEdit('${id}','${type}')"
+    onkeydown="if(event.key==='Enter')saveNameEdit('${id}','${type}');if(event.key==='Escape'){event.target.value='${oldName.replace(/'/g,"\\'")}';saveNameEdit('${id}','${type}')}"
+    onfocus="this.select()">`;
+  setTimeout(() => {
+    const inp = document.getElementById('edit-name-' + id);
+    if (inp) inp.focus();
+  }, 10);
+}
+
+// Saves the new name back to the data array
+function saveNameEdit(id, type) {
+  const inp = document.getElementById('edit-name-' + id);
+  if (!inp) return;
+  const newName = inp.value.trim();
+  if (!newName) { renderRoster(); return; }
+  const item = getItem(id, type);
+  if (item && newName !== item.name) {
+    item.name = newName;
+    saveLocal();
+    toast(`Renamed to "${newName}"`);
+  }
+  renderRoster();
+}
+function prevM(){calMonth--;if(calMonth<0){calMonth=11;calYear--;}renderRoster();}
+function nextM(){calMonth++;if(calMonth>11){calMonth=0;calYear++;}renderRoster();}
+function setCV(v,b){calView=v;document.querySelectorAll('.vt-btn').forEach(x=>x.classList.remove('active'));b.classList.add('active');renderRoster();}
+function setSect(s,b){rosterSect=s;document.querySelectorAll('.ft').forEach(x=>x.classList.remove('active'));b.classList.add('active');renderRoster();}
+function setRosterProjFilter(pid){rosterProjFilter=pid;renderRoster();}
+
+function populateRosterProjFilter(){
+  const sel=document.getElementById('roster-proj-filter');
+  if(!sel)return;
+  const cur=sel.value;
+  // Collect all project IDs that appear in any assignment
+  const allItems=[...STAFF,...EXTRA,...EQUIP,...RENTALS];
+  const usedIds=new Set(allItems.flatMap(e=>Object.values(e.a||{})).filter(Boolean));
+  // Also include active projects
+  DB.projects.filter(p=>p.status==='Active').forEach(p=>usedIds.add(p.id));
+  usedIds.add('OFF');usedIds.add('Warehouse');
+  // Build options sorted by project ID
+  const opts=[...usedIds].sort().map(id=>{
+    const proj=DB.projects.find(p=>p.id===id);
+    const name=proj?proj.name:(id==='OFF'?'OFF / Holiday':id==='Warehouse'?'Warehouse':id);
+    return`<option value="${id}"${cur===id?' selected':''}>${id} — ${name}</option>`;
+  }).join('');
+  sel.innerHTML=`<option value="">— All projects —</option>`+opts;
+  sel.value=cur||'';
+}
+
+function renderRoster(){
+  document.getElementById('month-lbl').textContent=`${MONTHS[calMonth]} ${calYear}`;
+  populateRosterProjFilter(); // keep dropdown fresh
+  const days=getVisDays();
+  const t=new Date(),todayD=t.getMonth()===calMonth&&t.getFullYear()===calYear?t.getDate():null;
+  const show=s=>rosterSect==='all'||rosterSect===s;
+
+  // Helper: if a project filter is active, returns true only if the item
+  // has at least one day assigned to that project in the visible date range
+  const passFilter=item=>{
+    if(!rosterProjFilter)return true;
+    return days.some(d=>{
+      const key=`${calYear}-${calMonth+1}-${d}`;
+      return(item.a?.[key]||'')=== rosterProjFilter;
+    });
+  };
+  let h='<thead><tr>';
+  h+=`<th class="ic" style="min-width:130px">Name / Unit</th>`;
+  h+=`<th class="ic" style="min-width:70px">Info</th>`;
+  days.forEach(d=>{const dw=dow(calYear,calMonth,d),wk=dw===0||dw===6;h+=`<th style="min-width:30px;${wk?'color:#c9a200':''}">${d}<br><span style="font-size:8px;font-weight:500">${DLBL[dw]}</span></th>`;});
+  h+=`</tr></thead><tbody>`;
+  const mkSec=(lbl,col)=>`<tr class="trs"><td colspan="${days.length+2}" style="border-left:3px solid ${col}">${lbl}</td></tr>`;
+  const dayCells=(item,type)=>days.map(d=>{
+    const dw=dow(calYear,calMonth,d),wk=dw===0||dw===6,key=`${calYear}-${calMonth+1}-${d}`,asgn=item.a?.[key]||'',bg=asgn?pc(asgn):'',isT=d===todayD,tc=bg?ptc(bg):'';
+    const note=item.notes?.[key]||'';
+    const titleText=asgn?(note?`${asgn} — ${note}`:asgn):'click to assign';
+    const noteDot=note?`<span style="position:absolute;top:1px;right:1px;width:5px;height:5px;border-radius:50%;background:${tc||'#fff'};opacity:0.8;flex-shrink:0"></span>`:'';
+    return`<td class="day-cell${isT?' today-col':''}" style="position:relative;${bg?`background:${bg};`:''}${wk&&!bg?'background:rgba(0,0,0,0.02);':''}" onclick="clickCell('${item.id}','${key}','${d}','${type}')" title="${titleText.replace(/"/g,'&quot;')}">${asgn?`<div class="day-block" style="color:${tc}">${asgn==='OFF'?'OFF':asgn.split('-')[1]||asgn.slice(0,4)}</div>`:''}${noteDot}</td>`;
+  }).join('');
+
+  if(show('staff')){
+    const teams=[...new Set(STAFF.map(e=>e.team))];
+    teams.forEach(team=>{
+      const members=STAFF.filter(e=>e.team===team&&passFilter(e));
+      if(!members.length)return;
+      const tc=TEAM_COLORS[team]||'#888';
+      h+=mkSec(`${team} · ${members.length} people`,tc);
+      members.forEach(emp=>{
+        h+=`<tr><td class="ic">${nameCell(emp.id,'staff')}</td><td class="ic">`;
+        if(emp.certs.includes('H'))h+=`<span class="cert-badge cert-h">H</span>`;
+        if(emp.certs.includes('RFT'))h+=`<span class="cert-badge cert-r">RFT</span>`;
+        if(emp.certs.includes('EO'))h+=`<span class="cert-badge cert-e">EO</span>`;
+        if(emp.certs.includes('SSO'))h+=`<span class="cert-badge cert-s">SSO</span>`;
+        if(emp.certs.includes('CPR'))h+=`<span class="cert-badge cert-c">CPR</span>`;
+        h+=`</td>${dayCells(emp,'staff')}</tr>`;
+      });
+    });
+  }
+  if(show('extra')){
+    const filtered=EXTRA.filter(e=>passFilter(e));
+    if(filtered.length){
+      h+=mkSec(`Extra workers · ${filtered.length} people`,'#BA7517');
+      filtered.forEach(ew=>{
+        h+=`<tr style="background:rgba(250,238,218,0.2)"><td class="ic">${nameCell(ew.id,'extra')}</td>`;
+        h+=`<td class="ic"><span style="font-size:10px;color:var(--text2)">${ew.project||'—'}</span></td>${dayCells(ew,'extra')}</tr>`;
+      });
+    }
+  }
+  if(show('equip')){
+    const cats=[...new Set(EQUIP.map(e=>e.cat))];
+    cats.forEach(cat=>{
+      const items=EQUIP.filter(e=>e.cat===cat&&passFilter(e));
+      if(!items.length)return;
+      h+=mkSec(`${cat} · ${items.length} units`,'#185FA5');
+      items.forEach(eq=>{
+        h+=`<tr style="background:rgba(230,241,251,0.2)"><td class="ic">${nameCell(eq.id,'equip')}</td>`;
+        h+=`<td class="ic"><span style="font-size:10px;color:var(--text2)">${eq.note||'—'}</span></td>${dayCells(eq,'equip')}</tr>`;
+      });
+    });
+  }
+  if(show('rentals')){
+    const filtered=RENTALS.filter(e=>passFilter(e));
+    if(filtered.length){
+      h+=mkSec(`Rentals · ${filtered.length} items`,'#3B6D11');
+      filtered.forEach(r=>{
+        h+=`<tr style="background:rgba(234,243,222,0.2)"><td class="ic">${nameCell(r.id,'rental')}</td><td class="ic"></td>${dayCells(r,'rental')}</tr>`;
+      });
+    }
+  }
+  h+=`</tbody>`;
+  document.getElementById('roster-tbl').innerHTML=h;
+  const usedAll=[...STAFF,...EXTRA,...EQUIP,...RENTALS].flatMap(e=>Object.values(e.a||{})).filter(Boolean);
+  const uniq=[...new Set(usedAll)];
+  document.getElementById('roster-legend').innerHTML=uniq.map(p=>`<span class="li"><span class="lsq" style="background:${pc(p)}"></span>${p}</span>`).join('')+
+    (uniq.length?'<span class="li"><span class="lsq" style="background:#FCEBEB;border:0.5px solid #F09595"></span>OFF</span>':'');
+}
+
+function clickCell(itemId,dateKey,day,type){
+  const item=getItem(itemId,type);if(!item)return;
+  if(!item.a)item.a={};
+  if(!item.notes)item.notes={};
+  const cur=item.a[dateKey]||'';
+  const curNote=item.notes[dateKey]||'';
+  const d=dateKey.split('-'),dl=`${day} ${MO[parseInt(d[1])-1]} ${d[0]}`;
+  const activeProjs=DB.projects.filter(p=>p.status==='Active');
+  const pOpts=`<option value="">— Unassigned —</option>`+PROJECTS_LIST.filter(p=>p.id==='OFF'||p.id==='Warehouse'||activeProjs.find(ap=>ap.id===p.id)).map(p=>`<option value="${p.id}"${cur===p.id?' selected':''}>${p.id} — ${p.name}</option>`).join('');
+  showModal(`<div class="modal-title">Assign · ${item.name}</div>
+    <div style="font-size:12px;color:var(--text2);margin-bottom:12px">${dl}</div>
+    <div class="fg"><label>Project / assignment</label><select id="cp-proj">${pOpts}</select></div>
+    <div class="fg"><label>Notes / details for this day</label><textarea id="cp-note" placeholder="e.g. Equipment needed, site instructions, contact info..." style="min-height:72px;width:100%;font-size:13px;padding:8px;border-radius:var(--radius);border:0.5px solid var(--border2);background:var(--bg);color:var(--text);font-family:inherit;resize:vertical">${curNote}</textarea></div>
+    <div class="form-actions">
+      ${cur?`<button class="btn btn-deny btn-sm" onclick="clearCell('${itemId}','${dateKey}','${type}')">Clear</button>`:''}
+      <button class="btn" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="saveCell('${itemId}','${dateKey}','${type}')">Save</button>
+    </div>`);
+}
+function saveCell(id,key,type){
+  const item=getItem(id,type);
+  if(!item.a)item.a={};
+  if(!item.notes)item.notes={};
+  const v=document.getElementById('cp-proj').value;
+  const note=(document.getElementById('cp-note')?.value||'').trim();
+  if(v)item.a[key]=v;else delete item.a[key];
+  if(note)item.notes[key]=note;else delete item.notes[key];
+  saveLocal();closeModal();renderRoster();
+}
+function clearCell(id,key,type){
+  const item=getItem(id,type);
+  if(item.a)delete item.a[key];
+  if(item.notes)delete item.notes[key];
+  saveLocal();closeModal();renderRoster();
+}
+
+// ─── MULTI-ASSIGN ────────────────────────────────────────────────────────────
+function renderAssignPicker(){
+  const q=(document.getElementById('assign-search')?.value||'').toLowerCase();
+  const visible=ALL_ROSTER_ITEMS().filter(i=>!q||i.name.toLowerCase().includes(q)||i.group.toLowerCase().includes(q));
+  const groups=[...new Set(visible.map(i=>i.group))];
+  let h='';
+  groups.forEach(g=>{
+    const items=visible.filter(i=>i.group===g);
+    const firstItem=items[0];
+    const tc=TEAM_COLORS[g]||CAT_COLORS[firstItem?.cat]||'#888';
+    h+=`<div class="team-group"><div class="team-group-hd"><span style="width:7px;height:7px;border-radius:50%;background:${tc};flex-shrink:0"></span>${g}</div><div>`;
+    items.forEach(item=>{
+      const chk=assignSelected.has(item.id);
+      h+=`<div class="person-row${chk?' checked':''}" id="arow-${item.id}" onclick="toggleAssign('${item.id}')">
+        <input type="checkbox" ${chk?'checked':''} onclick="event.stopPropagation();toggleAssign('${item.id}')">
+        <span class="team-dot" style="background:${tc}"></span>
+        <span class="person-name">${item.name}</span>
+        <span class="person-tag">${item.cat}</span>
+      </div>`;
+    });
+    h+=`</div></div>`;
+  });
+  document.getElementById('assign-picker').innerHTML=h||'<div style="text-align:center;padding:1rem;color:var(--text3);font-size:13px">No results</div>';
+  renderAssignChips();
+}
+function renderAssignChips(){
+  document.getElementById('assign-count').textContent=assignSelected.size;
+  const items=ALL_ROSTER_ITEMS();
+  document.getElementById('assign-chips').innerHTML=[...assignSelected].map(id=>{
+    const item=items.find(i=>i.id===id);if(!item)return'';
+    const tc=TEAM_COLORS[item.group]||CAT_COLORS[item.cat]||'#888';
+    return`<span class="chip"><span style="width:6px;height:6px;border-radius:50%;background:${tc}"></span>${item.name}<span class="chip-x" onclick="toggleAssign('${id}')">&times;</span></span>`;
+  }).join('');
+}
+function toggleAssign(id){
+  if(assignSelected.has(id))assignSelected.delete(id);else assignSelected.add(id);
+  const row=document.getElementById('arow-'+id);
+  if(row)row.classList.toggle('checked',assignSelected.has(id));
+  const chk=row?.querySelector('input[type="checkbox"]');
+  if(chk)chk.checked=assignSelected.has(id);
+  renderAssignChips();
+}
+function selectAllAssign(){ALL_ROSTER_ITEMS().filter(i=>{const q=(document.getElementById('assign-search')?.value||'').toLowerCase();return!q||i.name.toLowerCase().includes(q)||i.group.toLowerCase().includes(q);}).forEach(i=>assignSelected.add(i.id));renderAssignPicker();}
+function clearAllAssign(){assignSelected.clear();renderAssignPicker();}
+function doAssign(){
+  if(!assignSelected.size){toast('Select at least one person or unit');return;}
+  const projId=document.getElementById('assign-proj').value;
+  const from=parseInt(document.getElementById('assign-from').value);
+  const to=parseInt(document.getElementById('assign-to').value);
+  if(from>to){toast('Start day must be before end day');return;}
+  const items=ALL_ROSTER_ITEMS();
+  let count=0;
+  assignSelected.forEach(id=>{
+    const item=items.find(i=>i.id===id);if(!item)return;
+    const realItem=getItem(id,item.cat==='extra'?'extra':item.cat==='equip'?'equip':item.cat==='rental'?'rental':'staff');
+    if(!realItem)return;if(!realItem.a)realItem.a={};
+    for(let d=from;d<=to;d++){realItem.a[`${calYear}-${calMonth+1}-${d}`]=projId;}
+    count++;
+  });
+  closeModal();renderRoster();saveLocal();toast(`Assigned ${projId} to ${count} people/units · days ${from}–${to}`);
+}
+
+// ─── MODALS ──────────────────────────────────────────────────────────────────
+function showModal(content,large=false){
+  document.getElementById('modal-area').innerHTML=`<div class="modal-backdrop" onclick="if(event.target===this)closeModal()"><div class="modal${large?' modal-lg':''}">${content}</div></div>`;
+}
+function closeModal(){document.getElementById('modal-area').innerHTML='';assignSelected.clear();}
+
+function openModal(type,pid,extra){
+  const codeOpts=Object.entries(CODES_MAP).map(([k,v])=>`<option value="${k}">${k} — ${v}</option>`).join('');
+  const activeProjects=DB.projects.filter(p=>p.status==='Active');
+  const pOpts=PROJECTS_LIST.filter(p=>p.id==='OFF'||p.id==='Warehouse'||activeProjects.find(ap=>ap.id===p.id)).map(p=>`<option value="${p.id}"${p.id===pid?' selected':''}>${p.id} — ${p.name}</option>`).join('');
+  const total=dim(calYear,calMonth);
+
+  if(type==='assign'){
+    assignSelected.clear();
+    showModal(`<div class="modal-title">Assign project to date range</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:14px">
+        <div class="fg" style="margin-bottom:0;grid-column:1/3"><label>Project</label><select id="assign-proj" class="fi">${pOpts}</select></div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+          <div class="fg" style="margin-bottom:0"><label>Start day</label><input id="assign-from" type="number" class="fi" min="1" max="${total}" value="1"></div>
+          <div class="fg" style="margin-bottom:0"><label>End day</label><input id="assign-to" type="number" class="fi" min="1" max="${total}" value="${total}"></div>
+        </div>
+      </div>
+      <div class="divider"></div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px">
+        <label class="fl" style="margin-bottom:0">Select people &amp; equipment</label>
+        <div style="display:flex;gap:6px">
+          <button class="btn btn-sm" onclick="selectAllAssign()">Select all</button>
+          <button class="btn btn-sm" onclick="clearAllAssign()">Clear</button>
+        </div>
+      </div>
+      <input class="picker-search" id="assign-search" placeholder="Search by name or team..." oninput="renderAssignPicker()">
+      <div class="picker-box" id="assign-picker"></div>
+      <div class="sel-summary"><span style="color:var(--text2);font-size:12px">Selected: <span class="sel-count" id="assign-count">0</span> people / units</span></div>
+      <div class="chips-wrap" id="assign-chips"></div>
+      <div class="form-actions">
+        <button class="btn" onclick="closeModal()">Cancel</button>
+        <button class="btn btn-primary" onclick="doAssign()">Assign to all selected</button>
+      </div>`,true);
+    setTimeout(renderAssignPicker,10);
+    return;
+  }
+
+  if(type==='project'){
+    showModal(`<div class="modal-title">New project</div>
+      <div class="fg2"><div class="fg" style="margin-bottom:0"><label>Project number</label><input id="f-num" placeholder="26-011"></div><div class="fg" style="margin-bottom:0"><label>Name</label><input id="f-pname" placeholder="Project name"></div></div>
+      <div class="fg2"><div class="fg" style="margin-bottom:0"><label>Project manager</label><input id="f-pm" placeholder="Full name"></div><div class="fg" style="margin-bottom:0"><label>PM email</label><input id="f-email" type="email" placeholder="pm@zlccorp.com"></div></div>
+      <div class="fg"><label>Address</label><input id="f-addr" placeholder="Project address"></div>
+      <div class="fg2"><div class="fg" style="margin-bottom:0"><label>Client</label><input id="f-client" placeholder="Client name"></div><div class="fg" style="margin-bottom:0"><label>Start month</label><select id="f-month">${MO.map(m=>`<option>${m}</option>`).join('')}</select></div></div>
+      <div class="fg"><label>Status</label><select id="f-status"><option>Active</option><option>Pending</option><option>Complete</option><option>On hold</option><option>Finish</option><option>Canceled</option></select></div>
+      <div class="divider"></div>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px"><label class="fl" style="margin-bottom:0">Cost codes &amp; values</label><button class="btn btn-sm" onclick="addCodeRow()">+ Add code</button></div>
+      <div id="code-rows"><div class="code-row-entry" id="coderow-0"><select style="flex:1;min-width:0">${codeOpts}</select><input type="number" placeholder="Value ($)" style="width:120px"><button class="btn btn-sm btn-deny" onclick="removeCodeRow('coderow-0')">✕</button></div></div>
+      <div class="form-actions"><button class="btn" onclick="closeModal()">Cancel</button><button class="btn btn-primary" onclick="saveProject()">Save project</button></div>`);
+  } else if(type==='co'){
+    showModal(`<div class="modal-title">New change order</div>
+      <div class="fg"><label>Project</label><select id="f-proj">${DB.projects.map(p=>`<option value="${p.id}"${p.id===pid?' selected':''}>${p.id} — ${p.name}</option>`).join('')}</select></div>
+      <div class="fg2"><div class="fg" style="margin-bottom:0"><label>CO number</label><input id="f-conum" placeholder="CO#02"></div><div class="fg" style="margin-bottom:0"><label>Value ($)</label><input id="f-coval" type="number" placeholder="0"></div></div>
+      <div class="fg2"><div class="fg" style="margin-bottom:0"><label>Cost code</label><select id="f-cocode">${codeOpts}</select></div><div class="fg" style="margin-bottom:0"><label>Date</label><input id="f-codate" type="date"></div></div>
+      <div class="fg"><label>Description</label><input id="f-codesc" placeholder="Describe additional work..."></div>
+      <div class="fg"><label>Status</label><select id="f-cost"><option>Pending</option><option>Approved</option><option>Canceled</option></select></div>
+      <div class="form-actions"><button class="btn" onclick="closeModal()">Cancel</button><button class="btn btn-primary" onclick="saveCO()">Save CO</button></div>`);
+  } else if(type==='rfi'){
+    showModal(`<div class="modal-title">New RFI</div>
+      <div class="fg"><label>Project</label><select id="f-proj">${DB.projects.map(p=>`<option value="${p.id}"${p.id===pid?' selected':''}>${p.id} — ${p.name}</option>`).join('')}</select></div>
+      <div class="fg2"><div class="fg" style="margin-bottom:0"><label>RFI number</label><input id="f-rnum" placeholder="RFI-02"></div><div class="fg" style="margin-bottom:0"><label>Date submitted</label><input id="f-rdate" type="date"></div></div>
+      <div class="fg"><label>Description / question</label><textarea id="f-rdesc" placeholder="Describe the clarification needed..."></textarea></div>
+      <div class="form-actions"><button class="btn" onclick="closeModal()">Cancel</button><button class="btn btn-primary" onclick="saveRFI()">Save RFI</button></div>`);
+  } else if(type==='sub'){
+    showModal(`<div class="modal-title">New submittal</div>
+      <div class="fg"><label>Project</label><select id="f-proj">${DB.projects.map(p=>`<option value="${p.id}"${p.id===pid?' selected':''}>${p.id} — ${p.name}</option>`).join('')}</select></div>
+      <div class="fg2"><div class="fg" style="margin-bottom:0"><label>Submittal number</label><input id="f-snum" placeholder="SUB-03"></div><div class="fg" style="margin-bottom:0"><label>Date submitted</label><input id="f-sdate" type="date"></div></div>
+      <div class="fg2"><div class="fg" style="margin-bottom:0"><label>Cost code</label><select id="f-scode">${codeOpts}</select></div><div class="fg" style="margin-bottom:0"><label>Status</label><select id="f-sst"><option>Under review</option><option>Pending review</option><option>Approved</option></select></div></div>
+      <div class="fg"><label>Material / item</label><input id="f-smat" placeholder="e.g. Concrete mix design, Shop drawings..."></div>
+      <div class="form-actions"><button class="btn" onclick="closeModal()">Cancel</button><button class="btn btn-primary" onclick="saveSub()">Save submittal</button></div>`);
+  } else if(type==='historical'){
+    const nxt=DB.historical.length?DB.historical[DB.historical.length-1].year+1:2023;
+    showModal(`<div class="modal-title">Add historical year</div>
+      <div class="fg2"><div class="fg" style="margin-bottom:0"><label>Year</label><input id="h-year" type="number" value="${nxt}"></div><div class="fg" style="margin-bottom:0"><label>Total sales ($)</label><input id="h-total" type="number" placeholder="0"></div></div>
+      <div class="divider"></div><div style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:8px">Sales by quarter</div>
+      <div class="fg2"><div class="fg" style="margin-bottom:0"><label>Q1</label><input id="h-q1" type="number" placeholder="0"></div><div class="fg" style="margin-bottom:0"><label>Q2</label><input id="h-q2" type="number" placeholder="0"></div></div>
+      <div class="fg2"><div class="fg" style="margin-bottom:0"><label>Q3</label><input id="h-q3" type="number" placeholder="0"></div><div class="fg" style="margin-bottom:0"><label>Q4</label><input id="h-q4" type="number" placeholder="0"></div></div>
+      <div class="divider"></div><div style="font-size:12px;font-weight:600;color:var(--text);margin-bottom:8px">Sales by cost code</div>
+      <div class="fg2">${Object.entries(CODES_MAP).map(([k,v])=>`<div class="fg" style="margin-bottom:0"><label>${k} — ${v}</label><input id="h-code-${k}" type="number" placeholder="0"></div>`).join('')}</div>
+      <div class="form-actions"><button class="btn" onclick="closeModal()">Cancel</button><button class="btn btn-primary" onclick="saveHistorical()">Save year</button></div>`);
+  } else if(type==='emp'){
+    const teams=[...new Set(STAFF.map(e=>e.team))];
+    showModal(`<div class="modal-title">New employee</div>
+      <div class="fg2"><div class="fg" style="margin-bottom:0"><label>Name</label><input id="n-name" placeholder="Name #vehicle"></div>
+      <div class="fg" style="margin-bottom:0"><label>Team</label><select id="n-team" onchange="document.getElementById('nt-w').style.display=this.value==='__new__'?'block':'none'">${teams.map(t=>`<option>${t}</option>`).join('')}<option value="__new__">+ New team</option></select></div></div>
+      <div id="nt-w" style="display:none" class="fg"><label>New team name</label><input id="n-newt" placeholder="Team name"></div>
+      <div class="fg"><label>Certifications</label><div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:5px">${['H','RFT','EO','SSO','CPR'].map(c=>`<label style="display:flex;align-items:center;gap:4px;font-size:12px;color:var(--text);font-weight:400"><input type="checkbox" id="c-${c.toLowerCase()}" style="width:auto;accent-color:var(--blue)"> ${c}</label>`).join('')}</div></div>
+      <div class="fg"><label>Vehicle status</label><select id="n-veh"><option value="">N/A</option><option value="Good">Good</option><option value="Needs attention">Needs attention</option></select></div>
+      <div class="form-actions"><button class="btn" onclick="closeModal()">Cancel</button><button class="btn btn-primary" onclick="saveEmp()">Save</button></div>`);
+  } else if(type==='extraW'){
+    showModal(`<div class="modal-title">New extra worker</div>
+      <div class="fg"><label>Name</label><input id="ew-name" placeholder="Worker name"></div>
+      <div class="fg"><label>Associated project</label><select id="ew-proj"><option value="">— Unassigned —</option>${pOpts}</select></div>
+      <div class="form-actions"><button class="btn" onclick="closeModal()">Cancel</button><button class="btn btn-primary" onclick="saveExtraW()">Save</button></div>`);
+  } else if(type==='order'){
+    const o = extra || {}; // extra = existing order if editing
+    const activeProjs = DB.projects.filter(p=>p.status==='Active');
+    const projOpts = `<option value="">— No project —</option>`
+      + activeProjs.map(p=>`<option value="${p.id}"${o.project===p.id?' selected':''}>${p.id} — ${p.name}</option>`).join('');
+    showModal(`<div class="modal-title">${o.id?'Edit order':'New open order'}</div>
+      <input type="hidden" id="ord-id" value="${o.id||''}">
+      <div class="fg"><label>Title <span style="color:#E24B4A">*</span></label>
+        <input id="ord-title" placeholder="e.g. Submit permit application, Call client, Follow up CO#5..." value="${o.title||''}"></div>
+      <div class="fg2">
+        <div class="fg" style="margin-bottom:0"><label>Priority</label>
+          <select id="ord-pri">
+            <option value="High"${(o.priority||'Medium')==='High'?' selected':''}>🔴 High</option>
+            <option value="Medium"${(o.priority||'Medium')==='Medium'?' selected':''}>🟡 Medium</option>
+            <option value="Low"${(o.priority||'Medium')==='Low'?' selected':''}>🔵 Low</option>
+          </select></div>
+        <div class="fg" style="margin-bottom:0"><label>Due date</label>
+          <input id="ord-due" type="date" value="${o.due||''}"></div>
+      </div>
+      <div class="fg2">
+        <div class="fg" style="margin-bottom:0"><label>Project</label>
+          <select id="ord-proj">${projOpts}</select></div>
+        <div class="fg" style="margin-bottom:0"><label>Assignee</label>
+          <input id="ord-assignee" placeholder="Name" value="${o.assignee||''}"></div>
+      </div>
+      <div class="fg"><label>Notes</label>
+        <textarea id="ord-desc" placeholder="Additional details..." style="min-height:60px">${o.desc||''}</textarea></div>
+      <div class="form-actions">
+        <button class="btn" onclick="closeModal()">Cancel</button>
+        <button class="btn btn-primary" onclick="saveOrder()">Save order</button>
+      </div>`);
+  }
+}
+
+// ─── SAVES ───────────────────────────────────────────────────────────────────
+function addCodeRow(){
+  const id='coderow-'+codeRowIdx++;
+  const cOpts=Object.entries(CODES_MAP).map(([k,v])=>`<option value="${k}">${k} — ${v}</option>`).join('');
+  const div=document.createElement('div');div.className='code-row-entry';div.id=id;
+  div.innerHTML=`<select style="flex:1;min-width:0">${cOpts}</select><input type="number" placeholder="Value ($)" style="width:120px"><button class="btn btn-sm btn-deny" onclick="removeCodeRow('${id}')">✕</button>`;
+  document.getElementById('code-rows').appendChild(div);
+}
+function removeCodeRow(id){const el=document.getElementById(id);if(el)el.remove();}
+
+function saveProject(){
+  const num=document.getElementById('f-num').value.trim(),name=document.getElementById('f-pname').value.trim();
+  if(!num||!name){toast('Number and name required');return;}
+  if(DB.projects.find(p=>p.id===num)){toast('Project number already exists');return;}
+  const codes=[...document.getElementById('code-rows').querySelectorAll('.code-row-entry')].map(r=>({code:r.querySelector('select').value,value:parseFloat(r.querySelector('input[type="number"]').value)||0})).filter(c=>c.value>0);
+  if(!codes.length){toast('Add at least one cost code with a value');return;}
+  const pm=document.getElementById('f-pm').value.trim()||'—';
+  const pmEmail=document.getElementById('f-email').value.trim()||'—';
+  const address=document.getElementById('f-addr').value.trim()||'—';
+  const client=document.getElementById('f-client').value.trim()||'—';
+  const month=document.getElementById('f-month').value;
+  const status=document.getElementById('f-status').value;
+  // Build a full date string for col J — e.g. "Jan" → "1/1/2026"
+  const moIdx={'Jan':0,'Feb':1,'Mar':2,'Apr':3,'May':4,'Jun':5,'Jul':6,'Aug':7,'Sep':8,'Oct':9,'Nov':10,'Dec':11};
+  const yr=new Date().getFullYear();
+  const mi=moIdx[month]??new Date().getMonth();
+  const fullDate=`${mi+1}/1/${yr}`;
+  DB.projects.push({id:num,name,pm,pmEmail,address,client,codes,month,year:yr,status,notes:'',cos:[],rfis:[],subs:[],history:[{date:todate(),text:`Project created — ${name}`,type:'created'}],_manual:true});
+  sheetWrite('addProject',{id:num,name,pm,pmEmail,address,client,codes,month:fullDate,status});
+  saveLocal();closeModal();toast(`Project ${num} saved → Sheets`);renderProjTable();renderOverview();selProject(num);
+}
+function saveCO(){
+  const pid=document.getElementById('f-proj').value,num=document.getElementById('f-conum').value.trim(),val=parseFloat(document.getElementById('f-coval').value)||0,desc=document.getElementById('f-codesc').value.trim(),code=document.getElementById('f-cocode').value,status=document.getElementById('f-cost').value,dr=document.getElementById('f-codate').value;
+  if(!num||!desc){toast('Number and description required');return;}
+  const p=DB.projects.find(x=>x.id===pid),ds=dr?new Date(dr).toLocaleDateString('en-US',{month:'short',day:'numeric'}):todate();
+  p.cos.push({id:uid(),num,desc,value:val,status,date:ds,code});
+  p.history.push({date:todate(),text:`${num} created — ${desc} (${fmt(val)} · code ${code})`,type:'co'});
+  if(status==='Approved'){
+    p.history.push({date:todate(),text:`${num} APPROVED — +${fmt(val)} added to project value`,type:'approved'});
+    sheetWrite('addApprovedCO',{projectId:pid,projectName:p.name,coNum:num,desc,code,value:val,approvalDate:ds});
+  }
+  // Send pm + pmEmail so CO sheet cols A=Email B=Name are filled correctly
+  sheetWrite('addCO',{projectId:pid,projectName:p.name,pm:p.pm||'',pmEmail:p.pmEmail||'',num,desc,code,value:val,status,date:ds});
+  closeModal();toast(`${num} saved → Sheets`);if(selProj===pid){subTab='cos';renderDetail();}renderOverview();
+}
+function saveRFI(){
+  const pid=document.getElementById('f-proj').value,num=document.getElementById('f-rnum').value.trim(),desc=document.getElementById('f-rdesc').value.trim(),dr=document.getElementById('f-rdate').value;
+  if(!num||!desc){toast('Number and description required');return;}
+  const p=DB.projects.find(x=>x.id===pid),ds=dr?new Date(dr).toLocaleDateString('en-US',{month:'short',day:'numeric'}):todate();
+  p.rfis.push({id:uid(),num,desc,submitted:ds,response:'—',status:'Open'});
+  p.history.push({date:todate(),text:`${num} submitted — ${desc}`,type:'rfi'});
+  sheetWrite('addRFI',{projectId:pid,projectName:p.name,num,desc,submitted:ds});
+  closeModal();toast(`${num} saved → Sheets`);if(selProj===pid){subTab='rfis';renderDetail();}renderOverview();
+}
+function saveSub(){
+  const pid=document.getElementById('f-proj').value,num=document.getElementById('f-snum').value.trim(),mat=document.getElementById('f-smat').value.trim(),status=document.getElementById('f-sst').value,code=document.getElementById('f-scode').value,dr=document.getElementById('f-sdate').value;
+  if(!num||!mat){toast('Number and material required');return;}
+  const p=DB.projects.find(x=>x.id===pid),ds=dr?new Date(dr).toLocaleDateString('en-US',{month:'short',day:'numeric'}):todate();
+  p.subs.push({id:uid(),num,material:mat,submitted:ds,status,code});
+  p.history.push({date:todate(),text:`${num} submitted — ${mat} · code ${code}`,type:'sub'});
+  sheetWrite('addSub',{projectId:pid,projectName:p.name,num,material:mat,code,submitted:ds,status});
+  closeModal();toast(`${num} saved → Sheets`);if(selProj===pid){subTab='subs';renderDetail();}renderOverview();
+}
+function saveHistorical(){
+  const year=parseInt(document.getElementById('h-year').value),total=parseFloat(document.getElementById('h-total').value)||0;
+  if(!year||year<2000){toast('Invalid year');return;}
+  const quarters={Q1:parseFloat(document.getElementById('h-q1').value)||0,Q2:parseFloat(document.getElementById('h-q2').value)||0,Q3:parseFloat(document.getElementById('h-q3').value)||0,Q4:parseFloat(document.getElementById('h-q4').value)||0};
+  const codes={};Object.keys(CODES_MAP).forEach(k=>{const v=parseFloat(document.getElementById('h-code-'+k).value)||0;if(v>0)codes[k]=v;});
+  const idx=DB.historical.findIndex(h=>h.year===year);
+  if(idx>=0)DB.historical[idx]={year,total,quarters,codes};else{DB.historical.push({year,total,quarters,codes});DB.historical.sort((a,b)=>a.year-b.year);}
+  closeModal();toast(`${year} data saved`);saveLocal();renderAnalytics();
+}
+function saveEmp(){
+  const name=document.getElementById('n-name').value.trim();if(!name){toast('Name required');return;}
+  let team=document.getElementById('n-team').value;if(team==='__new__')team=document.getElementById('n-newt').value.trim()||'New team';
+  const certs=['h','rft','eo','sso','cpr'].filter(c=>document.getElementById('c-'+c)?.checked).map(c=>c.toUpperCase());
+  STAFF.push({id:uid(),name,team,certs,veh:document.getElementById('n-veh').value,a:{},notes:{}});
+  saveLocal();closeModal();renderRoster();toast(`${name} added`);
+}
+function saveExtraW(){
+  const name=document.getElementById('ew-name').value.trim();if(!name){toast('Name required');return;}
+  EXTRA.push({id:'ew'+uid(),name,project:document.getElementById('ew-proj').value,a:{},notes:{}});
+  saveLocal();closeModal();renderRoster();toast(`${name} added`);
+}
+
+// ─── LOCAL STORAGE PERSISTENCE ────────────────────────────────────────────────
+// Saves roster assignments, notes, extra staff, and manually added projects
+// so data survives page refresh
+function saveLocal() {
+  try {
+    // Save roster assignments + notes for all items
+    const rosterData = {
+      staff: STAFF.map(e => ({ id:e.id, a:e.a||{}, notes:e.notes||{} })),
+      extra: EXTRA.map(e => ({ id:e.id, a:e.a||{}, notes:e.notes||{}, project:e.project })),
+      equip: EQUIP.map(e => ({ id:e.id, a:e.a||{}, notes:e.notes||{} })),
+      rentals: RENTALS.map(e => ({ id:e.id, a:e.a||{}, notes:e.notes||{} })),
+      extraList: EXTRA.filter(e => e.id.startsWith('ew') && !['ew1','ew2','ew3','ew4','ew5','ew6','ew7','ew8'].includes(e.id)),
+      staffList: STAFF.filter(e => !['e1','e2','e3','e4','e5','e6','e7','e8','e9','e10','e11','e12','e13','e14','e15','e16','e17'].includes(e.id)),
+    };
+    localStorage.setItem('zlc_roster', JSON.stringify(rosterData));
+    // Save open orders
+    localStorage.setItem('zlc_orders', JSON.stringify(DB.openOrders||[]));
+    // Save manually added projects (those not from the sheet)
+    const manualProjects = DB.projects.filter(p => p._manual);
+    localStorage.setItem('zlc_manual_projects', JSON.stringify(manualProjects));
+    // Save historical overrides
+    localStorage.setItem('zlc_historical', JSON.stringify(DB.historical));
+  } catch(e) { console.warn('saveLocal error:', e); }
+}
+
+function loadLocal() {
+  try {
+    // Restore roster assignments + notes
+    const rosterRaw = localStorage.getItem('zlc_roster');
+    if (rosterRaw) {
+      const rd = JSON.parse(rosterRaw);
+      // Restore assignments and notes into existing items
+      (rd.staff||[]).forEach(saved => {
+        const item = STAFF.find(e => e.id === saved.id);
+        if (item) { item.a = saved.a||{}; item.notes = saved.notes||{}; }
+      });
+      (rd.extra||[]).forEach(saved => {
+        const item = EXTRA.find(e => e.id === saved.id);
+        if (item) { item.a = saved.a||{}; item.notes = saved.notes||{}; item.project = saved.project||item.project; }
+      });
+      (rd.equip||[]).forEach(saved => {
+        const item = EQUIP.find(e => e.id === saved.id);
+        if (item) { item.a = saved.a||{}; item.notes = saved.notes||{}; }
+      });
+      (rd.rentals||[]).forEach(saved => {
+        const item = RENTALS.find(e => e.id === saved.id);
+        if (item) { item.a = saved.a||{}; item.notes = saved.notes||{}; }
+      });
+      // Restore extra workers added by user
+      (rd.extraList||[]).forEach(saved => {
+        if (!EXTRA.find(e => e.id === saved.id)) EXTRA.push(saved);
+      });
+      // Restore staff added by user
+      (rd.staffList||[]).forEach(saved => {
+        if (!STAFF.find(e => e.id === saved.id)) STAFF.push(saved);
+      });
+    }
+    // Restore historical overrides
+    const histRaw = localStorage.getItem('zlc_historical');
+    if (histRaw) DB.historical = JSON.parse(histRaw);
+    // Restore open orders
+    const ordRaw = localStorage.getItem('zlc_orders');
+    if (ordRaw) DB.openOrders = JSON.parse(ordRaw);
+    // Restore manually added projects (will be merged after sheet sync)
+    const manualRaw = localStorage.getItem('zlc_manual_projects');
+    if (manualRaw) {
+      const manual = JSON.parse(manualRaw);
+      manual.forEach(p => { if (!DB.projects.find(x => x.id === p.id)) DB.projects.push(p); });
+    }
+  } catch(e) { console.warn('loadLocal error:', e); }
+}
+
+// ─── INIT ─────────────────────────────────────────────────────────────────────
+loadLocal();        // Restore saved local data first
+renderAnalytics();
+renderProjTable();
+syncFromSheets();   // Then sync from Google Sheets (will update projects)
+</script>
+</body>
+</html>
