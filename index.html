@@ -266,7 +266,9 @@
   </div>
   <div style="flex:1"></div>
   <div style="padding:12px 16px;border-top:0.5px solid var(--border)">
-    <button id="sync-badge" onclick="syncFromSheets()" style="width:100%;font-size:11px;font-weight:600;padding:7px 12px;border-radius:var(--radius);border:0.5px solid var(--border2);cursor:pointer;transition:all .15s;background:#f0eeea;color:#9e9c97">Sync from Sheets</button>
+    <button id="sync-badge" onclick="syncFromSheets()" style="width:100%;font-size:11px;font-weight:600;padding:7px 12px;border-radius:var(--radius);border:0.5px solid var(--border2);cursor:pointer;transition:all .15s;background:#f0eeea;color:#9e9c97">↻ Sync from Sheets</button>
+    <button onclick="forceSaveToCloud()" style="width:100%;margin-top:6px;font-size:11px;font-weight:600;padding:6px 12px;border-radius:var(--radius);border:0.5px solid #185FA5;cursor:pointer;background:#E8F0FE;color:#185FA5">☁ Save to cloud</button>
+    <button onclick="loadFromCloud()" style="width:100%;margin-top:6px;font-size:11px;font-weight:600;padding:6px 12px;border-radius:var(--radius);border:0.5px solid var(--border2);cursor:pointer;background:#f0eeea;color:#9e9c97">↓ Load from cloud</button>
     <button onclick="testWrite()" style="width:100%;margin-top:6px;font-size:11px;font-weight:600;padding:6px 12px;border-radius:var(--radius);border:0.5px solid var(--border2);cursor:pointer;background:#EAF3DE;color:#27500A">Test Sheet write</button>
     <div id="write-log" style="font-size:10px;color:var(--text3);margin-top:6px;word-break:break-all;line-height:1.4"></div>
     <div style="font-size:10px;color:var(--text3);text-align:center;margin-top:6px">ZLC Project Manager v1.1</div>
@@ -2539,18 +2541,36 @@ function saveToCloud(rosterData) {
     'manual':     DB.projects.filter(p=>p._manual),
     'historical': DB.historical,
   };
-  // Use fetch GET — works from GitHub Pages (HTTPS)
+  // Use POST no-cors — avoids URL length limits and works from GitHub Pages
   const saveOne = (key, value) => {
-    const url = APPS_SCRIPT_URL + '?data=' + encodeURIComponent(JSON.stringify({action:'saveAppData', key, value}));
-    fetch(url)
-      .then(r=>r.json())
-      .then(r=>{ if(r.ok) console.log('Cloud saved:', key); })
-      .catch(e=>console.warn('Cloud save failed for', key, e.message));
+    const body = JSON.stringify({action:'saveAppData', key, value});
+    fetch(APPS_SCRIPT_URL, {
+      method: 'POST',
+      mode: 'no-cors',
+      headers: {'Content-Type': 'text/plain;charset=utf-8'},
+      body: body,
+    }).then(()=>console.log('Cloud saved (no-cors):', key))
+      .catch(e=>console.warn('Cloud save failed:', key, e.message));
   };
-  // Stagger saves by 200ms each to avoid rate limits
+  // Stagger saves by 400ms each to avoid Apps Script rate limits
   Object.entries(chunks).forEach(([key, value], i) => {
-    setTimeout(() => saveOne(key, value), i * 300);
+    setTimeout(() => saveOne(key, value), i * 400);
   });
+}
+
+// Manual cloud save button — call this from the sidebar sync button
+async function forceSaveToCloud() {
+  toast('Saving to cloud...');
+  const rosterData = {
+    staff:   STAFF.map(e=>({id:e.id,a:e.a||{},notes:e.notes||{},wh:e.wh||{},cc:e.cc||{},co:e.co||{},name:e.name})),
+    extra:   EXTRA.map(e=>({id:e.id,a:e.a||{},notes:e.notes||{},wh:e.wh||{},cc:e.cc||{},co:e.co||{},name:e.name,project:e.project})),
+    equip:   EQUIP.map(e=>({id:e.id,a:e.a||{},notes:e.notes||{},wh:e.wh||{},cc:e.cc||{},co:e.co||{},name:e.name})),
+    rentals: RENTALS.map(e=>({id:e.id,a:e.a||{},notes:e.notes||{},wh:e.wh||{},cc:e.cc||{},co:e.co||{},name:e.name})),
+    extraList: EXTRA.filter(e=>e.id.startsWith('ew')&&!['ew1','ew2','ew3','ew4','ew5','ew6','ew7','ew8'].includes(e.id)),
+    staffList: STAFF.filter(e=>!['e1','e2','e3','e4','e5','e6','e7','e8','e9','e10','e11','e12','e13','e14','e15','e16','e17','e18'].includes(e.id)),
+  };
+  saveToCloud(rosterData);
+  setTimeout(()=>toast('✓ Saved to cloud'), 2000);
 }
 
 function loadLocal() {
