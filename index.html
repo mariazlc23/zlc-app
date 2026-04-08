@@ -2028,18 +2028,49 @@ function clickCell(itemId,dateKey,day,type){
   if(!item.a)item.a={};
   if(!item.notes)item.notes={};
   if(!item.wh)item.wh={};
+  if(!item.cc)item.cc={};
+  if(!item.co)item.co={};
   const cur=item.a[dateKey]||'';
   const curNote=item.notes[dateKey]||'';
   const curWh=item.wh[dateKey]||'';
+  const curCc=item.cc[dateKey]||'';
+  const curCo=item.co[dateKey]||'';
   const d=dateKey.split('-'),dl=`${day} ${MO[parseInt(d[1])-1]} ${d[0]}`;
   const activeProjs=DB.projects.filter(p=>p.status==='Active');
-  // Build project options from live DB — always reflects current active projects
   const allProjs=[
     {id:'OFF', name:'OFF / Holiday'},
     {id:'Warehouse', name:'Warehouse'},
     ...activeProjs.map(p=>({id:p.id, name:p.name}))
   ];
-  // Multi-project mode for drivers (Francisco etc)
+
+  // Build cost code + CO options for a given project ID
+  function buildExtraFields(pid, selCc, selCo) {
+    const proj = DB.projects.find(p=>p.id===pid);
+    if(!proj || (pid==='OFF'||pid==='Warehouse'||!pid)) return '';
+    let html='';
+    // Cost codes
+    if(proj.codes && proj.codes.length) {
+      const ccOpts=`<option value="">— Select cost code —</option>`
+        +proj.codes.map(c=>`<option value="${c.code}"${selCc===c.code?' selected':''}>${c.code} — ${CODES_MAP[c.code]||c.code} (${fmt(c.value)})</option>`).join('');
+      html+=`<div class="fg" style="margin-bottom:8px">
+        <label style="font-size:11px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.05em">Cost code</label>
+        <select id="cp-cc" style="width:100%;font-size:13px;padding:6px 8px;border-radius:var(--radius);border:0.5px solid var(--border2);background:var(--bg);color:var(--text)">${ccOpts}</select>
+      </div>`;
+    }
+    // COs — only pending or approved
+    const openCOs = (proj.cos||[]).filter(c=>c.status==='Pending'||c.status==='Approved');
+    if(openCOs.length) {
+      const coOpts=`<option value="">— No CO —</option>`
+        +openCOs.map(c=>`<option value="${c.id}"${selCo===c.id?' selected':''}>${c.num} — ${c.desc} (${fmt(c.value)}) [${c.status}]</option>`).join('');
+      html+=`<div class="fg" style="margin-bottom:0">
+        <label style="font-size:11px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.05em">Change order (CO)</label>
+        <select id="cp-co" style="width:100%;font-size:13px;padding:6px 8px;border-radius:var(--radius);border:0.5px solid var(--border2);background:var(--bg);color:var(--text)">${coOpts}</select>
+      </div>`;
+    }
+    return html;
+  }
+
+  // Multi-project mode for drivers
   if(item.multi){
     const selected=new Set(cur?cur.split(',').map(x=>x.trim()).filter(Boolean):[]);
     const chkOpts=allProjs.map(p=>
@@ -2065,17 +2096,24 @@ function clickCell(itemId,dateKey,day,type){
       </div>`);
     return;
   }
+
+  // Standard single-project modal
   const pOpts=`<option value="">— Unassigned —</option>`+allProjs.map(p=>`<option value="${p.id}"${cur===p.id?' selected':''}>${p.id} — ${p.name}</option>`).join('');
+  const extraFields = buildExtraFields(cur, curCc, curCo);
+
   showModal(`<div class="modal-title">Assign · ${item.name}</div>
     <div style="font-size:12px;color:var(--text2);margin-bottom:12px">${dl}</div>
-    <div class="fg"><label>Project / assignment</label><select id="cp-proj">${pOpts}</select></div>
+    <div class="fg"><label>Project / assignment</label>
+      <select id="cp-proj" onchange="updateCellExtraFields('${itemId}','${dateKey}')">${pOpts}</select>
+    </div>
+    <div id="cp-extra-fields" style="margin-bottom:0">${extraFields}</div>
     <div class="fg"><label>Notes for this day</label>
       <textarea id="cp-note" placeholder="Site instructions, contact info..." style="min-height:60px;width:100%;font-size:13px;padding:8px;border-radius:var(--radius);border:0.5px solid var(--border2);background:var(--bg);color:var(--text);font-family:inherit;resize:vertical">${curNote}</textarea></div>
     <div class="fg" style="background:rgba(255,243,205,0.4);border:0.5px solid #F0C040;border-radius:var(--radius);padding:10px 12px;margin-bottom:0">
       <label style="color:#7A5800;font-weight:600;display:flex;align-items:center;gap:6px">
-        <span style="font-size:14px">📦</span> Warehouse notes
+        <span>📦</span> Warehouse notes
       </label>
-      <textarea id="cp-wh" placeholder="e.g. 2x concrete bags, rebar #4, generator, orange cones..." style="min-height:60px;width:100%;font-size:13px;padding:8px;border-radius:var(--radius);border:0.5px solid #F0C040;background:#FFFEF5;color:var(--text);font-family:inherit;resize:vertical;margin-top:6px">${curWh}</textarea>
+      <textarea id="cp-wh" placeholder="e.g. 2x concrete bags, rebar #4, generator..." style="min-height:60px;width:100%;font-size:13px;padding:8px;border-radius:var(--radius);border:0.5px solid #F0C040;background:#FFFEF5;color:var(--text);font-family:inherit;resize:vertical;margin-top:6px">${curWh}</textarea>
     </div>
     <div class="form-actions">
       ${cur?`<button class="btn btn-deny btn-sm" onclick="clearCell('${itemId}','${dateKey}','${type}')">Clear</button>`:''}
@@ -2084,34 +2122,67 @@ function clickCell(itemId,dateKey,day,type){
     </div>`);
 }
 
+// Called when project dropdown changes — updates cost code + CO fields dynamically
+function updateCellExtraFields(itemId, dateKey) {
+  const pid = document.getElementById('cp-proj')?.value||'';
+  const item = getItem(itemId, 'staff') || getItem(itemId,'extra') || getItem(itemId,'equip') || getItem(itemId,'rental');
+  const curCc = item?.cc?.[dateKey]||'';
+  const curCo = item?.co?.[dateKey]||'';
+  const proj = DB.projects.find(p=>p.id===pid);
+  const el = document.getElementById('cp-extra-fields');
+  if(!el) return;
+  if(!proj || !pid || pid==='OFF' || pid==='Warehouse') { el.innerHTML=''; return; }
+  let html='';
+  if(proj.codes && proj.codes.length) {
+    const ccOpts=`<option value="">— Select cost code —</option>`
+      +proj.codes.map(c=>`<option value="${c.code}"${curCc===c.code?' selected':''}>${c.code} — ${CODES_MAP[c.code]||c.code} (${fmt(c.value)})</option>`).join('');
+    html+=`<div class="fg" style="margin-bottom:8px">
+      <label style="font-size:11px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.05em">Cost code</label>
+      <select id="cp-cc" style="width:100%;font-size:13px;padding:6px 8px;border-radius:var(--radius);border:0.5px solid var(--border2);background:var(--bg);color:var(--text)">${ccOpts}</select>
+    </div>`;
+  }
+  const openCOs = (proj.cos||[]).filter(c=>c.status==='Pending'||c.status==='Approved');
+  if(openCOs.length) {
+    const coOpts=`<option value="">— No CO —</option>`
+      +openCOs.map(c=>`<option value="${c.id}"${curCo===c.id?' selected':''}>${c.num} — ${c.desc} (${fmt(c.value)}) [${c.status}]</option>`).join('');
+    html+=`<div class="fg" style="margin-bottom:0">
+      <label style="font-size:11px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.05em">Change order (CO)</label>
+      <select id="cp-co" style="width:100%;font-size:13px;padding:6px 8px;border-radius:var(--radius);border:0.5px solid var(--border2);background:var(--bg);color:var(--text)">${coOpts}</select>
+    </div>`;
+  }
+  el.innerHTML = html;
+}
+
 function saveCell(id,key,type){
   const item=getItem(id,type);
   if(!item.a)item.a={};
   if(!item.notes)item.notes={};
   if(!item.wh)item.wh={};
-  const v    = document.getElementById('cp-proj').value;
+  if(!item.cc)item.cc={};
+  if(!item.co)item.co={};
+  const v    = document.getElementById('cp-proj')?.value||'';
   const note = (document.getElementById('cp-note')?.value||'').trim();
   const wh   = (document.getElementById('cp-wh')?.value||'').trim();
+  const cc   = document.getElementById('cp-cc')?.value||'';
+  const co   = document.getElementById('cp-co')?.value||'';
 
   const prevWh = item.wh[key]||'';
 
   if(v) item.a[key]=v; else delete item.a[key];
   if(note) item.notes[key]=note; else delete item.notes[key];
   if(wh) item.wh[key]=wh; else delete item.wh[key];
+  if(cc) item.cc[key]=cc; else delete item.cc[key];
+  if(co) item.co[key]=co; else delete item.co[key];
 
-  // If warehouse notes changed and there's a project assigned, write to sheet
+  // Write warehouse notes to sheet if changed
   if(wh && wh !== prevWh && v && v !== 'OFF') {
-    // Parse date from key "YYYY-M-D"
     const [yr,mo,dy] = key.split('-');
     const dateStr = `${parseInt(mo)}/${parseInt(dy)}/${yr}`;
     const proj = DB.projects.find(p=>p.id===v);
     const projName = proj ? proj.name : v;
     sheetWrite('addWarehouse', {
-      date:       dateStr,
-      worker:     item.name,
-      projectId:  v,
-      projectName:projName,
-      notes:      wh,
+      date: dateStr, worker: item.name,
+      projectId: v, projectName: projName, notes: wh,
     });
   }
 
@@ -2123,6 +2194,8 @@ function clearCell(id,key,type){
   if(item.a)    delete item.a[key];
   if(item.notes)delete item.notes[key];
   if(item.wh)   delete item.wh[key];
+  if(item.cc)   delete item.cc[key];
+  if(item.co)   delete item.co[key];
   saveLocal();closeModal();renderRoster();
 }
 
@@ -2434,10 +2507,10 @@ function saveLocal() {
   try {
     // Save roster assignments + notes for all items
     const rosterData = {
-      staff: STAFF.map(e => ({ id:e.id, a:e.a||{}, notes:e.notes||{}, wh:e.wh||{} })),
-      extra: EXTRA.map(e => ({ id:e.id, a:e.a||{}, notes:e.notes||{}, wh:e.wh||{}, project:e.project })),
-      equip: EQUIP.map(e => ({ id:e.id, a:e.a||{}, notes:e.notes||{}, wh:e.wh||{} })),
-      rentals: RENTALS.map(e => ({ id:e.id, a:e.a||{}, notes:e.notes||{}, wh:e.wh||{} })),
+      staff: STAFF.map(e => ({ id:e.id, a:e.a||{}, notes:e.notes||{}, wh:e.wh||{}, cc:e.cc||{}, co:e.co||{} })),
+      extra: EXTRA.map(e => ({ id:e.id, a:e.a||{}, notes:e.notes||{}, wh:e.wh||{}, cc:e.cc||{}, co:e.co||{}, project:e.project })),
+      equip: EQUIP.map(e => ({ id:e.id, a:e.a||{}, notes:e.notes||{}, wh:e.wh||{}, cc:e.cc||{}, co:e.co||{} })),
+      rentals: RENTALS.map(e => ({ id:e.id, a:e.a||{}, notes:e.notes||{}, wh:e.wh||{}, cc:e.cc||{}, co:e.co||{} })),
       extraList: EXTRA.filter(e => e.id.startsWith('ew') && !['ew1','ew2','ew3','ew4','ew5','ew6','ew7','ew8'].includes(e.id)),
       staffList: STAFF.filter(e => !['e1','e2','e3','e4','e5','e6','e7','e8','e9','e10','e11','e12','e13','e14','e15','e16','e17','e18'].includes(e.id)),
     };
@@ -2461,19 +2534,19 @@ function loadLocal() {
       // Restore assignments and notes into existing items
       (rd.staff||[]).forEach(saved => {
         const item = STAFF.find(e => e.id === saved.id);
-        if (item) { item.a = saved.a||{}; item.notes = saved.notes||{}; item.wh = saved.wh||{}; }
+        if (item) { item.a = saved.a||{}; item.notes = saved.notes||{}; item.wh = saved.wh||{}; item.cc = saved.cc||{}; item.co = saved.co||{}; }
       });
       (rd.extra||[]).forEach(saved => {
         const item = EXTRA.find(e => e.id === saved.id);
-        if (item) { item.a = saved.a||{}; item.notes = saved.notes||{}; item.wh = saved.wh||{}; item.project = saved.project||item.project; }
+        if (item) { item.a = saved.a||{}; item.notes = saved.notes||{}; item.wh = saved.wh||{}; item.cc = saved.cc||{}; item.co = saved.co||{}; item.project = saved.project||item.project; }
       });
       (rd.equip||[]).forEach(saved => {
         const item = EQUIP.find(e => e.id === saved.id);
-        if (item) { item.a = saved.a||{}; item.notes = saved.notes||{}; item.wh = saved.wh||{}; }
+        if (item) { item.a = saved.a||{}; item.notes = saved.notes||{}; item.wh = saved.wh||{}; item.cc = saved.cc||{}; item.co = saved.co||{}; }
       });
       (rd.rentals||[]).forEach(saved => {
         const item = RENTALS.find(e => e.id === saved.id);
-        if (item) { item.a = saved.a||{}; item.notes = saved.notes||{}; item.wh = saved.wh||{}; }
+        if (item) { item.a = saved.a||{}; item.notes = saved.notes||{}; item.wh = saved.wh||{}; item.cc = saved.cc||{}; item.co = saved.co||{}; }
       });
       // Restore extra workers added by user
       (rd.extraList||[]).forEach(saved => {
