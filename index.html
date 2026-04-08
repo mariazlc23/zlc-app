@@ -142,6 +142,8 @@
   .rt th.ic { text-align: left; padding: 6px 10px; min-width: auto; }
   .rt td { border: 0.5px solid var(--border); padding: 0; vertical-align: middle; }
   .rt td.ic { padding: 6px 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 140px; }
+  /* Day view note cells — allow full text, no clipping */
+  .rt td.ic.day-note { white-space: normal; overflow: visible; text-overflow: unset; max-width: none; min-width: 180px; }
   .trs td { background: var(--bg2); padding: 5px 10px; font-size: 10px; font-weight: 700; color: var(--text2); text-transform: uppercase; letter-spacing: .07em; border: 0.5px solid var(--border); }
   .day-cell { width: 30px; min-width: 30px; height: 28px; cursor: pointer; text-align: center; }
   .day-cell:hover { outline: 2px solid var(--blue); z-index: 1; position: relative; }
@@ -1947,9 +1949,9 @@ function renderRoster(){
       ? `<span style="font-size:12px;color:#7A5800;line-height:1.4">📦 ${wh}</span>`
       : `<span style="color:var(--text3);font-size:11px"></span>`;
 
-    return `<td class="ic" style="vertical-align:top;padding:8px 10px">${trabajoHtml}</td>`
-          +`<td class="ic" style="vertical-align:top;padding:8px 10px">${detallesHtml}</td>`
-          +`<td class="ic" style="vertical-align:top;padding:8px 10px;background:rgba(255,243,205,0.2)">${whHtml}</td>`;
+    return `<td class="ic day-note" style="vertical-align:top;padding:8px 10px">${trabajoHtml}</td>`
+          +`<td class="ic day-note" style="vertical-align:top;padding:8px 10px">${detallesHtml}</td>`
+          +`<td class="ic day-note" style="vertical-align:top;padding:8px 10px;background:rgba(255,243,205,0.2)">${whHtml}</td>`;
   };
 
   // All-month cells — supports multi-project comma-separated values
@@ -1980,7 +1982,7 @@ function renderRoster(){
       const key=`${calYear}-${calMonth+1}-${rosterDayFilter}`;
       const asgn=item.a?.[key]||'';
       const projKey=asgn.split(',')[0].trim()||'ZZZ'; // sort by first project
-      const rowHtml=`<tr style="${bgStyle}"><td class="ic" style="vertical-align:top;padding:8px 10px">${nameCell(item.id,type)}</td>${extra}</tr>`;
+      const rowHtml=`<tr style="${bgStyle}"><td class="ic day-note" style="vertical-align:top;padding:8px 10px;max-width:150px">${nameCell(item.id,type)}</td>${extra}</tr>`;
       dayViewRows.push({proj:projKey, html:rowHtml});
       return ''; // will be added sorted later
     }
@@ -2002,7 +2004,7 @@ function renderRoster(){
     const filtered=EXTRA.filter(e=>passFilter(e));
     if(filtered.length){
       const rows=filtered.map(ew=>{
-        if(dayMode){const extra=dayViewCells(ew);if(!extra)return '';return`<tr style="background:rgba(250,238,218,0.2)"><td class="ic" style="vertical-align:top;padding:8px 10px">${nameCell(ew.id,'extra')}</td>${extra}</tr>`;}
+        if(dayMode){const extra=dayViewCells(ew);if(!extra)return '';return`<tr style="background:rgba(250,238,218,0.2)"><td class="ic day-note" style="vertical-align:top;padding:8px 10px;max-width:150px">${nameCell(ew.id,'extra')}</td>${extra}</tr>`;}
         return`<tr style="background:rgba(250,238,218,0.2)"><td class="ic">${nameCell(ew.id,'extra')}</td><td class="ic">${ewWeekSummary(ew)}</td>${dayCells(ew,'extra')}</tr>`;
       }).filter(Boolean);
       if(rows.length){h+=mkSec(`Extra workers · ${filtered.length} people`,'#BA7517');h+=rows.join('');}
@@ -2023,7 +2025,7 @@ function renderRoster(){
     const filtered=RENTALS.filter(e=>passFilter(e));
     if(filtered.length){
       const rows=filtered.map(r=>{
-        if(dayMode){const extra=dayViewCells(r);if(!extra)return '';return`<tr style="background:rgba(234,243,222,0.2)"><td class="ic" style="vertical-align:top;padding:8px 10px">${nameCell(r.id,'rental')}</td>${extra}</tr>`;}
+        if(dayMode){const extra=dayViewCells(r);if(!extra)return '';return`<tr style="background:rgba(234,243,222,0.2)"><td class="ic day-note" style="vertical-align:top;padding:8px 10px;max-width:150px">${nameCell(r.id,'rental')}</td>${extra}</tr>`;}
         return`<tr style="background:rgba(234,243,222,0.2)"><td class="ic">${nameCell(r.id,'rental')}</td><td class="ic"></td>${dayCells(r,'rental')}</tr>`;
       }).filter(Boolean);
       if(rows.length){h+=mkSec(`Rentals · ${filtered.length} items`,'#3B6D11');h+=rows.join('');}
