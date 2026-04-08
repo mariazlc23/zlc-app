@@ -2503,80 +2503,160 @@ function saveExtraW(){
 // ─── LOCAL STORAGE PERSISTENCE ────────────────────────────────────────────────
 // Saves roster assignments, notes, extra staff, and manually added projects
 // so data survives page refresh
+// ─── CLOUD PERSISTENCE ───────────────────────────────────────────────────────
+// Saves to BOTH localStorage (fast, offline) and Google Sheets (shared across devices)
+// On load: reads from Sheets first, falls back to localStorage if Sheets unavailable
+
+let _saveTimer = null;
+
 function saveLocal() {
   try {
-    // Save roster assignments + notes for all items
     const rosterData = {
-      staff: STAFF.map(e => ({ id:e.id, a:e.a||{}, notes:e.notes||{}, wh:e.wh||{}, cc:e.cc||{}, co:e.co||{} })),
-      extra: EXTRA.map(e => ({ id:e.id, a:e.a||{}, notes:e.notes||{}, wh:e.wh||{}, cc:e.cc||{}, co:e.co||{}, project:e.project })),
-      equip: EQUIP.map(e => ({ id:e.id, a:e.a||{}, notes:e.notes||{}, wh:e.wh||{}, cc:e.cc||{}, co:e.co||{} })),
-      rentals: RENTALS.map(e => ({ id:e.id, a:e.a||{}, notes:e.notes||{}, wh:e.wh||{}, cc:e.cc||{}, co:e.co||{} })),
+      staff:   STAFF.map(e => ({ id:e.id, a:e.a||{}, notes:e.notes||{}, wh:e.wh||{}, cc:e.cc||{}, co:e.co||{}, name:e.name })),
+      extra:   EXTRA.map(e => ({ id:e.id, a:e.a||{}, notes:e.notes||{}, wh:e.wh||{}, cc:e.cc||{}, co:e.co||{}, name:e.name, project:e.project })),
+      equip:   EQUIP.map(e => ({ id:e.id, a:e.a||{}, notes:e.notes||{}, wh:e.wh||{}, cc:e.cc||{}, co:e.co||{}, name:e.name })),
+      rentals: RENTALS.map(e => ({ id:e.id, a:e.a||{}, notes:e.notes||{}, wh:e.wh||{}, cc:e.cc||{}, co:e.co||{}, name:e.name })),
       extraList: EXTRA.filter(e => e.id.startsWith('ew') && !['ew1','ew2','ew3','ew4','ew5','ew6','ew7','ew8'].includes(e.id)),
       staffList: STAFF.filter(e => !['e1','e2','e3','e4','e5','e6','e7','e8','e9','e10','e11','e12','e13','e14','e15','e16','e17','e18'].includes(e.id)),
     };
+    // 1. Save to localStorage immediately (fast, works offline)
     localStorage.setItem('zlc_roster', JSON.stringify(rosterData));
-    // Save open orders
     localStorage.setItem('zlc_orders', JSON.stringify(DB.openOrders||[]));
-    // Save manually added projects (those not from the sheet)
-    const manualProjects = DB.projects.filter(p => p._manual);
-    localStorage.setItem('zlc_manual_projects', JSON.stringify(manualProjects));
-    // Save historical overrides
+    localStorage.setItem('zlc_manual_projects', JSON.stringify(DB.projects.filter(p=>p._manual)));
     localStorage.setItem('zlc_historical', JSON.stringify(DB.historical));
+
+    // 2. Debounce cloud save — wait 1.5s after last change before writing to sheet
+    clearTimeout(_saveTimer);
+    _saveTimer = setTimeout(() => saveToCloud(rosterData), 1500);
   } catch(e) { console.warn('saveLocal error:', e); }
+}
+
+function saveToCloud(rosterData) {
+  if (!APPS_SCRIPT_URL) return;
+  // Save each data chunk as a separate key in "App Data" sheet
+  const chunks = {
+    'roster':   rosterData,
+    'orders':   DB.openOrders||[],
+    'manual':   DB.projects.filter(p=>p._manual),
+    'historical': DB.historical,
+  };
+  Object.entries(chunks).forEach(([key, value]) => {
+    sheetWrite('saveAppData', { key, value });
+  });
+  console.log('Cloud save sent');
 }
 
 function loadLocal() {
   try {
-    // Restore roster assignments + notes
     const rosterRaw = localStorage.getItem('zlc_roster');
-    if (rosterRaw) {
-      const rd = JSON.parse(rosterRaw);
-      // Restore assignments and notes into existing items
-      (rd.staff||[]).forEach(saved => {
-        const item = STAFF.find(e => e.id === saved.id);
-        if (item) { item.a = saved.a||{}; item.notes = saved.notes||{}; item.wh = saved.wh||{}; item.cc = saved.cc||{}; item.co = saved.co||{}; }
-      });
-      (rd.extra||[]).forEach(saved => {
-        const item = EXTRA.find(e => e.id === saved.id);
-        if (item) { item.a = saved.a||{}; item.notes = saved.notes||{}; item.wh = saved.wh||{}; item.cc = saved.cc||{}; item.co = saved.co||{}; item.project = saved.project||item.project; }
-      });
-      (rd.equip||[]).forEach(saved => {
-        const item = EQUIP.find(e => e.id === saved.id);
-        if (item) { item.a = saved.a||{}; item.notes = saved.notes||{}; item.wh = saved.wh||{}; item.cc = saved.cc||{}; item.co = saved.co||{}; }
-      });
-      (rd.rentals||[]).forEach(saved => {
-        const item = RENTALS.find(e => e.id === saved.id);
-        if (item) { item.a = saved.a||{}; item.notes = saved.notes||{}; item.wh = saved.wh||{}; item.cc = saved.cc||{}; item.co = saved.co||{}; }
-      });
-      // Restore extra workers added by user
-      (rd.extraList||[]).forEach(saved => {
-        if (!EXTRA.find(e => e.id === saved.id)) EXTRA.push(saved);
-      });
-      // Restore staff added by user
-      (rd.staffList||[]).forEach(saved => {
-        if (!STAFF.find(e => e.id === saved.id)) STAFF.push(saved);
-      });
-    }
-    // Restore historical overrides
+    if (rosterRaw) applyRosterData(JSON.parse(rosterRaw));
     const histRaw = localStorage.getItem('zlc_historical');
     if (histRaw) DB.historical = JSON.parse(histRaw);
-    // Restore open orders
     const ordRaw = localStorage.getItem('zlc_orders');
     if (ordRaw) DB.openOrders = JSON.parse(ordRaw);
-    // Restore manually added projects (will be merged after sheet sync)
     const manualRaw = localStorage.getItem('zlc_manual_projects');
     if (manualRaw) {
-      const manual = JSON.parse(manualRaw);
-      manual.forEach(p => { if (!DB.projects.find(x => x.id === p.id)) DB.projects.push(p); });
+      JSON.parse(manualRaw).forEach(p => { if (!DB.projects.find(x=>x.id===p.id)) DB.projects.push(p); });
     }
   } catch(e) { console.warn('loadLocal error:', e); }
 }
 
+async function loadFromCloud() {
+  if (!APPS_SCRIPT_URL) return;
+  try {
+    const url = APPS_SCRIPT_URL + '?data=' + encodeURIComponent(JSON.stringify({action:'loadAppData'}));
+    const res  = await fetch(url);
+    const json = await res.json();
+    if (!json.ok || !json.data) return;
+    const d = json.data;
+
+    let changed = false;
+
+    // Restore roster
+    if (d.roster) {
+      applyRosterData(d.roster);
+      localStorage.setItem('zlc_roster', JSON.stringify(d.roster));
+      changed = true;
+    }
+    // Restore orders
+    if (d.orders) {
+      DB.openOrders = d.orders;
+      localStorage.setItem('zlc_orders', JSON.stringify(d.orders));
+      changed = true;
+    }
+    // Restore historical
+    if (d.historical) {
+      DB.historical = d.historical;
+      localStorage.setItem('zlc_historical', JSON.stringify(d.historical));
+      changed = true;
+    }
+    // Restore manual projects
+    if (d.manual && d.manual.length) {
+      d.manual.forEach(p => { if (!DB.projects.find(x=>x.id===p.id)) DB.projects.push(p); });
+      changed = true;
+    }
+
+    if (changed) {
+      renderRoster();
+      renderAnalytics();
+      renderProjTable();
+      renderOverview();
+      toast('✓ Data loaded from cloud');
+    }
+    console.log('Cloud load complete');
+  } catch(e) {
+    console.warn('Cloud load failed, using local cache:', e.message);
+  }
+}
+
+function applyRosterData(rd) {
+  (rd.staff||[]).forEach(saved => {
+    const item = STAFF.find(e => e.id === saved.id);
+    if (item) {
+      item.a = saved.a||{}; item.notes = saved.notes||{};
+      item.wh = saved.wh||{}; item.cc = saved.cc||{}; item.co = saved.co||{};
+      if (saved.name) item.name = saved.name; // restore renamed names
+    }
+  });
+  (rd.extra||[]).forEach(saved => {
+    const item = EXTRA.find(e => e.id === saved.id);
+    if (item) {
+      item.a = saved.a||{}; item.notes = saved.notes||{};
+      item.wh = saved.wh||{}; item.cc = saved.cc||{}; item.co = saved.co||{};
+      item.project = saved.project||item.project;
+      if (saved.name) item.name = saved.name;
+    }
+  });
+  (rd.equip||[]).forEach(saved => {
+    const item = EQUIP.find(e => e.id === saved.id);
+    if (item) {
+      item.a = saved.a||{}; item.notes = saved.notes||{};
+      item.wh = saved.wh||{}; item.cc = saved.cc||{}; item.co = saved.co||{};
+      if (saved.name) item.name = saved.name;
+    }
+  });
+  (rd.rentals||[]).forEach(saved => {
+    const item = RENTALS.find(e => e.id === saved.id);
+    if (item) {
+      item.a = saved.a||{}; item.notes = saved.notes||{};
+      item.wh = saved.wh||{}; item.cc = saved.cc||{}; item.co = saved.co||{};
+      if (saved.name) item.name = saved.name;
+    }
+  });
+  (rd.extraList||[]).forEach(saved => {
+    if (!EXTRA.find(e => e.id === saved.id)) EXTRA.push(saved);
+  });
+  (rd.staffList||[]).forEach(saved => {
+    if (!STAFF.find(e => e.id === saved.id)) STAFF.push(saved);
+  });
+}
+
 // ─── INIT ─────────────────────────────────────────────────────────────────────
-loadLocal();        // Restore saved local data first
+loadLocal();         // 1. Load from localStorage instantly (fast, works offline)
 renderAnalytics();
 renderProjTable();
-syncFromSheets();   // Then sync from Google Sheets (will update projects)
+syncFromSheets();    // 2. Sync projects from Google Sheets
+loadFromCloud();     // 3. Load saved app state from cloud (roster, orders, etc.)
 </script>
 </body>
 </html>
