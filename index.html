@@ -459,7 +459,7 @@ const CAT_COLORS={staff:'#185FA5',extra:'#BA7517',equip:'#3B6D11',rental:'#88878
 const SHEET_ID  = '1Y35oa2ebgCisj3PzVs2dTMUN5dY2Hhci4RIt55Kn44Y';
 const API_KEY   = 'AIzaSyCCuKyfurmT2w-L2dn6-XbvupaOmlHufUE';
 // Paste your Apps Script URL below after following setup instructions:
-let APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbx0sk-p5eqKmmUC85CVIM7gRTPIwahR9YswIMv0tuRvaBIF_nN32xNtQWPdV_yIK2DYSw/exec';
+let APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbykDsi5ymL1xemZKAMNmpdt3Usr8PwkNMTFxqLhdlXa9rV0Twx1hBzgBosDqlSLQvtj/exec';
 
 const GIDS = {
   projects: '1735667570',
@@ -2533,17 +2533,24 @@ function saveLocal() {
 
 function saveToCloud(rosterData) {
   if (!APPS_SCRIPT_URL) return;
-  // Save each data chunk as a separate key in "App Data" sheet
   const chunks = {
-    'roster':   rosterData,
-    'orders':   DB.openOrders||[],
-    'manual':   DB.projects.filter(p=>p._manual),
+    'roster':     rosterData,
+    'orders':     DB.openOrders||[],
+    'manual':     DB.projects.filter(p=>p._manual),
     'historical': DB.historical,
   };
-  Object.entries(chunks).forEach(([key, value]) => {
-    sheetWrite('saveAppData', { key, value });
+  // Use fetch GET — works from GitHub Pages (HTTPS)
+  const saveOne = (key, value) => {
+    const url = APPS_SCRIPT_URL + '?data=' + encodeURIComponent(JSON.stringify({action:'saveAppData', key, value}));
+    fetch(url)
+      .then(r=>r.json())
+      .then(r=>{ if(r.ok) console.log('Cloud saved:', key); })
+      .catch(e=>console.warn('Cloud save failed for', key, e.message));
+  };
+  // Stagger saves by 200ms each to avoid rate limits
+  Object.entries(chunks).forEach(([key, value], i) => {
+    setTimeout(() => saveOne(key, value), i * 300);
   });
-  console.log('Cloud save sent');
 }
 
 function loadLocal() {
