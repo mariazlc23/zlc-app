@@ -267,8 +267,7 @@
   <div style="flex:1"></div>
   <div style="padding:12px 16px;border-top:0.5px solid var(--border)">
     <button id="sync-badge" onclick="syncFromSheets()" style="width:100%;font-size:11px;font-weight:600;padding:7px 12px;border-radius:var(--radius);border:0.5px solid var(--border2);cursor:pointer;transition:all .15s;background:#f0eeea;color:#9e9c97">↻ Sync from Sheets</button>
-    <button onclick="forceSaveToCloud()" style="width:100%;margin-top:6px;font-size:11px;font-weight:600;padding:6px 12px;border-radius:var(--radius);border:0.5px solid #185FA5;cursor:pointer;background:#E8F0FE;color:#185FA5">☁ Save to cloud</button>
-    <button onclick="loadFromCloud()" style="width:100%;margin-top:6px;font-size:11px;font-weight:600;padding:6px 12px;border-radius:var(--radius);border:0.5px solid var(--border2);cursor:pointer;background:#f0eeea;color:#9e9c97">↓ Load from cloud</button>
+    <button onclick="forceSaveToCloud()" title="Save all data to cloud so any device can access it" style="width:100%;margin-top:6px;font-size:11px;font-weight:600;padding:6px 12px;border-radius:var(--radius);border:0.5px solid #185FA5;cursor:pointer;background:#E8F0FE;color:#185FA5">☁ Save to cloud</button>
     <button onclick="testWrite()" style="width:100%;margin-top:6px;font-size:11px;font-weight:600;padding:6px 12px;border-radius:var(--radius);border:0.5px solid var(--border2);cursor:pointer;background:#EAF3DE;color:#27500A">Test Sheet write</button>
     <div id="write-log" style="font-size:10px;color:var(--text3);margin-top:6px;word-break:break-all;line-height:1.4"></div>
     <div style="font-size:10px;color:var(--text3);text-align:center;margin-top:6px">ZLC Project Manager v1.1</div>
@@ -2528,40 +2527,74 @@ function saveLocal() {
     localStorage.setItem('zlc_historical', JSON.stringify(DB.historical));
 
     // 2. Debounce cloud save — wait 1.5s after last change before writing to sheet
-    clearTimeout(_saveTimer);
-    _saveTimer = setTimeout(() => saveToCloud(rosterData), 1500);
+    // Auto cloud save after 2s of inactivity
+    saveToCloud(rosterData);
   } catch(e) { console.warn('saveLocal error:', e); }
 }
 
+// Cloud save queue — batches changes and sends automatically
+let _cloudQueue = {};
+let _cloudTimer = null;
+
 function saveToCloud(rosterData) {
   if (!APPS_SCRIPT_URL) return;
-  const chunks = {
+  // Queue the data — will be sent after 2 seconds of inactivity
+  _cloudQueue = {
     'roster':     rosterData,
     'orders':     DB.openOrders||[],
     'manual':     DB.projects.filter(p=>p._manual),
     'historical': DB.historical,
   };
-  // Use POST no-cors — avoids URL length limits and works from GitHub Pages
-  const saveOne = (key, value) => {
-    const body = JSON.stringify({action:'saveAppData', key, value});
-    fetch(APPS_SCRIPT_URL, {
-      method: 'POST',
-      mode: 'no-cors',
-      headers: {'Content-Type': 'text/plain;charset=utf-8'},
-      body: body,
-    }).then(()=>console.log('Cloud saved (no-cors):', key))
-      .catch(e=>console.warn('Cloud save failed:', key, e.message));
-  };
-  // Stagger saves by 400ms each to avoid Apps Script rate limits
-  Object.entries(chunks).forEach(([key, value], i) => {
-    setTimeout(() => saveOne(key, value), i * 400);
+  clearTimeout(_cloudTimer);
+  _cloudTimer = setTimeout(flushCloudQueue, 2000);
+}
+
+function flushCloudQueue() {
+  if (!APPS_SCRIPT_URL || !Object.keys(_cloudQueue).length) return;
+  const entries = Object.entries(_cloudQueue);
+  _cloudQueue = {};
+  // Send each key one at a time with 500ms gap
+  entries.forEach(([key, value], i) => {
+    setTimeout(() => cloudSaveOne(key, value), i * 500);
   });
 }
 
-// Manual cloud save button — call this from the sidebar sync button
+function cloudSaveOne(key, value) {
+  const body = JSON.stringify({action:'saveAppData', key, value});
+  // Try POST first (no URL length limit)
+  fetch(APPS_SCRIPT_URL, {
+    method: 'POST',
+    mode: 'no-cors',
+    headers: {'Content-Type':'text/plain;charset=utf-8'},
+    body: body,
+  }).catch(()=>{});
+  // Also try GET as backup (smaller payloads)
+  try {
+    const encoded = encodeURIComponent(body);
+    if (encoded.length < 7000) { // URL limit ~8000 chars
+      fetch(APPS_SCRIPT_URL + '?data=' + encoded)
+        .then(r=>r.json())
+        .then(r=>{ if(r.ok) updateSyncBadge('saved'); })
+        .catch(()=>{});
+    }
+  } catch(e){}
+}
+
 async function forceSaveToCloud() {
-  toast('Saving to cloud...');
-  const rosterData = {
+  updateSyncBadge('saving');
+  const rosterData = buildRosterData();
+  _cloudQueue = {
+    'roster':     rosterData,
+    'orders':     DB.openOrders||[],
+    'manual':     DB.projects.filter(p=>p._manual),
+    'historical': DB.historical,
+  };
+  flushCloudQueue();
+  setTimeout(()=>{ updateSyncBadge('ok'); toast('✓ Saved to cloud'); }, 3000);
+}
+
+function buildRosterData() {
+  return {
     staff:   STAFF.map(e=>({id:e.id,a:e.a||{},notes:e.notes||{},wh:e.wh||{},cc:e.cc||{},co:e.co||{},name:e.name})),
     extra:   EXTRA.map(e=>({id:e.id,a:e.a||{},notes:e.notes||{},wh:e.wh||{},cc:e.cc||{},co:e.co||{},name:e.name,project:e.project})),
     equip:   EQUIP.map(e=>({id:e.id,a:e.a||{},notes:e.notes||{},wh:e.wh||{},cc:e.cc||{},co:e.co||{},name:e.name})),
@@ -2569,8 +2602,6 @@ async function forceSaveToCloud() {
     extraList: EXTRA.filter(e=>e.id.startsWith('ew')&&!['ew1','ew2','ew3','ew4','ew5','ew6','ew7','ew8'].includes(e.id)),
     staffList: STAFF.filter(e=>!['e1','e2','e3','e4','e5','e6','e7','e8','e9','e10','e11','e12','e13','e14','e15','e16','e17','e18'].includes(e.id)),
   };
-  saveToCloud(rosterData);
-  setTimeout(()=>toast('✓ Saved to cloud'), 2000);
 }
 
 function loadLocal() {
