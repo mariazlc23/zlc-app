@@ -1879,9 +1879,10 @@ function renderRoster(){
   // Build header
   let h='<thead><tr>';
   if(dayMode){
-    h+=`<th class="ic" style="min-width:140px">Name / Unit</th>`;
-    h+=`<th class="ic" style="min-width:70px">Info</th>`;
-    h+=`<th class="ic" style="min-width:220px">Notes</th>`;
+    h+=`<th class="ic" style="min-width:140px">Nombre</th>`;
+    h+=`<th class="ic" style="min-width:180px">Trabajo · Cost code</th>`;
+    h+=`<th class="ic" style="min-width:220px">Detalles del día</th>`;
+    h+=`<th class="ic" style="min-width:180px;background:rgba(255,243,205,0.4)">📦 Warehouse</th>`;
   } else {
     h+=`<th class="ic" style="min-width:130px">Name / Unit</th>`;
     h+=`<th class="ic" style="min-width:70px">Info</th>`;
@@ -1889,7 +1890,7 @@ function renderRoster(){
   }
   h+=`</tr></thead><tbody>`;
 
-  const colSpan=dayMode?3:days.length+2;
+  const colSpan=dayMode?4:days.length+2;
   const mkSec=(lbl,col)=>`<tr class="trs"><td colspan="${colSpan}" style="border-left:3px solid ${col}">${lbl}</td></tr>`;
 
   // Cert badges helper
@@ -1904,21 +1905,51 @@ function renderRoster(){
     return b;
   };
 
-  // Single-day cells: project pill + note text
+  // Single-day cells: trabajo+costcode | detalles | warehouse
+  // Returns 3 <td> elements — or null if no assignment and no note
   const dayViewCells=item=>{
-    const key=`${calYear}-${calMonth+1}-${rosterDayFilter}`;
-    const asgn=item.a?.[key]||'';
-    const note=item.notes?.[key]||'';
-    if(!asgn&&!note)return null;
-    // Project pills
-    const pills = asgn ? asgn.split(',').map(a=>{
-      const a2=a.trim();const bg2=pc(a2);const tc2=bg2?ptc(bg2):'var(--text2)';
-      return`<span style="display:inline-block;padding:2px 9px;border-radius:99px;background:${bg2||'var(--bg3)'};color:${tc2};font-size:11px;font-weight:600;margin:1px 2px 1px 0">${a2}</span>`;
-    }).join('') : '';
-    // Notes combined into same single cell after project pills
-    const noteHtml=note?`<div style="font-size:12px;color:var(--text);margin-top:${asgn?'4px':'0'}">${note}</div>`:'';
-    const combined = pills+noteHtml || `<span style="color:var(--text3);font-size:11px">—</span>`;
-    return`<td class="ic" colspan="1">${combined}</td>`;
+    const key   = `${calYear}-${calMonth+1}-${rosterDayFilter}`;
+    const asgn  = item.a?.[key]||'';
+    const note  = item.notes?.[key]||'';
+    const wh    = item.wh?.[key]||'';
+    const cc    = item.cc?.[key]||'';  // cost code
+    if(!asgn && !note && !wh) return null;
+
+    // ── Col 1: Trabajo + cost code ────────────────────────────────────────────
+    let trabajoHtml = '';
+    if(asgn) {
+      asgn.split(',').forEach(a=>{
+        const a2  = a.trim();
+        const bg2 = pc(a2);
+        const tc2 = bg2 ? ptc(bg2) : 'var(--text2)';
+        const proj= DB.projects.find(p=>p.id===a2);
+        // Cost code for this assignment
+        const ccVal = (cc && asgn.split(',').length===1) ? cc : '';
+        const ccName= ccVal ? (CODES_MAP[ccVal]||ccVal) : '';
+        trabajoHtml += `<div style="margin-bottom:4px">
+          <span style="display:inline-block;padding:2px 9px;border-radius:99px;background:${bg2||'var(--bg3)'};color:${tc2};font-size:11px;font-weight:700">${a2}</span>
+          ${proj?`<div style="font-size:10px;color:var(--text2);margin-top:1px;padding-left:2px">${proj.name}</div>`:''}
+          ${ccVal?`<div style="font-size:10px;color:var(--blue);font-weight:600;padding-left:2px">${ccVal} — ${ccName}</div>`:''}
+        </div>`;
+      });
+    } else {
+      trabajoHtml = `<span style="color:var(--text3);font-size:11px">—</span>`;
+    }
+
+    // ── Col 2: Detalles del día ────────────────────────────────────────────────
+    // Only show if THIS person has a note — leave blank otherwise
+    const detallesHtml = note
+      ? `<span style="font-size:12px;color:var(--text);line-height:1.4">${note}</span>`
+      : `<span style="color:var(--text3);font-size:11px"></span>`;
+
+    // ── Col 3: Warehouse notes ─────────────────────────────────────────────────
+    const whHtml = wh
+      ? `<span style="font-size:12px;color:#7A5800;line-height:1.4">📦 ${wh}</span>`
+      : `<span style="color:var(--text3);font-size:11px"></span>`;
+
+    return `<td class="ic" style="vertical-align:top;padding:8px 10px">${trabajoHtml}</td>`
+          +`<td class="ic" style="vertical-align:top;padding:8px 10px">${detallesHtml}</td>`
+          +`<td class="ic" style="vertical-align:top;padding:8px 10px;background:rgba(255,243,205,0.2)">${whHtml}</td>`;
   };
 
   // All-month cells — supports multi-project comma-separated values
@@ -1949,7 +1980,7 @@ function renderRoster(){
       const key=`${calYear}-${calMonth+1}-${rosterDayFilter}`;
       const asgn=item.a?.[key]||'';
       const projKey=asgn.split(',')[0].trim()||'ZZZ'; // sort by first project
-      const rowHtml=`<tr style="${bgStyle}"><td class="ic">${nameCell(item.id,type)}</td><td class="ic">${info}</td>${extra}</tr>`;
+      const rowHtml=`<tr style="${bgStyle}"><td class="ic" style="vertical-align:top;padding:8px 10px">${nameCell(item.id,type)}</td>${extra}</tr>`;
       dayViewRows.push({proj:projKey, html:rowHtml});
       return ''; // will be added sorted later
     }
@@ -1971,7 +2002,7 @@ function renderRoster(){
     const filtered=EXTRA.filter(e=>passFilter(e));
     if(filtered.length){
       const rows=filtered.map(ew=>{
-        if(dayMode){const extra=dayViewCells(ew);if(!extra)return '';return`<tr style="background:rgba(250,238,218,0.2)"><td class="ic">${nameCell(ew.id,'extra')}</td><td class="ic">${ewWeekSummary(ew)}</td>${extra}</tr>`;}
+        if(dayMode){const extra=dayViewCells(ew);if(!extra)return '';return`<tr style="background:rgba(250,238,218,0.2)"><td class="ic" style="vertical-align:top;padding:8px 10px">${nameCell(ew.id,'extra')}</td>${extra}</tr>`;}
         return`<tr style="background:rgba(250,238,218,0.2)"><td class="ic">${nameCell(ew.id,'extra')}</td><td class="ic">${ewWeekSummary(ew)}</td>${dayCells(ew,'extra')}</tr>`;
       }).filter(Boolean);
       if(rows.length){h+=mkSec(`Extra workers · ${filtered.length} people`,'#BA7517');h+=rows.join('');}
@@ -1992,7 +2023,7 @@ function renderRoster(){
     const filtered=RENTALS.filter(e=>passFilter(e));
     if(filtered.length){
       const rows=filtered.map(r=>{
-        if(dayMode){const extra=dayViewCells(r);if(!extra)return '';return`<tr style="background:rgba(234,243,222,0.2)"><td class="ic">${nameCell(r.id,'rental')}</td><td class="ic"></td>${extra}</tr>`;}
+        if(dayMode){const extra=dayViewCells(r);if(!extra)return '';return`<tr style="background:rgba(234,243,222,0.2)"><td class="ic" style="vertical-align:top;padding:8px 10px">${nameCell(r.id,'rental')}</td>${extra}</tr>`;}
         return`<tr style="background:rgba(234,243,222,0.2)"><td class="ic">${nameCell(r.id,'rental')}</td><td class="ic"></td>${dayCells(r,'rental')}</tr>`;
       }).filter(Boolean);
       if(rows.length){h+=mkSec(`Rentals · ${filtered.length} items`,'#3B6D11');h+=rows.join('');}
@@ -2009,7 +2040,7 @@ function renderRoster(){
         const proj=DB.projects.find(p=>p.id===curProj);
         const label=curProj==='ZZZ'?'Unassigned':(proj?`${proj.id} — ${proj.name}`:curProj);
         const col=pc(curProj)||'#888';
-        h+=`<tr class="trs"><td colspan="3" style="border-left:3px solid ${col}">${label}</td></tr>`;
+        h+=`<tr class="trs"><td colspan="4" style="border-left:3px solid ${col}">${label}</td></tr>`;
       }
       h+=r.html;
     });
