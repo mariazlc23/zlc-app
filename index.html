@@ -217,27 +217,6 @@
   .order-meta  { font-size:11px; color:var(--text2); display:flex; gap:10px; flex-wrap:wrap; }
   .order-actions { display:flex; gap:4px; flex-shrink:0; }
   .order-done { text-decoration:line-through; opacity:0.5; }
-  /* Print / PDF */
-  @media print {
-    * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
-    body { background: white !important; margin: 0; }
-    .sidebar, .page-header, .roster-controls, .filter-tabs, .legend,
-    #modal-area, .toast, #view-dashboard, #view-projects,
-    .btn, button:not(.no-hide) { display: none !important; }
-    .app, .main, #view-roster { display: block !important; width: 100% !important;
-      height: auto !important; overflow: visible !important; padding: 0 !important; }
-    .roster-wrap { overflow: visible !important; max-height: none !important; }
-    #pdf-print-header { display: block !important; margin-bottom: 12px; }
-    .rt { font-size: 11px !important; width: 100% !important; border-collapse: collapse !important; }
-    .rt th, .rt td { padding: 4px 6px !important; border: 0.5px solid #ddd !important; }
-    .trs td { font-size: 10px !important; background: #f5f5f5 !important; }
-    .day-cell { min-width: 22px !important; }
-    .day-block { font-size: 8px !important; }
-    .ic { min-width: 80px !important; }
-    @page { margin: 10mm; size: A4 landscape; }
-  }
-  #pdf-print-header { display: none; }
-
   ::-webkit-scrollbar { width: 6px; height: 6px; }
   ::-webkit-scrollbar-track { background: transparent; }
   ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 3px; }
@@ -333,9 +312,11 @@
       <div style="display:flex;gap:4px;flex-wrap:wrap" id="status-filters">
         <button class="ft active" onclick="setStatusFilter('',this)">All</button>
         <button class="ft" onclick="setStatusFilter('Active',this)">Active</button>
+        <button class="ft" onclick="setStatusFilter('Finish',this)">Finish</button>
         <button class="ft" onclick="setStatusFilter('Pending',this)">Pending</button>
-        <button class="ft" onclick="setStatusFilter('Complete',this)">Complete</button>
+        <button class="ft" onclick="setStatusFilter('On hold',this)">On hold</button>
         <button class="ft" onclick="setStatusFilter('Canceled',this)">Canceled</button>
+        <button class="ft" onclick="setStatusFilter('Complete',this)">Complete</button>
       </div>
       <span id="proj-count" style="font-size:12px;color:var(--text2)"></span>
     </div>
@@ -378,14 +359,6 @@
         </select>
         <button class="btn btn-sm btn-ghost" onclick="setRosterProjFilter('');document.getElementById('roster-proj-filter').value=''" style="font-size:11px;padding:3px 8px">✕ Clear</button>
       </div>
-      <div style="display:flex;align-items:center;gap:8px">
-        <label style="font-size:12px;color:var(--text2);white-space:nowrap;margin:0">Day view:</label>
-        <select id="roster-day-filter" onchange="setRosterDayFilter(this.value)" style="font-size:12px;padding:4px 8px;border-radius:var(--radius);border:0.5px solid var(--border2);background:var(--bg);color:var(--text);min-width:120px">
-          <option value="">— All days —</option>
-        </select>
-        <button class="btn btn-sm btn-ghost" onclick="setRosterDayFilter('');document.getElementById('roster-day-filter').value=''" style="font-size:11px;padding:3px 8px">✕ Clear</button>
-        <button class="btn btn-sm" onclick="downloadDayPDF()" id="pdf-btn" style="font-size:11px;padding:4px 10px;background:#E24B4A;color:#fff;border:none;border-radius:var(--radius);cursor:pointer;display:none">⬇ Download PDF</button>
-      </div>
     </div>
   </div>
   <div class="filter-tabs">
@@ -396,7 +369,6 @@
     <button class="ft" onclick="setSect('rentals',this)">Rentals</button>
   </div>
   <div class="legend" id="roster-legend"></div>
-  <div id="pdf-print-header"></div>
   <div class="roster-wrap"><table class="rt" id="roster-tbl"></table></div>
 </div>
 </div><!-- end main -->
@@ -421,7 +393,7 @@ const CAT_COLORS={staff:'#185FA5',extra:'#BA7517',equip:'#3B6D11',rental:'#88878
 const SHEET_ID  = '1Y35oa2ebgCisj3PzVs2dTMUN5dY2Hhci4RIt55Kn44Y';
 const API_KEY   = 'AIzaSyCCuKyfurmT2w-L2dn6-XbvupaOmlHufUE';
 // Paste your Apps Script URL below after following setup instructions:
-let APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbx0sk-p5eqKmmUC85CVIM7gRTPIwahR9YswIMv0tuRvaBIF_nN32xNtQWPdV_yIK2DYSw/exec';
+let APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbz09_1Ocvd9xAgNI2qAyVEqREzEgFICgLZhb6QW-Pji2UOa0d_QIB4IBQaSdjsnCxrtvQ/exec';
 
 const GIDS = {
   projects: '1735667570',
@@ -919,7 +891,6 @@ let calYear=2026, calMonth=3, calView='month';
 let annualChart=null, codeRowIdx=1;
 let assignSelected=new Set();
 let rosterProjFilter='';
-let rosterDayFilter=0; // 0 = all days, number = show only that day
 
 // ─── UTILS ──────────────────────────────────────────────────────────────────
 const fmt=v=>'$'+Math.round(v).toLocaleString();
@@ -1396,56 +1367,6 @@ function nextM(){calMonth++;if(calMonth>11){calMonth=0;calYear++;}renderRoster()
 function setCV(v,b){calView=v;document.querySelectorAll('.vt-btn').forEach(x=>x.classList.remove('active'));b.classList.add('active');renderRoster();}
 function setSect(s,b){rosterSect=s;document.querySelectorAll('.ft').forEach(x=>x.classList.remove('active'));b.classList.add('active');renderRoster();}
 function setRosterProjFilter(pid){rosterProjFilter=pid;renderRoster();}
-function setRosterDayFilter(d){
-  rosterDayFilter=d?parseInt(d):0;
-  const btn=document.getElementById('pdf-btn');
-  if(btn) btn.style.display=rosterDayFilter?'block':'none';
-  renderRoster();
-}
-
-function downloadDayPDF(){
-  if(!rosterDayFilter){ toast('Select a day first using the Day view filter'); return; }
-  const DL=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
-  const dw=dow(calYear,calMonth,rosterDayFilter);
-  const dateStr=`${DL[dw]}, ${MONTHS[calMonth]} ${rosterDayFilter}, ${calYear}`;
-
-  // Build print header
-  const hdr=document.getElementById('pdf-print-header');
-  if(hdr){
-    hdr.innerHTML=`
-      <div style="display:flex;justify-content:space-between;align-items:flex-end;border-bottom:2px solid #222;padding-bottom:8px;margin-bottom:12px">
-        <div>
-          <div style="font-size:20px;font-weight:700;color:#111">ZLC Corp — Daily Schedule</div>
-          <div style="font-size:14px;color:#555;margin-top:2px">${dateStr}</div>
-        </div>
-        <div style="font-size:11px;color:#888">Generated ${new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})}</div>
-      </div>`;
-  }
-
-  // Make sure we're in day view mode before printing
-  const prevDay=rosterDayFilter;
-  if(!rosterDayFilter) setRosterDayFilter(new Date().getDate());
-
-  // Small delay so DOM updates, then print
-  setTimeout(()=>{
-    window.print();
-  }, 150);
-}
-
-function populateRosterDayFilter(){
-  const sel=document.getElementById('roster-day-filter');
-  if(!sel)return;
-  const cur=sel.value;
-  const dInM=dim(calYear,calMonth);
-  const DL=['Su','Mo','Tu','We','Th','Fr','Sa'];
-  let opts='<option value="">— All days —</option>';
-  for(let d=1;d<=dInM;d++){
-    const dw=dow(calYear,calMonth,d);
-    opts+=`<option value="${d}"${cur==d?' selected':''}>${d} ${DL[dw]} ${MONTHS[calMonth].slice(0,3)}</option>`;
-  }
-  sel.innerHTML=opts;
-  if(cur) sel.value=cur;
-}
 
 function populateRosterProjFilter(){
   const sel=document.getElementById('roster-proj-filter');
@@ -1467,118 +1388,28 @@ function populateRosterProjFilter(){
   sel.value=cur||'';
 }
 
-// ─── EXTRA WORKER WEEKLY SUMMARY ─────────────────────────────────────────────
-// Returns a compact HTML summary of where this extra worker was sent each day
-// of the current calendar week (Mon–Sun), ordered by day.
-// Shows: Mon: 25-064  Tue: 26-001  ...  (only days with assignments)
-function ewWeekSummary(ew) {
-  if(!ew.a || !Object.keys(ew.a).length) {
-    return `<span style="font-size:10px;color:var(--text3)">No assignments</span>`;
-  }
-
-  // Find current week bounds (Mon–Sun) relative to calYear/calMonth view
-  const today = new Date();
-  // Use the currently viewed month's "today" or actual today
-  const refDate = new Date(calYear, calMonth, rosterDayFilter || today.getDate());
-  const dayOfWeek = refDate.getDay(); // 0=Sun,1=Mon...6=Sat
-  // Monday of this week
-  const monday = new Date(refDate);
-  monday.setDate(refDate.getDate() - (dayOfWeek === 0 ? 6 : dayOfWeek - 1));
-
-  const DAY_SHORT = ['Su','Mo','Tu','We','Th','Fr','Sa'];
-  const entries = [];
-
-  for (let i = 0; i < 7; i++) {
-    const d = new Date(monday);
-    d.setDate(monday.getDate() + i);
-    const yr  = d.getFullYear();
-    const mo  = d.getMonth() + 1;
-    const day = d.getDate();
-    const key = `${yr}-${mo}-${day}`;
-    const asgn = ew.a[key];
-    if (!asgn) continue;
-
-    const dayLabel = DAY_SHORT[d.getDay()];
-    const shortId  = asgn === 'OFF' ? 'OFF'
-                   : asgn === 'Warehouse' ? 'WH'
-                   : (asgn.split('-')[1] || asgn.slice(0,5));
-    const bg = pc(asgn);
-    const tc = bg ? ptc(bg) : 'var(--text2)';
-
-    entries.push(`<span style="display:inline-flex;align-items:center;gap:2px;margin:1px 0">
-      <span style="font-size:9px;color:var(--text3);font-weight:500;min-width:14px">${dayLabel}</span>
-      <span style="font-size:9px;font-weight:700;padding:1px 5px;border-radius:99px;background:${bg||'var(--bg3)'};color:${tc}">${shortId}</span>
-    </span>`);
-  }
-
-  if (!entries.length) {
-    // No assignments this week — show last known project as fallback
-    return `<span style="font-size:10px;color:var(--text3)">Not this week</span>`;
-  }
-
-  return `<div style="display:flex;flex-direction:column;gap:0px;line-height:1.3">${entries.join('')}</div>`;
-}
-
 function renderRoster(){
   document.getElementById('month-lbl').textContent=`${MONTHS[calMonth]} ${calYear}`;
-  populateRosterProjFilter();
-  populateRosterDayFilter();
+  populateRosterProjFilter(); // keep dropdown fresh
   const days=getVisDays();
   const t=new Date(),todayD=t.getMonth()===calMonth&&t.getFullYear()===calYear?t.getDate():null;
   const show=s=>rosterSect==='all'||rosterSect===s;
-  const dayMode=rosterDayFilter>0;
 
+  // Helper: if a project filter is active, returns true only if the item
+  // has at least one day assigned to that project in the visible date range
   const passFilter=item=>{
     if(!rosterProjFilter)return true;
     return days.some(d=>{
       const key=`${calYear}-${calMonth+1}-${d}`;
-      return(item.a?.[key]||'')===rosterProjFilter;
+      return(item.a?.[key]||'')=== rosterProjFilter;
     });
   };
-
-  // Build header
   let h='<thead><tr>';
-  if(dayMode){
-    h+=`<th class="ic" style="min-width:140px">Name / Unit</th>`;
-    h+=`<th class="ic" style="min-width:70px">Info</th>`;
-    h+=`<th class="ic" style="min-width:130px">Project</th>`;
-    h+=`<th class="ic" style="min-width:220px">Notes</th>`;
-  } else {
-    h+=`<th class="ic" style="min-width:130px">Name / Unit</th>`;
-    h+=`<th class="ic" style="min-width:70px">Info</th>`;
-    days.forEach(d=>{const dw=dow(calYear,calMonth,d),wk=dw===0||dw===6;h+=`<th style="min-width:30px;${wk?'color:#c9a200':''}">${d}<br><span style="font-size:8px;font-weight:500">${DLBL[dw]}</span></th>`;});
-  }
+  h+=`<th class="ic" style="min-width:130px">Name / Unit</th>`;
+  h+=`<th class="ic" style="min-width:70px">Info</th>`;
+  days.forEach(d=>{const dw=dow(calYear,calMonth,d),wk=dw===0||dw===6;h+=`<th style="min-width:30px;${wk?'color:#c9a200':''}">${d}<br><span style="font-size:8px;font-weight:500">${DLBL[dw]}</span></th>`;});
   h+=`</tr></thead><tbody>`;
-
-  const colSpan=dayMode?4:days.length+2;
-  const mkSec=(lbl,col)=>`<tr class="trs"><td colspan="${colSpan}" style="border-left:3px solid ${col}">${lbl}</td></tr>`;
-
-  // Cert badges helper
-  const certBadges=item=>{
-    if(!item.certs)return item.note?`<span style="font-size:10px;color:var(--text2)">${item.note}</span>`:'';
-    let b='';
-    if(item.certs.includes('H'))b+=`<span class="cert-badge cert-h">H</span>`;
-    if(item.certs.includes('RFT'))b+=`<span class="cert-badge cert-r">RFT</span>`;
-    if(item.certs.includes('EO'))b+=`<span class="cert-badge cert-e">EO</span>`;
-    if(item.certs.includes('SSO'))b+=`<span class="cert-badge cert-s">SSO</span>`;
-    if(item.certs.includes('CPR'))b+=`<span class="cert-badge cert-c">CPR</span>`;
-    return b;
-  };
-
-  // Single-day cells: project pill + note text
-  const dayViewCells=item=>{
-    const key=`${calYear}-${calMonth+1}-${rosterDayFilter}`;
-    const asgn=item.a?.[key]||'';
-    const note=item.notes?.[key]||'';
-    if(!asgn&&!note)return null;
-    const bg=asgn?pc(asgn):'';
-    const tc=bg?ptc(bg):'';
-    const pill=asgn?`<span style="display:inline-block;padding:2px 9px;border-radius:99px;background:${bg};color:${tc};font-size:11px;font-weight:600">${asgn}</span>`:`<span style="color:var(--text3);font-size:11px">—</span>`;
-    const noteHtml=note?`<span style="font-size:12px;color:var(--text)">${note}</span>`:`<span style="color:var(--text3);font-size:11px">—</span>`;
-    return`<td class="ic">${pill}</td><td class="ic">${noteHtml}</td>`;
-  };
-
-  // All-month cells
+  const mkSec=(lbl,col)=>`<tr class="trs"><td colspan="${days.length+2}" style="border-left:3px solid ${col}">${lbl}</td></tr>`;
   const dayCells=(item,type)=>days.map(d=>{
     const dw=dow(calYear,calMonth,d),wk=dw===0||dw===6,key=`${calYear}-${calMonth+1}-${d}`,asgn=item.a?.[key]||'',bg=asgn?pc(asgn):'',isT=d===todayD,tc=bg?ptc(bg):'';
     const note=item.notes?.[key]||'';
@@ -1587,36 +1418,32 @@ function renderRoster(){
     return`<td class="day-cell${isT?' today-col':''}" style="position:relative;${bg?`background:${bg};`:''}${wk&&!bg?'background:rgba(0,0,0,0.02);':''}" onclick="clickCell('${item.id}','${key}','${d}','${type}')" title="${titleText.replace(/"/g,'&quot;')}">${asgn?`<div class="day-block" style="color:${tc}">${asgn==='OFF'?'OFF':asgn.split('-')[1]||asgn.slice(0,4)}</div>`:''}${noteDot}</td>`;
   }).join('');
 
-  // Render a row — returns '' if day mode and no assignment/note
-  const row=(item,type,bgStyle='')=>{
-    const info=certBadges(item);
-    if(dayMode){
-      const extra=dayViewCells(item);
-      if(!extra)return '';
-      return`<tr style="${bgStyle}"><td class="ic">${nameCell(item.id,type)}</td><td class="ic">${info}</td>${extra}</tr>`;
-    }
-    return`<tr style="${bgStyle}"><td class="ic">${nameCell(item.id,type)}</td><td class="ic">${info}</td>${dayCells(item,type)}</tr>`;
-  };
-
   if(show('staff')){
     const teams=[...new Set(STAFF.map(e=>e.team))];
     teams.forEach(team=>{
       const members=STAFF.filter(e=>e.team===team&&passFilter(e));
       if(!members.length)return;
-      const rows=members.map(e=>row(e,'staff')).filter(Boolean);
-      if(!rows.length)return;
-      h+=mkSec(`${team} · ${members.length} people`,TEAM_COLORS[team]||'#888');
-      h+=rows.join('');
+      const tc=TEAM_COLORS[team]||'#888';
+      h+=mkSec(`${team} · ${members.length} people`,tc);
+      members.forEach(emp=>{
+        h+=`<tr><td class="ic">${nameCell(emp.id,'staff')}</td><td class="ic">`;
+        if(emp.certs.includes('H'))h+=`<span class="cert-badge cert-h">H</span>`;
+        if(emp.certs.includes('RFT'))h+=`<span class="cert-badge cert-r">RFT</span>`;
+        if(emp.certs.includes('EO'))h+=`<span class="cert-badge cert-e">EO</span>`;
+        if(emp.certs.includes('SSO'))h+=`<span class="cert-badge cert-s">SSO</span>`;
+        if(emp.certs.includes('CPR'))h+=`<span class="cert-badge cert-c">CPR</span>`;
+        h+=`</td>${dayCells(emp,'staff')}</tr>`;
+      });
     });
   }
   if(show('extra')){
     const filtered=EXTRA.filter(e=>passFilter(e));
     if(filtered.length){
-      const rows=filtered.map(ew=>{
-        if(dayMode){const extra=dayViewCells(ew);if(!extra)return '';return`<tr style="background:rgba(250,238,218,0.2)"><td class="ic">${nameCell(ew.id,'extra')}</td><td class="ic">${ewWeekSummary(ew)}</td>${extra}</tr>`;}
-        return`<tr style="background:rgba(250,238,218,0.2)"><td class="ic">${nameCell(ew.id,'extra')}</td><td class="ic">${ewWeekSummary(ew)}</td>${dayCells(ew,'extra')}</tr>`;
-      }).filter(Boolean);
-      if(rows.length){h+=mkSec(`Extra workers · ${filtered.length} people`,'#BA7517');h+=rows.join('');}
+      h+=mkSec(`Extra workers · ${filtered.length} people`,'#BA7517');
+      filtered.forEach(ew=>{
+        h+=`<tr style="background:rgba(250,238,218,0.2)"><td class="ic">${nameCell(ew.id,'extra')}</td>`;
+        h+=`<td class="ic"><span style="font-size:10px;color:var(--text2)">${ew.project||'—'}</span></td>${dayCells(ew,'extra')}</tr>`;
+      });
     }
   }
   if(show('equip')){
@@ -1624,107 +1451,63 @@ function renderRoster(){
     cats.forEach(cat=>{
       const items=EQUIP.filter(e=>e.cat===cat&&passFilter(e));
       if(!items.length)return;
-      const rows=items.map(eq=>row(eq,'equip','background:rgba(230,241,251,0.2)')).filter(Boolean);
-      if(!rows.length)return;
       h+=mkSec(`${cat} · ${items.length} units`,'#185FA5');
-      h+=rows.join('');
+      items.forEach(eq=>{
+        h+=`<tr style="background:rgba(230,241,251,0.2)"><td class="ic">${nameCell(eq.id,'equip')}</td>`;
+        h+=`<td class="ic"><span style="font-size:10px;color:var(--text2)">${eq.note||'—'}</span></td>${dayCells(eq,'equip')}</tr>`;
+      });
     });
   }
   if(show('rentals')){
     const filtered=RENTALS.filter(e=>passFilter(e));
     if(filtered.length){
-      const rows=filtered.map(r=>{
-        if(dayMode){const extra=dayViewCells(r);if(!extra)return '';return`<tr style="background:rgba(234,243,222,0.2)"><td class="ic">${nameCell(r.id,'rental')}</td><td class="ic"></td>${extra}</tr>`;}
-        return`<tr style="background:rgba(234,243,222,0.2)"><td class="ic">${nameCell(r.id,'rental')}</td><td class="ic"></td>${dayCells(r,'rental')}</tr>`;
-      }).filter(Boolean);
-      if(rows.length){h+=mkSec(`Rentals · ${filtered.length} items`,'#3B6D11');h+=rows.join('');}
+      h+=mkSec(`Rentals · ${filtered.length} items`,'#3B6D11');
+      filtered.forEach(r=>{
+        h+=`<tr style="background:rgba(234,243,222,0.2)"><td class="ic">${nameCell(r.id,'rental')}</td><td class="ic"></td>${dayCells(r,'rental')}</tr>`;
+      });
     }
   }
-  h+='</tbody>';
+  h+=`</tbody>`;
   document.getElementById('roster-tbl').innerHTML=h;
   const usedAll=[...STAFF,...EXTRA,...EQUIP,...RENTALS].flatMap(e=>Object.values(e.a||{})).filter(Boolean);
   const uniq=[...new Set(usedAll)];
   document.getElementById('roster-legend').innerHTML=uniq.map(p=>`<span class="li"><span class="lsq" style="background:${pc(p)}"></span>${p}</span>`).join('')+
-    (uniq.length?'<span class="li"><span class="lsq" style="background:#FCEBEB;border:0.5px solid #F09595"></span>OFF</span>':'')+
-    (dayMode?`<span style="font-size:11px;color:var(--text2);margin-left:8px">Showing: ${DLBL[dow(calYear,calMonth,rosterDayFilter)]} ${rosterDayFilter} ${MONTHS[calMonth]}</span>`:'');
+    (uniq.length?'<span class="li"><span class="lsq" style="background:#FCEBEB;border:0.5px solid #F09595"></span>OFF</span>':'');
 }
-
 
 function clickCell(itemId,dateKey,day,type){
   const item=getItem(itemId,type);if(!item)return;
   if(!item.a)item.a={};
   if(!item.notes)item.notes={};
-  if(!item.wh)item.wh={};
   const cur=item.a[dateKey]||'';
   const curNote=item.notes[dateKey]||'';
-  const curWh=item.wh[dateKey]||'';
   const d=dateKey.split('-'),dl=`${day} ${MO[parseInt(d[1])-1]} ${d[0]}`;
   const activeProjs=DB.projects.filter(p=>p.status==='Active');
-  // Build project options from live DB — always reflects current active projects
-  const allProjs=[
-    {id:'OFF', name:'OFF / Holiday'},
-    {id:'Warehouse', name:'Warehouse'},
-    ...activeProjs.map(p=>({id:p.id, name:p.name}))
-  ];
-  const pOpts=`<option value="">— Unassigned —</option>`+allProjs.map(p=>`<option value="${p.id}"${cur===p.id?' selected':''}>${p.id} — ${p.name}</option>`).join('');
+  const pOpts=`<option value="">— Unassigned —</option>`+PROJECTS_LIST.filter(p=>p.id==='OFF'||p.id==='Warehouse'||activeProjs.find(ap=>ap.id===p.id)).map(p=>`<option value="${p.id}"${cur===p.id?' selected':''}>${p.id} — ${p.name}</option>`).join('');
   showModal(`<div class="modal-title">Assign · ${item.name}</div>
     <div style="font-size:12px;color:var(--text2);margin-bottom:12px">${dl}</div>
     <div class="fg"><label>Project / assignment</label><select id="cp-proj">${pOpts}</select></div>
-    <div class="fg"><label>Notes for this day</label>
-      <textarea id="cp-note" placeholder="Site instructions, contact info..." style="min-height:60px;width:100%;font-size:13px;padding:8px;border-radius:var(--radius);border:0.5px solid var(--border2);background:var(--bg);color:var(--text);font-family:inherit;resize:vertical">${curNote}</textarea></div>
-    <div class="fg" style="background:rgba(255,243,205,0.4);border:0.5px solid #F0C040;border-radius:var(--radius);padding:10px 12px;margin-bottom:0">
-      <label style="color:#7A5800;font-weight:600;display:flex;align-items:center;gap:6px">
-        <span style="font-size:14px">📦</span> Warehouse notes
-        <span style="font-size:10px;font-weight:400;color:#9A7010">(materials, tools, equipment needed)</span>
-      </label>
-      <textarea id="cp-wh" placeholder="e.g. 2x concrete bags, rebar #4, generator, orange cones..." style="min-height:60px;width:100%;font-size:13px;padding:8px;border-radius:var(--radius);border:0.5px solid #F0C040;background:#FFFEF5;color:var(--text);font-family:inherit;resize:vertical;margin-top:6px">${curWh}</textarea>
-    </div>
+    <div class="fg"><label>Notes / details for this day</label><textarea id="cp-note" placeholder="e.g. Equipment needed, site instructions, contact info..." style="min-height:72px;width:100%;font-size:13px;padding:8px;border-radius:var(--radius);border:0.5px solid var(--border2);background:var(--bg);color:var(--text);font-family:inherit;resize:vertical">${curNote}</textarea></div>
     <div class="form-actions">
       ${cur?`<button class="btn btn-deny btn-sm" onclick="clearCell('${itemId}','${dateKey}','${type}')">Clear</button>`:''}
       <button class="btn" onclick="closeModal()">Cancel</button>
       <button class="btn btn-primary" onclick="saveCell('${itemId}','${dateKey}','${type}')">Save</button>
     </div>`);
 }
-
 function saveCell(id,key,type){
   const item=getItem(id,type);
   if(!item.a)item.a={};
   if(!item.notes)item.notes={};
-  if(!item.wh)item.wh={};
-  const v    = document.getElementById('cp-proj').value;
-  const note = (document.getElementById('cp-note')?.value||'').trim();
-  const wh   = (document.getElementById('cp-wh')?.value||'').trim();
-
-  const prevWh = item.wh[key]||'';
-
-  if(v) item.a[key]=v; else delete item.a[key];
-  if(note) item.notes[key]=note; else delete item.notes[key];
-  if(wh) item.wh[key]=wh; else delete item.wh[key];
-
-  // If warehouse notes changed and there's a project assigned, write to sheet
-  if(wh && wh !== prevWh && v && v !== 'OFF') {
-    // Parse date from key "YYYY-M-D"
-    const [yr,mo,dy] = key.split('-');
-    const dateStr = `${parseInt(mo)}/${parseInt(dy)}/${yr}`;
-    const proj = DB.projects.find(p=>p.id===v);
-    const projName = proj ? proj.name : v;
-    sheetWrite('addWarehouse', {
-      date:       dateStr,
-      worker:     item.name,
-      projectId:  v,
-      projectName:projName,
-      notes:      wh,
-    });
-  }
-
+  const v=document.getElementById('cp-proj').value;
+  const note=(document.getElementById('cp-note')?.value||'').trim();
+  if(v)item.a[key]=v;else delete item.a[key];
+  if(note)item.notes[key]=note;else delete item.notes[key];
   saveLocal();closeModal();renderRoster();
 }
-
 function clearCell(id,key,type){
   const item=getItem(id,type);
-  if(item.a)    delete item.a[key];
+  if(item.a)delete item.a[key];
   if(item.notes)delete item.notes[key];
-  if(item.wh)   delete item.wh[key];
   saveLocal();closeModal();renderRoster();
 }
 
@@ -1799,11 +1582,7 @@ function closeModal(){document.getElementById('modal-area').innerHTML='';assignS
 function openModal(type,pid,extra){
   const codeOpts=Object.entries(CODES_MAP).map(([k,v])=>`<option value="${k}">${k} — ${v}</option>`).join('');
   const activeProjects=DB.projects.filter(p=>p.status==='Active');
-  const pOpts=[
-    {id:'OFF',name:'OFF / Holiday'},
-    {id:'Warehouse',name:'Warehouse'},
-    ...activeProjects.map(p=>({id:p.id,name:p.name}))
-  ].map(p=>`<option value="${p.id}"${p.id===pid?' selected':''}>${p.id} — ${p.name}</option>`).join('');
+  const pOpts=PROJECTS_LIST.filter(p=>p.id==='OFF'||p.id==='Warehouse'||activeProjects.find(ap=>ap.id===p.id)).map(p=>`<option value="${p.id}"${p.id===pid?' selected':''}>${p.id} — ${p.name}</option>`).join('');
   const total=dim(calYear,calMonth);
 
   if(type==='assign'){
@@ -1842,7 +1621,7 @@ function openModal(type,pid,extra){
       <div class="fg2"><div class="fg" style="margin-bottom:0"><label>Project manager</label><input id="f-pm" placeholder="Full name"></div><div class="fg" style="margin-bottom:0"><label>PM email</label><input id="f-email" type="email" placeholder="pm@zlccorp.com"></div></div>
       <div class="fg"><label>Address</label><input id="f-addr" placeholder="Project address"></div>
       <div class="fg2"><div class="fg" style="margin-bottom:0"><label>Client</label><input id="f-client" placeholder="Client name"></div><div class="fg" style="margin-bottom:0"><label>Start month</label><select id="f-month">${MO.map(m=>`<option>${m}</option>`).join('')}</select></div></div>
-      <div class="fg"><label>Status</label><select id="f-status"><option>Active</option><option>Pending</option><option>Complete</option><option>Canceled</option></select></div>
+      <div class="fg"><label>Status</label><select id="f-status"><option>Active</option><option>Pending</option><option>Complete</option><option>On hold</option><option>Finish</option><option>Canceled</option></select></div>
       <div class="divider"></div>
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px"><label class="fl" style="margin-bottom:0">Cost codes &amp; values</label><button class="btn btn-sm" onclick="addCodeRow()">+ Add code</button></div>
       <div id="code-rows"><div class="code-row-entry" id="coderow-0"><select style="flex:1;min-width:0">${codeOpts}</select><input type="number" placeholder="Value ($)" style="width:120px"><button class="btn btn-sm btn-deny" onclick="removeCodeRow('coderow-0')">✕</button></div></div>
@@ -2018,10 +1797,10 @@ function saveLocal() {
   try {
     // Save roster assignments + notes for all items
     const rosterData = {
-      staff: STAFF.map(e => ({ id:e.id, a:e.a||{}, notes:e.notes||{}, wh:e.wh||{} })),
-      extra: EXTRA.map(e => ({ id:e.id, a:e.a||{}, notes:e.notes||{}, wh:e.wh||{}, project:e.project })),
-      equip: EQUIP.map(e => ({ id:e.id, a:e.a||{}, notes:e.notes||{}, wh:e.wh||{} })),
-      rentals: RENTALS.map(e => ({ id:e.id, a:e.a||{}, notes:e.notes||{}, wh:e.wh||{} })),
+      staff: STAFF.map(e => ({ id:e.id, a:e.a||{}, notes:e.notes||{} })),
+      extra: EXTRA.map(e => ({ id:e.id, a:e.a||{}, notes:e.notes||{}, project:e.project })),
+      equip: EQUIP.map(e => ({ id:e.id, a:e.a||{}, notes:e.notes||{} })),
+      rentals: RENTALS.map(e => ({ id:e.id, a:e.a||{}, notes:e.notes||{} })),
       extraList: EXTRA.filter(e => e.id.startsWith('ew') && !['ew1','ew2','ew3','ew4','ew5','ew6','ew7','ew8'].includes(e.id)),
       staffList: STAFF.filter(e => !['e1','e2','e3','e4','e5','e6','e7','e8','e9','e10','e11','e12','e13','e14','e15','e16','e17'].includes(e.id)),
     };
@@ -2045,19 +1824,19 @@ function loadLocal() {
       // Restore assignments and notes into existing items
       (rd.staff||[]).forEach(saved => {
         const item = STAFF.find(e => e.id === saved.id);
-        if (item) { item.a = saved.a||{}; item.notes = saved.notes||{}; item.wh = saved.wh||{}; }
+        if (item) { item.a = saved.a||{}; item.notes = saved.notes||{}; }
       });
       (rd.extra||[]).forEach(saved => {
         const item = EXTRA.find(e => e.id === saved.id);
-        if (item) { item.a = saved.a||{}; item.notes = saved.notes||{}; item.wh = saved.wh||{}; item.project = saved.project||item.project; }
+        if (item) { item.a = saved.a||{}; item.notes = saved.notes||{}; item.project = saved.project||item.project; }
       });
       (rd.equip||[]).forEach(saved => {
         const item = EQUIP.find(e => e.id === saved.id);
-        if (item) { item.a = saved.a||{}; item.notes = saved.notes||{}; item.wh = saved.wh||{}; }
+        if (item) { item.a = saved.a||{}; item.notes = saved.notes||{}; }
       });
       (rd.rentals||[]).forEach(saved => {
         const item = RENTALS.find(e => e.id === saved.id);
-        if (item) { item.a = saved.a||{}; item.notes = saved.notes||{}; item.wh = saved.wh||{}; }
+        if (item) { item.a = saved.a||{}; item.notes = saved.notes||{}; }
       });
       // Restore extra workers added by user
       (rd.extraList||[]).forEach(saved => {
