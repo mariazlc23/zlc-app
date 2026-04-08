@@ -436,10 +436,8 @@
         <button class="btn btn-sm btn-ghost" onclick="setRosterProjFilter('');document.getElementById('roster-proj-filter').value=''" style="font-size:11px;padding:3px 8px">✕ Clear</button>
       </div>
       <div style="display:flex;align-items:center;gap:8px">
-        <label style="font-size:12px;color:var(--text2);white-space:nowrap;margin:0">Day view:</label>
-        <select id="roster-day-filter" onchange="setRosterDayFilter(this.value)" style="font-size:12px;padding:4px 8px;border-radius:var(--radius);border:0.5px solid var(--border2);background:var(--bg);color:var(--text);min-width:120px">
-          <option value="">— All days —</option>
-        </select>
+        <label style="font-size:12px;color:var(--text2);white-space:nowrap;margin:0">Filter by date:</label>
+        <input id="roster-day-filter" type="date" onchange="setRosterDayFilter(this.value)" style="font-size:12px;padding:4px 8px;border-radius:var(--radius);border:0.5px solid var(--border2);background:var(--bg);color:var(--text);min-width:150px">
         <button class="btn btn-sm btn-ghost" onclick="setRosterDayFilter('');document.getElementById('roster-day-filter').value=''" style="font-size:11px;padding:3px 8px">✕ Clear</button>
         <button class="btn btn-sm" onclick="downloadDayPDF()" id="pdf-btn" style="font-size:11px;padding:4px 10px;background:#E24B4A;color:#fff;border:none;border-radius:var(--radius);cursor:pointer;display:none">⬇ Download PDF</button>
       </div>
@@ -975,7 +973,7 @@ let calYear=2026, calMonth=3, calView='month';
 let annualChart=null, codeRowIdx=1;
 let assignSelected=new Set();
 let rosterProjFilter='';
-let rosterDayFilter=0; // 0 = all days, number = show only that day
+let rosterDayFilter=''; // '' = all dates, otherwise exact date in YYYY-MM-DD
 
 // ─── UTILS ──────────────────────────────────────────────────────────────────
 const fmt=v=>'$'+Math.round(v).toLocaleString();
@@ -997,6 +995,24 @@ function bc(s){
 function toast(m){const t=document.getElementById('toast');t.textContent=m;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2500);}
 function pc(id){if(!id)return '';if(id==='OFF')return '#FCEBEB';return PROJ_COLORS[id]||(()=>{const h=Math.abs([...id].reduce((a,c)=>a*31+c.charCodeAt(0),0)%0xFFFFFF);return '#'+h.toString(16).padStart(6,'0');})();}
 function ptc(bg){if(!bg||bg==='')return '#666';const h=bg.replace('#','');const r=parseInt(h.slice(0,2),16),g=parseInt(h.slice(2,4),16),b=parseInt(h.slice(4,6),16);return(r*299+g*587+b*114)/1000>145?'#2C2C2A':'#F7F7F5';}
+
+function getRosterFilterDateParts(){
+  if(!rosterDayFilter) return null;
+  const parts = String(rosterDayFilter).split('-').map(Number);
+  if(parts.length!==3 || parts.some(n=>!n)) return null;
+  return { year: parts[0], month: parts[1], day: parts[2] };
+}
+function getRosterFilterKey(){
+  const parts = getRosterFilterDateParts();
+  return parts ? `${parts.year}-${parts.month}-${parts.day}` : '';
+}
+function formatRosterFilterLabel(){
+  const parts = getRosterFilterDateParts();
+  if(!parts) return '';
+  const date = new Date(parts.year, parts.month - 1, parts.day);
+  if(isNaN(date)) return '';
+  return date.toLocaleDateString('en-US',{weekday:'short', month:'short', day:'numeric', year:'numeric'});
+}
 
 // ─── NAV ────────────────────────────────────────────────────────────────────
 function goTab(n,b){
@@ -1785,17 +1801,22 @@ function setCV(v,b){calView=v;document.querySelectorAll('.vt-btn').forEach(x=>x.
 function setSect(s,b){rosterSect=s;document.querySelectorAll('.ft').forEach(x=>x.classList.remove('active'));b.classList.add('active');renderRoster();}
 function setRosterProjFilter(pid){rosterProjFilter=pid;renderRoster();}
 function setRosterDayFilter(d){
-  rosterDayFilter=d?parseInt(d):0;
+  rosterDayFilter=(d||'').trim();
+  const parts=getRosterFilterDateParts();
+  if(parts){
+    calYear=parts.year;
+    calMonth=parts.month-1;
+  }
+  const input=document.getElementById('roster-day-filter');
+  if(input && input.value!==rosterDayFilter) input.value=rosterDayFilter;
   const btn=document.getElementById('pdf-btn');
   if(btn) btn.style.display=rosterDayFilter?'block':'none';
   renderRoster();
 }
 
 function downloadDayPDF(){
-  if(!rosterDayFilter){ toast('Select a day first using the Day view filter'); return; }
-  const DL=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
-  const dw=dow(calYear,calMonth,rosterDayFilter);
-  const dateStr=`${DL[dw]}, ${MONTHS[calMonth]} ${rosterDayFilter}, ${calYear}`;
+  if(!rosterDayFilter){ toast('Select a date first'); return; }
+  const dateStr = formatRosterFilterLabel();
 
   // Build print header
   const hdr=document.getElementById('pdf-print-header');
@@ -1813,29 +1834,15 @@ function downloadDayPDF(){
       </div>`;
   }
 
-  // Make sure we're in day view mode before printing
-  const prevDay=rosterDayFilter;
-  if(!rosterDayFilter) setRosterDayFilter(new Date().getDate());
-
-  // Small delay so DOM updates, then print
   setTimeout(()=>{
     window.print();
   }, 150);
 }
 
 function populateRosterDayFilter(){
-  const sel=document.getElementById('roster-day-filter');
-  if(!sel)return;
-  const cur=sel.value;
-  const dInM=dim(calYear,calMonth);
-  const DL=['Su','Mo','Tu','We','Th','Fr','Sa'];
-  let opts='<option value="">— All days —</option>';
-  for(let d=1;d<=dInM;d++){
-    const dw=dow(calYear,calMonth,d);
-    opts+=`<option value="${d}"${cur==d?' selected':''}>${d} ${DL[dw]} ${MONTHS[calMonth].slice(0,3)}</option>`;
-  }
-  sel.innerHTML=opts;
-  if(cur) sel.value=cur;
+  const input=document.getElementById('roster-day-filter');
+  if(!input)return;
+  input.value=rosterDayFilter||'';
 }
 
 function populateRosterProjFilter(){
@@ -1870,7 +1877,8 @@ function ewWeekSummary(ew) {
   // Find current week bounds (Mon–Sun) relative to calYear/calMonth view
   const today = new Date();
   // Use the currently viewed month's "today" or actual today
-  const refDate = new Date(calYear, calMonth, rosterDayFilter || today.getDate());
+  const parts = getRosterFilterDateParts();
+  const refDate = parts ? new Date(parts.year, parts.month - 1, parts.day) : new Date(calYear, calMonth, today.getDate());
   const dayOfWeek = refDate.getDay(); // 0=Sun,1=Mon...6=Sat
   // Monday of this week
   const monday = new Date(refDate);
@@ -1917,10 +1925,14 @@ function renderRoster(){
   const days=getVisDays();
   const t=new Date(),todayD=t.getMonth()===calMonth&&t.getFullYear()===calYear?t.getDate():null;
   const show=s=>rosterSect==='all'||rosterSect===s;
-  const dayMode=rosterDayFilter>0;
+  const dayMode=!!rosterDayFilter;
 
   const passFilter=item=>{
     if(!rosterProjFilter)return true;
+    if(dayMode){
+      const key=getRosterFilterKey();
+      return (item.a?.[key]||'')===rosterProjFilter;
+    }
     return days.some(d=>{
       const key=`${calYear}-${calMonth+1}-${d}`;
       return(item.a?.[key]||'')===rosterProjFilter;
@@ -1959,7 +1971,7 @@ function renderRoster(){
   // Single-day cells: trabajo+costcode | detalles | warehouse
   // Returns 3 <td> elements — or null if no assignment and no note
   const dayViewCells=item=>{
-    const key   = `${calYear}-${calMonth+1}-${rosterDayFilter}`;
+    const key   = getRosterFilterKey();
     const asgn  = item.a?.[key]||'';
     const note  = item.notes?.[key]||'';
     const wh    = item.wh?.[key]||'';
@@ -2042,7 +2054,7 @@ function renderRoster(){
     if(dayMode){
       const extra=dayViewCells(item);
       if(!extra)return '';
-      const key=`${calYear}-${calMonth+1}-${rosterDayFilter}`;
+      const key=getRosterFilterKey();
       const asgn=item.a?.[key]||'';
       const projKey=asgn.split(',')[0].trim()||'ZZZ'; // sort by first project
       const rowHtml=`<tr style="${bgStyle}"><td class="ic day-note" style="vertical-align:top;padding:8px 10px;max-width:150px">${nameCell(item.id,type)}</td>${extra}</tr>`;
@@ -2119,7 +2131,7 @@ function renderRoster(){
     const lbl=proj?`${p} — ${proj.name}`:p;
     return`<span class="li"><span class="lsq" style="background:${pc(p)}"></span>${lbl}</span>`;
   }).join('')+(uniq.length?'<span class="li"><span class="lsq" style="background:#FCEBEB;border:0.5px solid #F09595"></span>OFF</span>':'')+
-    (dayMode?`<span style="font-size:11px;color:var(--text2);margin-left:8px">Showing: ${DLBL[dow(calYear,calMonth,rosterDayFilter)]} ${rosterDayFilter} ${MONTHS[calMonth]}</span>`:'');
+    (dayMode?`<span style="font-size:11px;color:var(--text2);margin-left:8px">Showing: ${formatRosterFilterLabel()}</span>`:'');
 }
 
 
