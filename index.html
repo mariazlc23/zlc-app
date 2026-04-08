@@ -217,6 +217,27 @@
   .order-meta  { font-size:11px; color:var(--text2); display:flex; gap:10px; flex-wrap:wrap; }
   .order-actions { display:flex; gap:4px; flex-shrink:0; }
   .order-done { text-decoration:line-through; opacity:0.5; }
+  /* Print / PDF */
+  @media print {
+    * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
+    body { background: white !important; margin: 0; }
+    .sidebar, .page-header, .roster-controls, .filter-tabs, .legend,
+    #modal-area, .toast, #view-dashboard, #view-projects,
+    .btn, button:not(.no-hide) { display: none !important; }
+    .app, .main, #view-roster { display: block !important; width: 100% !important;
+      height: auto !important; overflow: visible !important; padding: 0 !important; }
+    .roster-wrap { overflow: visible !important; max-height: none !important; }
+    #pdf-print-header { display: block !important; margin-bottom: 12px; }
+    .rt { font-size: 11px !important; width: 100% !important; border-collapse: collapse !important; }
+    .rt th, .rt td { padding: 4px 6px !important; border: 0.5px solid #ddd !important; }
+    .trs td { font-size: 10px !important; background: #f5f5f5 !important; }
+    .day-cell { min-width: 22px !important; }
+    .day-block { font-size: 8px !important; }
+    .ic { min-width: 80px !important; }
+    @page { margin: 10mm; size: A4 landscape; }
+  }
+  #pdf-print-header { display: none; }
+
   ::-webkit-scrollbar { width: 6px; height: 6px; }
   ::-webkit-scrollbar-track { background: transparent; }
   ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 3px; }
@@ -261,6 +282,7 @@
   <div class="dash-tabs">
     <button class="dtab active" onclick="goDash('analytics',this)">Historical analytics</button>
     <button class="dtab" onclick="goDash('overview',this)">Overview</button>
+    <button class="dtab" onclick="goDash('warehouse',this)">Warehouse</button>
   </div>
   <div id="dash-overview" style="display:none">
     <div class="card" style="margin-bottom:16px">
@@ -272,7 +294,17 @@
     </div>
     <div class="metrics" id="dash-metrics"></div>
     <div class="grid-2">
-      <div class="card" style="margin-bottom:0"><div class="card-header"><span class="card-title">Pending change orders</span></div><div id="dash-cos"></div></div>
+      <div class="card" style="margin-bottom:0">
+        <div class="card-header">
+          <span class="card-title">Change orders</span>
+          <div style="display:flex;gap:4px">
+            <button class="btn btn-sm btn-ghost" id="co-filter-all" onclick="setCOFilter('all',this)" style="font-size:10px;padding:2px 7px">All</button>
+            <button class="btn btn-sm" id="co-filter-pending" onclick="setCOFilter('pending',this)" style="font-size:10px;padding:2px 7px;background:var(--amber-light);color:var(--amber)">Pending</button>
+            <button class="btn btn-sm btn-ghost" id="co-filter-done" onclick="setCOFilter('done',this)" style="font-size:10px;padding:2px 7px">Done</button>
+          </div>
+        </div>
+        <div id="dash-cos"></div>
+      </div>
       <div class="card" style="margin-bottom:0"><div class="card-header"><span class="card-title">Open RFIs &amp; submittals</span></div><div id="dash-open"></div></div>
     </div>
     <div class="card" style="margin-top:16px">
@@ -283,6 +315,27 @@
         <th style="width:65px">Month</th><th style="width:72px">Status</th>
       </tr></thead><tbody id="dash-tbody"></tbody></table></div>
     </div>
+  </div>
+  <div id="dash-warehouse" style="display:none">
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:20px">
+      <div>
+        <div style="font-size:18px;font-weight:700;color:var(--text)">📦 Warehouse Dashboard</div>
+        <div style="font-size:12px;color:var(--text2);margin-top:2px" id="wh-subtitle">Loading from ZLC Outlook…</div>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <div style="position:relative">
+          <input id="wh-search" type="text" placeholder="Search..." oninput="filterWarehouse()"
+            style="font-size:12px;padding:5px 10px 5px 28px;border-radius:var(--radius);border:0.5px solid var(--border2);background:var(--bg);color:var(--text);width:160px">
+          <span style="position:absolute;left:8px;top:50%;transform:translateY(-50%);color:var(--text3);font-size:11px">🔍</span>
+        </div>
+        <select id="wh-view" onchange="filterWarehouse()" style="font-size:12px;padding:5px 8px;border-radius:var(--radius);border:0.5px solid var(--border2);background:var(--bg);color:var(--text)">
+          <option value="sections">By section</option>
+          <option value="table">Table view</option>
+        </select>
+        <button class="btn btn-sm btn-ghost" onclick="syncWarehouse()" style="white-space:nowrap">↻ Refresh</button>
+      </div>
+    </div>
+    <div id="wh-dash-content"><div class="empty">Loading…</div></div>
   </div>
   <div id="dash-analytics">
     <div style="display:flex;justify-content:flex-end;margin-bottom:14px">
@@ -312,11 +365,15 @@
       <div style="display:flex;gap:4px;flex-wrap:wrap" id="status-filters">
         <button class="ft active" onclick="setStatusFilter('',this)">All</button>
         <button class="ft" onclick="setStatusFilter('Active',this)">Active</button>
-        <button class="ft" onclick="setStatusFilter('Finish',this)">Finish</button>
         <button class="ft" onclick="setStatusFilter('Pending',this)">Pending</button>
-        <button class="ft" onclick="setStatusFilter('On hold',this)">On hold</button>
-        <button class="ft" onclick="setStatusFilter('Canceled',this)">Canceled</button>
         <button class="ft" onclick="setStatusFilter('Complete',this)">Complete</button>
+        <button class="ft" onclick="setStatusFilter('Canceled',this)">Canceled</button>
+      </div>
+      <div style="position:relative;margin-bottom:8px">
+        <input id="proj-search" type="text" placeholder="Search by number or name..."
+          oninput="filterProjTable()"
+          style="font-size:13px;padding:6px 12px 6px 32px;border-radius:var(--radius);border:0.5px solid var(--border2);background:var(--bg);color:var(--text);width:260px">
+        <span style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--text3);font-size:13px">🔍</span>
       </div>
       <span id="proj-count" style="font-size:12px;color:var(--text2)"></span>
     </div>
@@ -359,6 +416,14 @@
         </select>
         <button class="btn btn-sm btn-ghost" onclick="setRosterProjFilter('');document.getElementById('roster-proj-filter').value=''" style="font-size:11px;padding:3px 8px">✕ Clear</button>
       </div>
+      <div style="display:flex;align-items:center;gap:8px">
+        <label style="font-size:12px;color:var(--text2);white-space:nowrap;margin:0">Day view:</label>
+        <select id="roster-day-filter" onchange="setRosterDayFilter(this.value)" style="font-size:12px;padding:4px 8px;border-radius:var(--radius);border:0.5px solid var(--border2);background:var(--bg);color:var(--text);min-width:120px">
+          <option value="">— All days —</option>
+        </select>
+        <button class="btn btn-sm btn-ghost" onclick="setRosterDayFilter('');document.getElementById('roster-day-filter').value=''" style="font-size:11px;padding:3px 8px">✕ Clear</button>
+        <button class="btn btn-sm" onclick="downloadDayPDF()" id="pdf-btn" style="font-size:11px;padding:4px 10px;background:#E24B4A;color:#fff;border:none;border-radius:var(--radius);cursor:pointer;display:none">⬇ Download PDF</button>
+      </div>
     </div>
   </div>
   <div class="filter-tabs">
@@ -369,6 +434,7 @@
     <button class="ft" onclick="setSect('rentals',this)">Rentals</button>
   </div>
   <div class="legend" id="roster-legend"></div>
+  <div id="pdf-print-header"></div>
   <div class="roster-wrap"><table class="rt" id="roster-tbl"></table></div>
 </div>
 </div><!-- end main -->
@@ -393,7 +459,7 @@ const CAT_COLORS={staff:'#185FA5',extra:'#BA7517',equip:'#3B6D11',rental:'#88878
 const SHEET_ID  = '1Y35oa2ebgCisj3PzVs2dTMUN5dY2Hhci4RIt55Kn44Y';
 const API_KEY   = 'AIzaSyCCuKyfurmT2w-L2dn6-XbvupaOmlHufUE';
 // Paste your Apps Script URL below after following setup instructions:
-let APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbz09_1Ocvd9xAgNI2qAyVEqREzEgFICgLZhb6QW-Pji2UOa0d_QIB4IBQaSdjsnCxrtvQ/exec';
+let APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbx0sk-p5eqKmmUC85CVIM7gRTPIwahR9YswIMv0tuRvaBIF_nN32xNtQWPdV_yIK2DYSw/exec';
 
 const GIDS = {
   projects: '1735667570',
@@ -836,7 +902,8 @@ let STAFF=[
   {id:'e14',name:'Hugo',team:'Lobos',certs:[],veh:'Needs attention',a:{},notes:{}},
   {id:'e15',name:'Joaquin',team:'Joaquin',certs:[],veh:'Needs attention',a:{},notes:{}},
   {id:'e16',name:'Hernan',team:'Warehouse',certs:[],veh:'',a:{},notes:{}},
-  {id:'e17',name:'Francisco #5',team:'Driver',certs:['CPR'],veh:'Good',a:{},notes:{}},
+  {id:'e17',name:'Francisco #5',team:'Driver',certs:['CPR'],veh:'Good',a:{},notes:{},wh:{},multi:true},
+  {id:'e18',name:'Driver 2',team:'Driver',certs:[],veh:'Good',a:{},notes:{},wh:{},multi:true},
 ];
 let EXTRA=[
   {id:'ew1',name:'Lazaro',project:'25-061',a:{},notes:{}},{id:'ew2',name:'Jose Ines',project:'25-103',a:{},notes:{}},
@@ -891,6 +958,7 @@ let calYear=2026, calMonth=3, calView='month';
 let annualChart=null, codeRowIdx=1;
 let assignSelected=new Set();
 let rosterProjFilter='';
+let rosterDayFilter=0; // 0 = all days, number = show only that day
 
 // ─── UTILS ──────────────────────────────────────────────────────────────────
 const fmt=v=>'$'+Math.round(v).toLocaleString();
@@ -928,18 +996,61 @@ function goDash(t,b){
   document.querySelectorAll('.dtab').forEach(x=>x.classList.remove('active'));b.classList.add('active');
   document.getElementById('dash-overview').style.display=t==='overview'?'block':'none';
   document.getElementById('dash-analytics').style.display=t==='analytics'?'block':'none';
-  if(t==='overview')renderOverview();else renderAnalytics();
+  document.getElementById('dash-warehouse').style.display=t==='warehouse'?'block':'none';
+  if(t==='overview')renderOverview();
+  else if(t==='analytics')renderAnalytics();
+  else if(t==='warehouse')syncWarehouse();
 }
 
 // ─── DASHBOARD OVERVIEW ──────────────────────────────────────────────────────
+let coDashFilter = 'pending'; // all | pending | done
+
+function setCOFilter(f, btn) {
+  coDashFilter = f;
+  document.querySelectorAll('#co-filter-all,#co-filter-pending,#co-filter-done').forEach(b=>{
+    b.style.background=''; b.style.color=''; b.classList.add('btn-ghost'); b.classList.remove('btn-primary');
+  });
+  if(btn){ btn.classList.remove('btn-ghost'); btn.style.background='var(--blue)'; btn.style.color='#fff'; }
+  renderCOList();
+}
+
+function renderCOList() {
+  const el = document.getElementById('dash-cos');
+  if(!el) return;
+  const allCOs = DB.projects.flatMap(p=>p.cos.map(c=>({...c,pid:p.id,pname:p.name})));
+  let filtered;
+  if(coDashFilter==='pending') filtered = allCOs.filter(c=>c.status==='Pending');
+  else if(coDashFilter==='done') filtered = allCOs.filter(c=>c.status==='Approved'||c.status==='Canceled');
+  else filtered = allCOs;
+  filtered.sort((a,b)=>a.pid.localeCompare(b.pid));
+  if(!filtered.length){ el.innerHTML='<div class="empty">No COs</div>'; return; }
+  el.innerHTML = filtered.map(c=>{
+    const statusCls = c.status==='Approved'?'b-green':c.status==='Canceled'?'b-red':'b-amber';
+    const workIcon  = c.status==='Approved'?'✓':c.status==='Canceled'?'✕':'⏳';
+    return`<div style="display:flex;justify-content:space-between;align-items:flex-start;padding:8px 0;border-bottom:0.5px solid var(--border);font-size:12px;gap:8px">
+      <div style="flex:1;min-width:0">
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:2px">
+          <strong>${c.num}</strong>
+          <span style="color:var(--text3);font-size:10px">${c.pid} — ${c.pname}</span>
+        </div>
+        <div style="color:var(--text2);font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${c.desc}</div>
+      </div>
+      <div style="text-align:right;flex-shrink:0">
+        <strong>${fmt(c.value)}</strong>
+        <div style="margin-top:2px"><span class="badge ${statusCls}">${workIcon} ${c.status}</span></div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
 function renderOverview(){
-  renderOrders(); // render open orders first
+  renderOrders();
   const active=DB.projects.filter(p=>p.status==='Active');
   const allCOs=DB.projects.flatMap(p=>p.cos.map(c=>({...c,pid:p.id})));
   const pendCOs=allCOs.filter(c=>c.status==='Pending');
   const pendVal=pendCOs.reduce((a,c)=>a+c.value,0);
-  const openRFIs=DB.projects.flatMap(p=>p.rfis.filter(r=>r.status==='Open'));
-  const openSubs=DB.projects.flatMap(p=>p.subs.filter(s=>s.status==='Under review'||s.status==='Pending review'));
+  const openRFIs=DB.projects.flatMap(p=>p.rfis.filter(r=>r.status==='Open').map(r=>({...r,pid:p.id,pname:p.name})));
+  const openSubs=DB.projects.flatMap(p=>p.subs.filter(s=>s.status==='Under review'||s.status==='Pending review').map(s=>({...s,pid:p.id,pname:p.name})));
   const contracted=active.reduce((a,p)=>a+tv(p),0);
   const won2026=DB.projects.filter(p=>p.id.startsWith('26-')).reduce((a,p)=>a+tv(p),0);
   document.getElementById('dash-metrics').innerHTML=`
@@ -949,24 +1060,274 @@ function renderOverview(){
     <div class="metric"><div class="metric-label">Pending COs</div><div class="metric-value">${pendCOs.length}</div><div class="metric-sub">${fmt(pendVal)} in review</div></div>
     <div class="metric"><div class="metric-label">Open RFIs</div><div class="metric-value">${openRFIs.length}</div></div>
     <div class="metric"><div class="metric-label">Subs in review</div><div class="metric-value">${openSubs.length}</div></div>`;
-  document.getElementById('dash-cos').innerHTML=pendCOs.length?pendCOs.map(c=>`
-    <div style="display:flex;justify-content:space-between;padding:9px 0;border-bottom:0.5px solid var(--border);font-size:12px;gap:8px">
-      <div><span style="color:var(--text2)">${c.pid}</span> · <strong>${c.num}</strong><div style="color:var(--text2);font-size:11px;margin-top:1px">${c.desc}</div></div>
-      <div style="text-align:right;flex-shrink:0"><strong>${fmt(c.value)}</strong><br><span class="badge b-amber" style="margin-top:3px">Pending</span></div>
-    </div>`).join(''):'<div class="empty">No pending COs</div>';
-  const items=[...openRFIs.map(r=>({t:'RFI',n:r.num,d:r.desc,cls:'b-blue'})),...openSubs.map(s=>({t:'SUB',n:s.num,d:s.material,cls:'b-amber'}))];
+
+  // COs with filter
+  renderCOList();
+
+  // RFIs & Subs WITH project name
+  const items=[
+    ...openRFIs.map(r=>({t:'RFI', n:r.num, d:r.desc, pid:r.pid, pname:r.pname, cls:'b-blue'})),
+    ...openSubs.map(s=>({t:'SUB', n:s.num, d:s.material, pid:s.pid, pname:s.pname, cls:'b-amber'}))
+  ];
   document.getElementById('dash-open').innerHTML=items.length?items.map(i=>`
-    <div style="display:flex;align-items:center;gap:8px;padding:8px 0;border-bottom:0.5px solid var(--border);font-size:12px">
-      <span class="badge ${i.cls}">${i.t}</span><strong>${i.n}</strong>
-      <span style="color:var(--text2);overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1">${i.d}</span>
+    <div style="padding:8px 0;border-bottom:0.5px solid var(--border);font-size:12px">
+      <div style="display:flex;align-items:center;gap:6px;margin-bottom:2px">
+        <span class="badge ${i.cls}">${i.t}</span>
+        <strong>${i.n}</strong>
+        <span style="font-size:10px;color:var(--text3)">${i.pid} — ${i.pname}</span>
+      </div>
+      <div style="color:var(--text2);font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${i.d}</div>
     </div>`).join(''):'<div class="empty">All clear</div>';
+
   document.getElementById('dash-tbody').innerHTML=active.map(p=>`
     <tr><td><strong>${p.id}</strong></td><td>${p.name}</td><td>${p.client}</td>
     <td>${fmt(bv(p))}</td><td><strong>${fmt(tv(p))}</strong></td>
     <td>${p.month}</td><td><span class="badge ${bc(p.status)}">${p.status}</span></td></tr>`).join('');
 }
 
-// ─── OPEN ORDERS ──────────────────────────────────────────────────────────────
+// ─── WAREHOUSE DASHBOARD ─────────────────────────────────────────────────────
+let whRawRows = [];
+const WH_DASHBOARD_GID = '280051356';
+
+async function syncWarehouse() {
+  const el = document.getElementById('wh-dash-content');
+  if(el) el.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;padding:40px;gap:12px;color:var(--text2)"><span style="font-size:20px">⏳</span> Loading from sheet…</div>`;
+  const sub = document.getElementById('wh-subtitle');
+  if(sub) sub.textContent = 'Loading…';
+  try {
+    // Read 4 separate ranges from the warehouse dashboard sheet
+    const sheetName = await getSheetNameByGid(WH_DASHBOARD_GID);
+    if(!sheetName){ el.innerHTML='<div class="empty">Sheet not found (GID 280051356)</div>'; return; }
+
+    const [vehData, driverData, equip1Data, equip2Data] = await Promise.all([
+      fetchRange(`${sheetName}!A2:E14`),
+      fetchRange(`${sheetName}!A22:E35`),
+      fetchRange(`${sheetName}!G2:M13`),
+      fetchRange(`${sheetName}!G15:K65`),
+    ]);
+
+    if(sub) sub.textContent = 'Live from ZLC Outlook · ' + new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'});
+    renderWarehouseDash({ veh:vehData, driver:driverData, equip1:equip1Data, equip2:equip2Data });
+  } catch(e){
+    if(el) el.innerHTML=`<div class="empty">Error: ${e.message}</div>`;
+    console.error('syncWarehouse:', e);
+  }
+}
+
+// Get sheet name by GID by fetching spreadsheet metadata
+async function getSheetNameByGid(gid) {
+  try {
+    const url = `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}?key=${API_KEY}&fields=sheets.properties`;
+    const res = await fetch(url);
+    const data = await res.json();
+    const sheet = (data.sheets||[]).find(s=>String(s.properties.sheetId)===String(gid));
+    return sheet ? sheet.properties.title : null;
+  } catch(e){ return null; }
+}
+
+// Fetch a specific A1 notation range
+async function fetchRange(range) {
+  try {
+    const url = `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/${encodeURIComponent(range)}?key=${API_KEY}`;
+    const res = await fetch(url);
+    const data = await res.json();
+    return data.values || [];
+  } catch(e){ return []; }
+}
+
+function filterWarehouse() {
+  const q    = (document.getElementById('wh-search')?.value||'').toLowerCase().trim();
+  const view = document.getElementById('wh-view')?.value || 'sections';
+  // Re-render with filter
+  if(whRawRows && (whRawRows.veh||whRawRows.driver)) renderWarehouseDash(whRawRows, q);
+}
+
+function renderWarehouseDash(sections, q='') {
+  whRawRows = sections;
+  const el = document.getElementById('wh-dash-content');
+  if(!el) return;
+
+  const view = document.getElementById('wh-view')?.value || 'sections';
+
+  let h = '<div style="display:flex;flex-direction:column;gap:24px">';
+
+  // ── SECTION 1: Vehicles needing attention (A3:E14) ──────────────────────────
+  h += renderWhSection({
+    rows:     sections.veh||[],
+    title:    '🚗 Vehicles needing attention',
+    color:    '#E24B4A',
+    bgLight:  'rgba(226,75,74,0.06)',
+    q,
+    cardMode: true,
+  });
+
+  // ── SECTION 2: Driver safety & oil log (A23:E35) ───────────────────────────
+  // Alert: col C (index 2) has a date that has already passed
+  h += renderWhSection({
+    rows:     sections.driver||[],
+    title:    '🧑‍✈️ Driver log — Safety check & oil',
+    color:    '#185FA5',
+    bgLight:  'rgba(24,95,165,0.06)',
+    q,
+    cardMode: false,
+    alertFn:  (row) => {
+      const v = String(row[2]||'').trim(); // Col C = index 2
+      if(!v) return false;
+      const d = new Date(v);
+      return !isNaN(d) && d < new Date();
+    },
+    alertCol: 2, // highlight col C specifically
+  });
+
+  // ── SECTION 3: Damaged equipment (G3:M13) ─────────────────────────────────
+  h += renderWhSection({
+    rows:     sections.equip1||[],
+    title:    '🔧 Damaged equipment',
+    color:    '#BA7517',
+    bgLight:  'rgba(186,117,23,0.06)',
+    q,
+    cardMode: true,
+  });
+
+  // ── SECTION 4: Equipment inventory (G16:K65) ──────────────────────────────
+  // Columns: G=Name, H=Status, I=Location, J=Operator, K=Last Update
+  // Alert: K (index 4) has a date older than 20 days
+  h += renderWhSection({
+    rows:     sections.equip2||[],
+    title:    '📦 Equipment inventory & status',
+    color:    '#3B6D11',
+    bgLight:  'rgba(59,109,17,0.06)',
+    q,
+    cardMode: false,
+    forcedHeaders: ['Equipment', 'Status', 'Location', 'Operator', 'Last Update'],
+    alertFn:  (row) => {
+      const v = String(row[4]||'').trim(); // Col K = index 4 = Last Update
+      if(!v) return false;
+      const d = new Date(v);
+      if(isNaN(d)) return false;
+      const daysDiff = (new Date() - d) / (1000 * 60 * 60 * 24);
+      return daysDiff > 20;
+    },
+    alertCol: 4, // highlight Last Update col
+    alertMsg: (row) => {
+      const v = String(row[4]||'').trim();
+      const d = new Date(v);
+      if(isNaN(d)) return v;
+      const days = Math.floor((new Date() - d) / (1000 * 60 * 60 * 24));
+      return `⚠ ${v} (${days}d ago)`;
+    },
+  });
+
+  h += '</div>';
+  el.innerHTML = h;
+}
+
+function renderWhSection({rows, title, color, bgLight, q, cardMode, alertFn, alertCol, alertMsg, forcedHeaders}) {
+  if(!rows.length) return '';
+
+  const headers = forcedHeaders || rows[0].map(h=>String(h||'').trim()).filter(Boolean);
+  const startIdx = forcedHeaders ? 0 : 1; // if forcedHeaders, no header row to skip
+  let data = rows.slice(startIdx).filter(r=>r.some(c=>String(c||'').trim()));
+  if(q) data = data.filter(r=>r.some(c=>String(c||'').toLowerCase().includes(q)));
+
+  const count = data.length;
+  let inner = '';
+
+  if(!data.length) {
+    inner = `<div style="padding:16px;text-align:center;color:var(--text3);font-size:13px">No data</div>`;
+  } else if(cardMode) {
+    // ── CARD LAYOUT ──────────────────────────────────────────────────────────
+    inner = `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px;padding:16px">`;
+    data.forEach(row=>{
+      const isAlert = alertFn ? alertFn(row) : false;
+      const cardTitle = String(row[0]||'').trim() || '—';
+      const fields = headers.slice(1).map((h,i)=>{
+        const v = String(row[i+1]||'').trim();
+        if(!v) return '';
+        const isAlertCell = alertFn && alertCol === i+1 && alertFn(row);
+        const vHtml = isAlertCell
+          ? `<span style="color:#E24B4A;font-weight:600">⚠ ${v}</span>`
+          : v;
+        return `<div style="display:flex;gap:6px;font-size:12px;padding:2px 0">
+          <span style="color:var(--text3);min-width:80px;font-size:11px;flex-shrink:0">${h}</span>
+          <span style="color:var(--text)">${vHtml}</span></div>`;
+      }).filter(Boolean).join('');
+
+      const borderColor = isAlert ? '#E24B4A' : color;
+      const cardBg = isAlert ? 'rgba(226,75,74,0.04)' : 'var(--bg)';
+      inner += `<div style="background:${cardBg};border:0.5px solid var(--border);border-top:3px solid ${borderColor};border-radius:8px;padding:12px">
+        <div style="font-size:13px;font-weight:600;color:${isAlert?'#E24B4A':'var(--text)'};margin-bottom:8px">
+          ${isAlert?'🚨':''} ${cardTitle}
+        </div>${fields}
+      </div>`;
+    });
+    inner += '</div>';
+
+  } else {
+    // ── TABLE LAYOUT ─────────────────────────────────────────────────────────
+    const alertColH = `<th style="width:24px;padding:6px 4px;border-bottom:2px solid ${color}"></th>`;
+    const thead = `<tr style="background:${bgLight}">${alertColH}${headers.map(h=>`<th style="font-size:11px;white-space:nowrap;padding:8px 10px;border-bottom:2px solid ${color}">${h}</th>`).join('')}</tr>`;
+
+    const tbody = data.map((row, ri)=>{
+      const isAlert = alertFn ? alertFn(row) : false;
+      const rowStyle = isAlert
+        ? 'background:rgba(226,75,74,0.08);border-left:3px solid #E24B4A'
+        : ri%2===0 ? 'background:var(--bg3)' : 'background:var(--bg)';
+
+      const cells = headers.map((h, i)=>{
+        let v = String(row[i]||'').trim();
+        if(!v) return `<td style="font-size:12px;padding:7px 10px;color:var(--text3)">—</td>`;
+
+        // This specific cell is the alert trigger
+        const isTriggerCell = alertFn && alertCol===i && alertFn(row);
+        // Status column coloring
+        const isStatusCol = h.toLowerCase().includes('status')||h.toLowerCase().includes('condition');
+        const isBad  = isStatusCol && /damage|broken|repair|down|fail|no/i.test(v);
+        const isGood = isStatusCol && /ok|good|working|pass|yes|available/i.test(v);
+
+        let vHtml;
+        if(isStatusCol) {
+          const cls = isBad?'b-red':isGood?'b-green':'b-amber';
+          vHtml = `<span class="badge ${cls}">${v}</span>`;
+        } else if(isTriggerCell) {
+          vHtml = `<span style="color:#E24B4A;font-weight:600">${alertMsg ? alertMsg(row) : '⚠ '+v}</span>`;
+        } else {
+          vHtml = v;
+        }
+        return `<td style="font-size:12px;padding:7px 10px">${vHtml}</td>`;
+      }).join('');
+
+      const alertCell = isAlert
+        ? `<td style="padding:6px 4px;text-align:center;font-size:13px">🚨</td>`
+        : `<td style="padding:6px 4px"></td>`;
+
+      return `<tr style="${rowStyle}">${alertCell}${cells}</tr>`;
+    }).join('');
+
+    inner = `<div class="tbl-wrap" style="padding:0">
+      <table><thead>${thead}</thead><tbody>${tbody}</tbody></table></div>`;
+  }
+
+  // Count alerts
+  const alertCount = alertFn ? data.filter(r=>alertFn(r)).length : 0;
+  const alertBadge = alertCount > 0
+    ? `<span style="font-size:11px;background:#E24B4A;color:#fff;padding:2px 8px;border-radius:99px;margin-left:8px">🚨 ${alertCount} alert${alertCount!==1?'s':''}</span>`
+    : '';
+
+  return `<div style="border:0.5px solid var(--border);border-radius:12px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.06)">
+    <div style="background:${color};color:#fff;padding:12px 16px;display:flex;align-items:center;justify-content:space-between">
+      <div style="font-size:14px;font-weight:700;display:flex;align-items:center">${title}${alertBadge}</div>
+      <span style="font-size:11px;background:rgba(255,255,255,0.2);padding:3px 10px;border-radius:99px">${count} item${count!==1?'s':''}</span>
+    </div>
+    ${inner}
+  </div>`;
+}
+
+// ─── PROJECT SEARCH FILTER ────────────────────────────────────────────────────
+function filterProjTable(){
+  const q=(document.getElementById('proj-search')?.value||'').toLowerCase().trim();
+  renderProjTable(q);
+}
 const PRI_ORDER = { High:0, Medium:1, Low:2 };
 const PRI_CLASS = { High:'pri-high', Medium:'pri-medium', Low:'pri-low' };
 const PRI_LABEL = { High:'🔴 High', Medium:'🟡 Medium', Low:'🔵 Low' };
@@ -1113,12 +1474,19 @@ function setStatusFilter(status, btn) {
   renderProjTable();
 }
 
-function renderProjTable(){
-  const filtered = projStatusFilter
+function renderProjTable(searchQ){
+  const q = (searchQ ?? (document.getElementById('proj-search')?.value||'')).toLowerCase().trim();
+  let filtered = projStatusFilter
     ? DB.projects.filter(p => p.status === projStatusFilter)
     : DB.projects;
+  if(q) filtered = filtered.filter(p =>
+    p.id.toLowerCase().includes(q) ||
+    p.name.toLowerCase().includes(q) ||
+    (p.client||'').toLowerCase().includes(q) ||
+    (p.pm||'').toLowerCase().includes(q)
+  );
   const count = document.getElementById('proj-count');
-  if(count) count.textContent = `${filtered.length} project${filtered.length!==1?'s':''}`;
+  if(count) count.textContent = `${filtered.length} project${filtered.length!==1?'s':''}${q?' matching "'+q+'"':''}`;
   document.getElementById('proj-tbody').innerHTML = filtered.map(p=>`
     <tr class="clickable${selProj===p.id?' selected':''}" onclick="selProject('${p.id}')">
       <td><strong>${p.id}</strong></td><td>${p.name}</td>
@@ -1367,6 +1735,56 @@ function nextM(){calMonth++;if(calMonth>11){calMonth=0;calYear++;}renderRoster()
 function setCV(v,b){calView=v;document.querySelectorAll('.vt-btn').forEach(x=>x.classList.remove('active'));b.classList.add('active');renderRoster();}
 function setSect(s,b){rosterSect=s;document.querySelectorAll('.ft').forEach(x=>x.classList.remove('active'));b.classList.add('active');renderRoster();}
 function setRosterProjFilter(pid){rosterProjFilter=pid;renderRoster();}
+function setRosterDayFilter(d){
+  rosterDayFilter=d?parseInt(d):0;
+  const btn=document.getElementById('pdf-btn');
+  if(btn) btn.style.display=rosterDayFilter?'block':'none';
+  renderRoster();
+}
+
+function downloadDayPDF(){
+  if(!rosterDayFilter){ toast('Select a day first using the Day view filter'); return; }
+  const DL=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+  const dw=dow(calYear,calMonth,rosterDayFilter);
+  const dateStr=`${DL[dw]}, ${MONTHS[calMonth]} ${rosterDayFilter}, ${calYear}`;
+
+  // Build print header
+  const hdr=document.getElementById('pdf-print-header');
+  if(hdr){
+    hdr.innerHTML=`
+      <div style="display:flex;justify-content:space-between;align-items:flex-end;border-bottom:2px solid #222;padding-bottom:8px;margin-bottom:12px">
+        <div>
+          <div style="font-size:20px;font-weight:700;color:#111">ZLC Corp — Daily Schedule</div>
+          <div style="font-size:14px;color:#555;margin-top:2px">${dateStr}</div>
+        </div>
+        <div style="font-size:11px;color:#888">Generated ${new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})}</div>
+      </div>`;
+  }
+
+  // Make sure we're in day view mode before printing
+  const prevDay=rosterDayFilter;
+  if(!rosterDayFilter) setRosterDayFilter(new Date().getDate());
+
+  // Small delay so DOM updates, then print
+  setTimeout(()=>{
+    window.print();
+  }, 150);
+}
+
+function populateRosterDayFilter(){
+  const sel=document.getElementById('roster-day-filter');
+  if(!sel)return;
+  const cur=sel.value;
+  const dInM=dim(calYear,calMonth);
+  const DL=['Su','Mo','Tu','We','Th','Fr','Sa'];
+  let opts='<option value="">— All days —</option>';
+  for(let d=1;d<=dInM;d++){
+    const dw=dow(calYear,calMonth,d);
+    opts+=`<option value="${d}"${cur==d?' selected':''}>${d} ${DL[dw]} ${MONTHS[calMonth].slice(0,3)}</option>`;
+  }
+  sel.innerHTML=opts;
+  if(cur) sel.value=cur;
+}
 
 function populateRosterProjFilter(){
   const sel=document.getElementById('roster-proj-filter');
@@ -1388,62 +1806,174 @@ function populateRosterProjFilter(){
   sel.value=cur||'';
 }
 
+// ─── EXTRA WORKER WEEKLY SUMMARY ─────────────────────────────────────────────
+// Returns a compact HTML summary of where this extra worker was sent each day
+// of the current calendar week (Mon–Sun), ordered by day.
+// Shows: Mon: 25-064  Tue: 26-001  ...  (only days with assignments)
+function ewWeekSummary(ew) {
+  if(!ew.a || !Object.keys(ew.a).length) {
+    return `<span style="font-size:10px;color:var(--text3)">No assignments</span>`;
+  }
+
+  // Find current week bounds (Mon–Sun) relative to calYear/calMonth view
+  const today = new Date();
+  // Use the currently viewed month's "today" or actual today
+  const refDate = new Date(calYear, calMonth, rosterDayFilter || today.getDate());
+  const dayOfWeek = refDate.getDay(); // 0=Sun,1=Mon...6=Sat
+  // Monday of this week
+  const monday = new Date(refDate);
+  monday.setDate(refDate.getDate() - (dayOfWeek === 0 ? 6 : dayOfWeek - 1));
+
+  const DAY_SHORT = ['Su','Mo','Tu','We','Th','Fr','Sa'];
+  const entries = [];
+
+  for (let i = 0; i < 7; i++) {
+    const d = new Date(monday);
+    d.setDate(monday.getDate() + i);
+    const yr  = d.getFullYear();
+    const mo  = d.getMonth() + 1;
+    const day = d.getDate();
+    const key = `${yr}-${mo}-${day}`;
+    const asgn = ew.a[key];
+    if (!asgn) continue;
+
+    const dayLabel = DAY_SHORT[d.getDay()];
+    const shortId  = asgn === 'OFF' ? 'OFF'
+                   : asgn === 'Warehouse' ? 'WH'
+                   : (asgn.split('-')[1] || asgn.slice(0,5));
+    const bg = pc(asgn);
+    const tc = bg ? ptc(bg) : 'var(--text2)';
+
+    entries.push(`<span style="display:inline-flex;align-items:center;gap:2px;margin:1px 0">
+      <span style="font-size:9px;color:var(--text3);font-weight:500;min-width:14px">${dayLabel}</span>
+      <span style="font-size:9px;font-weight:700;padding:1px 5px;border-radius:99px;background:${bg||'var(--bg3)'};color:${tc}">${shortId}</span>
+    </span>`);
+  }
+
+  if (!entries.length) {
+    // No assignments this week — show last known project as fallback
+    return `<span style="font-size:10px;color:var(--text3)">Not this week</span>`;
+  }
+
+  return `<div style="display:flex;flex-direction:column;gap:0px;line-height:1.3">${entries.join('')}</div>`;
+}
+
 function renderRoster(){
   document.getElementById('month-lbl').textContent=`${MONTHS[calMonth]} ${calYear}`;
-  populateRosterProjFilter(); // keep dropdown fresh
+  populateRosterProjFilter();
+  populateRosterDayFilter();
   const days=getVisDays();
   const t=new Date(),todayD=t.getMonth()===calMonth&&t.getFullYear()===calYear?t.getDate():null;
   const show=s=>rosterSect==='all'||rosterSect===s;
+  const dayMode=rosterDayFilter>0;
 
-  // Helper: if a project filter is active, returns true only if the item
-  // has at least one day assigned to that project in the visible date range
   const passFilter=item=>{
     if(!rosterProjFilter)return true;
     return days.some(d=>{
       const key=`${calYear}-${calMonth+1}-${d}`;
-      return(item.a?.[key]||'')=== rosterProjFilter;
+      return(item.a?.[key]||'')===rosterProjFilter;
     });
   };
+
+  // Build header
   let h='<thead><tr>';
-  h+=`<th class="ic" style="min-width:130px">Name / Unit</th>`;
-  h+=`<th class="ic" style="min-width:70px">Info</th>`;
-  days.forEach(d=>{const dw=dow(calYear,calMonth,d),wk=dw===0||dw===6;h+=`<th style="min-width:30px;${wk?'color:#c9a200':''}">${d}<br><span style="font-size:8px;font-weight:500">${DLBL[dw]}</span></th>`;});
+  if(dayMode){
+    h+=`<th class="ic" style="min-width:140px">Name / Unit</th>`;
+    h+=`<th class="ic" style="min-width:70px">Info</th>`;
+    h+=`<th class="ic" style="min-width:220px">Notes</th>`;
+  } else {
+    h+=`<th class="ic" style="min-width:130px">Name / Unit</th>`;
+    h+=`<th class="ic" style="min-width:70px">Info</th>`;
+    days.forEach(d=>{const dw=dow(calYear,calMonth,d),wk=dw===0||dw===6;h+=`<th style="min-width:30px;${wk?'color:#c9a200':''}">${d}<br><span style="font-size:8px;font-weight:500">${DLBL[dw]}</span></th>`;});
+  }
   h+=`</tr></thead><tbody>`;
-  const mkSec=(lbl,col)=>`<tr class="trs"><td colspan="${days.length+2}" style="border-left:3px solid ${col}">${lbl}</td></tr>`;
-  const dayCells=(item,type)=>days.map(d=>{
-    const dw=dow(calYear,calMonth,d),wk=dw===0||dw===6,key=`${calYear}-${calMonth+1}-${d}`,asgn=item.a?.[key]||'',bg=asgn?pc(asgn):'',isT=d===todayD,tc=bg?ptc(bg):'';
+
+  const colSpan=dayMode?3:days.length+2;
+  const mkSec=(lbl,col)=>`<tr class="trs"><td colspan="${colSpan}" style="border-left:3px solid ${col}">${lbl}</td></tr>`;
+
+  // Cert badges helper
+  const certBadges=item=>{
+    if(!item.certs)return item.note?`<span style="font-size:10px;color:var(--text2)">${item.note}</span>`:'';
+    let b='';
+    if(item.certs.includes('H'))b+=`<span class="cert-badge cert-h">H</span>`;
+    if(item.certs.includes('RFT'))b+=`<span class="cert-badge cert-r">RFT</span>`;
+    if(item.certs.includes('EO'))b+=`<span class="cert-badge cert-e">EO</span>`;
+    if(item.certs.includes('SSO'))b+=`<span class="cert-badge cert-s">SSO</span>`;
+    if(item.certs.includes('CPR'))b+=`<span class="cert-badge cert-c">CPR</span>`;
+    return b;
+  };
+
+  // Single-day cells: project pill + note text
+  const dayViewCells=item=>{
+    const key=`${calYear}-${calMonth+1}-${rosterDayFilter}`;
+    const asgn=item.a?.[key]||'';
     const note=item.notes?.[key]||'';
+    if(!asgn&&!note)return null;
+    // Project pills
+    const pills = asgn ? asgn.split(',').map(a=>{
+      const a2=a.trim();const bg2=pc(a2);const tc2=bg2?ptc(bg2):'var(--text2)';
+      return`<span style="display:inline-block;padding:2px 9px;border-radius:99px;background:${bg2||'var(--bg3)'};color:${tc2};font-size:11px;font-weight:600;margin:1px 2px 1px 0">${a2}</span>`;
+    }).join('') : '';
+    // Notes combined into same single cell after project pills
+    const noteHtml=note?`<div style="font-size:12px;color:var(--text);margin-top:${asgn?'4px':'0'}">${note}</div>`:'';
+    const combined = pills+noteHtml || `<span style="color:var(--text3);font-size:11px">—</span>`;
+    return`<td class="ic" colspan="1">${combined}</td>`;
+  };
+
+  // All-month cells — supports multi-project comma-separated values
+  const dayCells=(item,type)=>days.map(d=>{
+    const dw=dow(calYear,calMonth,d),wk=dw===0||dw===6,key=`${calYear}-${calMonth+1}-${d}`,asgn=item.a?.[key]||'',isT=d===todayD;
+    const note=item.notes?.[key]||'';
+    const noteDot=note?`<span style="position:absolute;top:1px;right:1px;width:5px;height:5px;border-radius:50%;background:rgba(255,255,255,0.8);"></span>`:'';
+    // Multi: show stacked mini pills
+    if(asgn&&asgn.includes(',')){
+      const parts=asgn.split(',').map(x=>x.trim()).filter(Boolean);
+      const bg0=pc(parts[0])||'var(--bg3)';
+      const inner=parts.map((a,i)=>{const bg=pc(a)||'var(--bg3)';const tc=ptc(bg);return`<div style="font-size:7px;font-weight:700;color:${tc};background:${bg};border-radius:2px;padding:1px 2px;line-height:1.2">${a.split('-')[1]||a.slice(0,4)}</div>`;}).join('');
+      return`<td class="day-cell${isT?' today-col':''}" style="position:relative;background:${bg0};${wk?'filter:brightness(0.97)':''}" onclick="clickCell('${item.id}','${key}','${d}','${type}')" title="${asgn+(note?' — '+note:'')}"><div style="display:flex;flex-direction:column;gap:1px;align-items:center">${inner}</div>${noteDot}</td>`;
+    }
+    const bg=asgn?pc(asgn):'',tc=bg?ptc(bg):'';
     const titleText=asgn?(note?`${asgn} — ${note}`:asgn):'click to assign';
-    const noteDot=note?`<span style="position:absolute;top:1px;right:1px;width:5px;height:5px;border-radius:50%;background:${tc||'#fff'};opacity:0.8;flex-shrink:0"></span>`:'';
     return`<td class="day-cell${isT?' today-col':''}" style="position:relative;${bg?`background:${bg};`:''}${wk&&!bg?'background:rgba(0,0,0,0.02);':''}" onclick="clickCell('${item.id}','${key}','${d}','${type}')" title="${titleText.replace(/"/g,'&quot;')}">${asgn?`<div class="day-block" style="color:${tc}">${asgn==='OFF'?'OFF':asgn.split('-')[1]||asgn.slice(0,4)}</div>`:''}${noteDot}</td>`;
   }).join('');
+
+  // Render a row — returns '' if day mode and no assignment/note
+  // dayViewRows collects {proj, html} for sorting in day mode
+  const dayViewRows=[];
+  const row=(item,type,bgStyle='')=>{
+    const info=certBadges(item);
+    if(dayMode){
+      const extra=dayViewCells(item);
+      if(!extra)return '';
+      const key=`${calYear}-${calMonth+1}-${rosterDayFilter}`;
+      const asgn=item.a?.[key]||'';
+      const projKey=asgn.split(',')[0].trim()||'ZZZ'; // sort by first project
+      const rowHtml=`<tr style="${bgStyle}"><td class="ic">${nameCell(item.id,type)}</td><td class="ic">${info}</td>${extra}</tr>`;
+      dayViewRows.push({proj:projKey, html:rowHtml});
+      return ''; // will be added sorted later
+    }
+    return`<tr style="${bgStyle}"><td class="ic">${nameCell(item.id,type)}</td><td class="ic">${info}</td>${dayCells(item,type)}</tr>`;
+  };
 
   if(show('staff')){
     const teams=[...new Set(STAFF.map(e=>e.team))];
     teams.forEach(team=>{
       const members=STAFF.filter(e=>e.team===team&&passFilter(e));
       if(!members.length)return;
-      const tc=TEAM_COLORS[team]||'#888';
-      h+=mkSec(`${team} · ${members.length} people`,tc);
-      members.forEach(emp=>{
-        h+=`<tr><td class="ic">${nameCell(emp.id,'staff')}</td><td class="ic">`;
-        if(emp.certs.includes('H'))h+=`<span class="cert-badge cert-h">H</span>`;
-        if(emp.certs.includes('RFT'))h+=`<span class="cert-badge cert-r">RFT</span>`;
-        if(emp.certs.includes('EO'))h+=`<span class="cert-badge cert-e">EO</span>`;
-        if(emp.certs.includes('SSO'))h+=`<span class="cert-badge cert-s">SSO</span>`;
-        if(emp.certs.includes('CPR'))h+=`<span class="cert-badge cert-c">CPR</span>`;
-        h+=`</td>${dayCells(emp,'staff')}</tr>`;
-      });
+      const rows=members.map(e=>row(e,'staff')).filter(Boolean);
+      if(!rows.length)return;
+      h+=mkSec(`${team} · ${members.length} people`,TEAM_COLORS[team]||'#888');
+      h+=rows.join('');
     });
   }
   if(show('extra')){
     const filtered=EXTRA.filter(e=>passFilter(e));
     if(filtered.length){
-      h+=mkSec(`Extra workers · ${filtered.length} people`,'#BA7517');
-      filtered.forEach(ew=>{
-        h+=`<tr style="background:rgba(250,238,218,0.2)"><td class="ic">${nameCell(ew.id,'extra')}</td>`;
-        h+=`<td class="ic"><span style="font-size:10px;color:var(--text2)">${ew.project||'—'}</span></td>${dayCells(ew,'extra')}</tr>`;
-      });
+      const rows=filtered.map(ew=>{
+        if(dayMode){const extra=dayViewCells(ew);if(!extra)return '';return`<tr style="background:rgba(250,238,218,0.2)"><td class="ic">${nameCell(ew.id,'extra')}</td><td class="ic">${ewWeekSummary(ew)}</td>${extra}</tr>`;}
+        return`<tr style="background:rgba(250,238,218,0.2)"><td class="ic">${nameCell(ew.id,'extra')}</td><td class="ic">${ewWeekSummary(ew)}</td>${dayCells(ew,'extra')}</tr>`;
+      }).filter(Boolean);
+      if(rows.length){h+=mkSec(`Extra workers · ${filtered.length} people`,'#BA7517');h+=rows.join('');}
     }
   }
   if(show('equip')){
@@ -1451,63 +1981,166 @@ function renderRoster(){
     cats.forEach(cat=>{
       const items=EQUIP.filter(e=>e.cat===cat&&passFilter(e));
       if(!items.length)return;
+      const rows=items.map(eq=>row(eq,'equip','background:rgba(230,241,251,0.2)')).filter(Boolean);
+      if(!rows.length)return;
       h+=mkSec(`${cat} · ${items.length} units`,'#185FA5');
-      items.forEach(eq=>{
-        h+=`<tr style="background:rgba(230,241,251,0.2)"><td class="ic">${nameCell(eq.id,'equip')}</td>`;
-        h+=`<td class="ic"><span style="font-size:10px;color:var(--text2)">${eq.note||'—'}</span></td>${dayCells(eq,'equip')}</tr>`;
-      });
+      h+=rows.join('');
     });
   }
   if(show('rentals')){
     const filtered=RENTALS.filter(e=>passFilter(e));
     if(filtered.length){
-      h+=mkSec(`Rentals · ${filtered.length} items`,'#3B6D11');
-      filtered.forEach(r=>{
-        h+=`<tr style="background:rgba(234,243,222,0.2)"><td class="ic">${nameCell(r.id,'rental')}</td><td class="ic"></td>${dayCells(r,'rental')}</tr>`;
-      });
+      const rows=filtered.map(r=>{
+        if(dayMode){const extra=dayViewCells(r);if(!extra)return '';return`<tr style="background:rgba(234,243,222,0.2)"><td class="ic">${nameCell(r.id,'rental')}</td><td class="ic"></td>${extra}</tr>`;}
+        return`<tr style="background:rgba(234,243,222,0.2)"><td class="ic">${nameCell(r.id,'rental')}</td><td class="ic"></td>${dayCells(r,'rental')}</tr>`;
+      }).filter(Boolean);
+      if(rows.length){h+=mkSec(`Rentals · ${filtered.length} items`,'#3B6D11');h+=rows.join('');}
     }
   }
-  h+=`</tbody>`;
+  // In day view, sort all collected rows by project name and append
+  if(dayMode && dayViewRows.length){
+    dayViewRows.sort((a,b)=>a.proj.localeCompare(b.proj));
+    // Group by project with section headers
+    let curProj='';
+    dayViewRows.forEach(r=>{
+      if(r.proj!==curProj){
+        curProj=r.proj;
+        const proj=DB.projects.find(p=>p.id===curProj);
+        const label=curProj==='ZZZ'?'Unassigned':(proj?`${proj.id} — ${proj.name}`:curProj);
+        const col=pc(curProj)||'#888';
+        h+=`<tr class="trs"><td colspan="3" style="border-left:3px solid ${col}">${label}</td></tr>`;
+      }
+      h+=r.html;
+    });
+  }
+  h+='</tbody>';
   document.getElementById('roster-tbl').innerHTML=h;
   const usedAll=[...STAFF,...EXTRA,...EQUIP,...RENTALS].flatMap(e=>Object.values(e.a||{})).filter(Boolean);
   const uniq=[...new Set(usedAll)];
   document.getElementById('roster-legend').innerHTML=uniq.map(p=>`<span class="li"><span class="lsq" style="background:${pc(p)}"></span>${p}</span>`).join('')+
-    (uniq.length?'<span class="li"><span class="lsq" style="background:#FCEBEB;border:0.5px solid #F09595"></span>OFF</span>':'');
+    (uniq.length?'<span class="li"><span class="lsq" style="background:#FCEBEB;border:0.5px solid #F09595"></span>OFF</span>':'')+
+    (dayMode?`<span style="font-size:11px;color:var(--text2);margin-left:8px">Showing: ${DLBL[dow(calYear,calMonth,rosterDayFilter)]} ${rosterDayFilter} ${MONTHS[calMonth]}</span>`:'');
 }
+
 
 function clickCell(itemId,dateKey,day,type){
   const item=getItem(itemId,type);if(!item)return;
   if(!item.a)item.a={};
   if(!item.notes)item.notes={};
+  if(!item.wh)item.wh={};
   const cur=item.a[dateKey]||'';
   const curNote=item.notes[dateKey]||'';
+  const curWh=item.wh[dateKey]||'';
   const d=dateKey.split('-'),dl=`${day} ${MO[parseInt(d[1])-1]} ${d[0]}`;
   const activeProjs=DB.projects.filter(p=>p.status==='Active');
-  const pOpts=`<option value="">— Unassigned —</option>`+PROJECTS_LIST.filter(p=>p.id==='OFF'||p.id==='Warehouse'||activeProjs.find(ap=>ap.id===p.id)).map(p=>`<option value="${p.id}"${cur===p.id?' selected':''}>${p.id} — ${p.name}</option>`).join('');
+  // Build project options from live DB — always reflects current active projects
+  const allProjs=[
+    {id:'OFF', name:'OFF / Holiday'},
+    {id:'Warehouse', name:'Warehouse'},
+    ...activeProjs.map(p=>({id:p.id, name:p.name}))
+  ];
+  // Multi-project mode for drivers (Francisco etc)
+  if(item.multi){
+    const selected=new Set(cur?cur.split(',').map(x=>x.trim()).filter(Boolean):[]);
+    const chkOpts=allProjs.map(p=>
+      `<label style="display:flex;align-items:center;gap:6px;padding:3px 0;font-size:12px;cursor:pointer">
+        <input type="checkbox" value="${p.id}" ${selected.has(p.id)?'checked':''} style="width:auto;accent-color:var(--blue)">
+        <strong>${p.id}</strong> — ${p.name}</label>`
+    ).join('');
+    showModal(`<div class="modal-title">Assign · ${item.name}</div>
+      <div style="font-size:12px;color:var(--text2);margin-bottom:12px">${dl}</div>
+      <div class="fg"><label>Projects for this day (select all that apply)</label>
+        <div style="max-height:220px;overflow-y:auto;border:0.5px solid var(--border2);border-radius:var(--radius);padding:8px">${chkOpts}</div>
+      </div>
+      <div class="fg"><label>Notes for this day</label>
+        <textarea id="cp-note" style="min-height:50px;width:100%;font-size:13px;padding:8px;border-radius:var(--radius);border:0.5px solid var(--border2);background:var(--bg);color:var(--text);font-family:inherit;resize:vertical">${curNote}</textarea></div>
+      <div class="fg" style="background:rgba(255,243,205,0.4);border:0.5px solid #F0C040;border-radius:var(--radius);padding:10px 12px;margin-bottom:0">
+        <label style="color:#7A5800;font-weight:600">📦 Warehouse notes</label>
+        <textarea id="cp-wh" placeholder="Materials, tools needed..." style="min-height:50px;width:100%;font-size:13px;padding:8px;border-radius:var(--radius);border:0.5px solid #F0C040;background:#FFFEF5;color:var(--text);font-family:inherit;resize:vertical;margin-top:6px">${curWh}</textarea>
+      </div>
+      <div class="form-actions">
+        ${cur?`<button class="btn btn-deny btn-sm" onclick="clearCell('${itemId}','${dateKey}','${type}')">Clear</button>`:''}
+        <button class="btn" onclick="closeModal()">Cancel</button>
+        <button class="btn btn-primary" onclick="saveMultiCell('${itemId}','${dateKey}','${type}')">Save</button>
+      </div>`);
+    return;
+  }
+  const pOpts=`<option value="">— Unassigned —</option>`+allProjs.map(p=>`<option value="${p.id}"${cur===p.id?' selected':''}>${p.id} — ${p.name}</option>`).join('');
   showModal(`<div class="modal-title">Assign · ${item.name}</div>
     <div style="font-size:12px;color:var(--text2);margin-bottom:12px">${dl}</div>
     <div class="fg"><label>Project / assignment</label><select id="cp-proj">${pOpts}</select></div>
-    <div class="fg"><label>Notes / details for this day</label><textarea id="cp-note" placeholder="e.g. Equipment needed, site instructions, contact info..." style="min-height:72px;width:100%;font-size:13px;padding:8px;border-radius:var(--radius);border:0.5px solid var(--border2);background:var(--bg);color:var(--text);font-family:inherit;resize:vertical">${curNote}</textarea></div>
+    <div class="fg"><label>Notes for this day</label>
+      <textarea id="cp-note" placeholder="Site instructions, contact info..." style="min-height:60px;width:100%;font-size:13px;padding:8px;border-radius:var(--radius);border:0.5px solid var(--border2);background:var(--bg);color:var(--text);font-family:inherit;resize:vertical">${curNote}</textarea></div>
+    <div class="fg" style="background:rgba(255,243,205,0.4);border:0.5px solid #F0C040;border-radius:var(--radius);padding:10px 12px;margin-bottom:0">
+      <label style="color:#7A5800;font-weight:600;display:flex;align-items:center;gap:6px">
+        <span style="font-size:14px">📦</span> Warehouse notes
+      </label>
+      <textarea id="cp-wh" placeholder="e.g. 2x concrete bags, rebar #4, generator, orange cones..." style="min-height:60px;width:100%;font-size:13px;padding:8px;border-radius:var(--radius);border:0.5px solid #F0C040;background:#FFFEF5;color:var(--text);font-family:inherit;resize:vertical;margin-top:6px">${curWh}</textarea>
+    </div>
     <div class="form-actions">
       ${cur?`<button class="btn btn-deny btn-sm" onclick="clearCell('${itemId}','${dateKey}','${type}')">Clear</button>`:''}
       <button class="btn" onclick="closeModal()">Cancel</button>
       <button class="btn btn-primary" onclick="saveCell('${itemId}','${dateKey}','${type}')">Save</button>
     </div>`);
 }
+
 function saveCell(id,key,type){
   const item=getItem(id,type);
   if(!item.a)item.a={};
   if(!item.notes)item.notes={};
-  const v=document.getElementById('cp-proj').value;
-  const note=(document.getElementById('cp-note')?.value||'').trim();
-  if(v)item.a[key]=v;else delete item.a[key];
-  if(note)item.notes[key]=note;else delete item.notes[key];
+  if(!item.wh)item.wh={};
+  const v    = document.getElementById('cp-proj').value;
+  const note = (document.getElementById('cp-note')?.value||'').trim();
+  const wh   = (document.getElementById('cp-wh')?.value||'').trim();
+
+  const prevWh = item.wh[key]||'';
+
+  if(v) item.a[key]=v; else delete item.a[key];
+  if(note) item.notes[key]=note; else delete item.notes[key];
+  if(wh) item.wh[key]=wh; else delete item.wh[key];
+
+  // If warehouse notes changed and there's a project assigned, write to sheet
+  if(wh && wh !== prevWh && v && v !== 'OFF') {
+    // Parse date from key "YYYY-M-D"
+    const [yr,mo,dy] = key.split('-');
+    const dateStr = `${parseInt(mo)}/${parseInt(dy)}/${yr}`;
+    const proj = DB.projects.find(p=>p.id===v);
+    const projName = proj ? proj.name : v;
+    sheetWrite('addWarehouse', {
+      date:       dateStr,
+      worker:     item.name,
+      projectId:  v,
+      projectName:projName,
+      notes:      wh,
+    });
+  }
+
   saveLocal();closeModal();renderRoster();
 }
+
 function clearCell(id,key,type){
   const item=getItem(id,type);
-  if(item.a)delete item.a[key];
+  if(item.a)    delete item.a[key];
   if(item.notes)delete item.notes[key];
+  if(item.wh)   delete item.wh[key];
+  saveLocal();closeModal();renderRoster();
+}
+
+function saveMultiCell(id,key,type){
+  const item=getItem(id,type);
+  if(!item.a)item.a={};if(!item.notes)item.notes={};if(!item.wh)item.wh={};
+  const checked=[...document.querySelectorAll('#modal-area input[type=checkbox]:checked')].map(c=>c.value);
+  const note=(document.getElementById('cp-note')?.value||'').trim();
+  const wh=(document.getElementById('cp-wh')?.value||'').trim();
+  if(checked.length) item.a[key]=checked.join(','); else delete item.a[key];
+  if(note) item.notes[key]=note; else delete item.notes[key];
+  if(wh){ item.wh[key]=wh;
+    const [yr,mo,dy]=key.split('-');
+    checked.filter(v=>v!=='OFF'&&v!=='Warehouse').forEach(v=>{
+      const proj=DB.projects.find(p=>p.id===v);
+      sheetWrite('addWarehouse',{date:`${parseInt(mo)}/${parseInt(dy)}/${yr}`,worker:item.name,projectId:v,projectName:proj?proj.name:v,notes:wh});
+    });
+  } else delete item.wh[key];
   saveLocal();closeModal();renderRoster();
 }
 
@@ -1582,7 +2215,11 @@ function closeModal(){document.getElementById('modal-area').innerHTML='';assignS
 function openModal(type,pid,extra){
   const codeOpts=Object.entries(CODES_MAP).map(([k,v])=>`<option value="${k}">${k} — ${v}</option>`).join('');
   const activeProjects=DB.projects.filter(p=>p.status==='Active');
-  const pOpts=PROJECTS_LIST.filter(p=>p.id==='OFF'||p.id==='Warehouse'||activeProjects.find(ap=>ap.id===p.id)).map(p=>`<option value="${p.id}"${p.id===pid?' selected':''}>${p.id} — ${p.name}</option>`).join('');
+  const pOpts=[
+    {id:'OFF',name:'OFF / Holiday'},
+    {id:'Warehouse',name:'Warehouse'},
+    ...activeProjects.map(p=>({id:p.id,name:p.name}))
+  ].map(p=>`<option value="${p.id}"${p.id===pid?' selected':''}>${p.id} — ${p.name}</option>`).join('');
   const total=dim(calYear,calMonth);
 
   if(type==='assign'){
@@ -1621,7 +2258,7 @@ function openModal(type,pid,extra){
       <div class="fg2"><div class="fg" style="margin-bottom:0"><label>Project manager</label><input id="f-pm" placeholder="Full name"></div><div class="fg" style="margin-bottom:0"><label>PM email</label><input id="f-email" type="email" placeholder="pm@zlccorp.com"></div></div>
       <div class="fg"><label>Address</label><input id="f-addr" placeholder="Project address"></div>
       <div class="fg2"><div class="fg" style="margin-bottom:0"><label>Client</label><input id="f-client" placeholder="Client name"></div><div class="fg" style="margin-bottom:0"><label>Start month</label><select id="f-month">${MO.map(m=>`<option>${m}</option>`).join('')}</select></div></div>
-      <div class="fg"><label>Status</label><select id="f-status"><option>Active</option><option>Pending</option><option>Complete</option><option>On hold</option><option>Finish</option><option>Canceled</option></select></div>
+      <div class="fg"><label>Status</label><select id="f-status"><option>Active</option><option>Pending</option><option>Complete</option><option>Canceled</option></select></div>
       <div class="divider"></div>
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px"><label class="fl" style="margin-bottom:0">Cost codes &amp; values</label><button class="btn btn-sm" onclick="addCodeRow()">+ Add code</button></div>
       <div id="code-rows"><div class="code-row-entry" id="coderow-0"><select style="flex:1;min-width:0">${codeOpts}</select><input type="number" placeholder="Value ($)" style="width:120px"><button class="btn btn-sm btn-deny" onclick="removeCodeRow('coderow-0')">✕</button></div></div>
@@ -1797,12 +2434,12 @@ function saveLocal() {
   try {
     // Save roster assignments + notes for all items
     const rosterData = {
-      staff: STAFF.map(e => ({ id:e.id, a:e.a||{}, notes:e.notes||{} })),
-      extra: EXTRA.map(e => ({ id:e.id, a:e.a||{}, notes:e.notes||{}, project:e.project })),
-      equip: EQUIP.map(e => ({ id:e.id, a:e.a||{}, notes:e.notes||{} })),
-      rentals: RENTALS.map(e => ({ id:e.id, a:e.a||{}, notes:e.notes||{} })),
+      staff: STAFF.map(e => ({ id:e.id, a:e.a||{}, notes:e.notes||{}, wh:e.wh||{} })),
+      extra: EXTRA.map(e => ({ id:e.id, a:e.a||{}, notes:e.notes||{}, wh:e.wh||{}, project:e.project })),
+      equip: EQUIP.map(e => ({ id:e.id, a:e.a||{}, notes:e.notes||{}, wh:e.wh||{} })),
+      rentals: RENTALS.map(e => ({ id:e.id, a:e.a||{}, notes:e.notes||{}, wh:e.wh||{} })),
       extraList: EXTRA.filter(e => e.id.startsWith('ew') && !['ew1','ew2','ew3','ew4','ew5','ew6','ew7','ew8'].includes(e.id)),
-      staffList: STAFF.filter(e => !['e1','e2','e3','e4','e5','e6','e7','e8','e9','e10','e11','e12','e13','e14','e15','e16','e17'].includes(e.id)),
+      staffList: STAFF.filter(e => !['e1','e2','e3','e4','e5','e6','e7','e8','e9','e10','e11','e12','e13','e14','e15','e16','e17','e18'].includes(e.id)),
     };
     localStorage.setItem('zlc_roster', JSON.stringify(rosterData));
     // Save open orders
@@ -1824,19 +2461,19 @@ function loadLocal() {
       // Restore assignments and notes into existing items
       (rd.staff||[]).forEach(saved => {
         const item = STAFF.find(e => e.id === saved.id);
-        if (item) { item.a = saved.a||{}; item.notes = saved.notes||{}; }
+        if (item) { item.a = saved.a||{}; item.notes = saved.notes||{}; item.wh = saved.wh||{}; }
       });
       (rd.extra||[]).forEach(saved => {
         const item = EXTRA.find(e => e.id === saved.id);
-        if (item) { item.a = saved.a||{}; item.notes = saved.notes||{}; item.project = saved.project||item.project; }
+        if (item) { item.a = saved.a||{}; item.notes = saved.notes||{}; item.wh = saved.wh||{}; item.project = saved.project||item.project; }
       });
       (rd.equip||[]).forEach(saved => {
         const item = EQUIP.find(e => e.id === saved.id);
-        if (item) { item.a = saved.a||{}; item.notes = saved.notes||{}; }
+        if (item) { item.a = saved.a||{}; item.notes = saved.notes||{}; item.wh = saved.wh||{}; }
       });
       (rd.rentals||[]).forEach(saved => {
         const item = RENTALS.find(e => e.id === saved.id);
-        if (item) { item.a = saved.a||{}; item.notes = saved.notes||{}; }
+        if (item) { item.a = saved.a||{}; item.notes = saved.notes||{}; item.wh = saved.wh||{}; }
       });
       // Restore extra workers added by user
       (rd.extraList||[]).forEach(saved => {
