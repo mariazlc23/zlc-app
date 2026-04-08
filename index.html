@@ -1583,10 +1583,11 @@ function renderDetail(){
         <button class="stab${subTab==='subs'?' active':''}" onclick="goSub('subs')">Submittals (${p.subs.length})</button>
         <button class="stab${subTab==='history'?' active':''}" onclick="goSub('history')">History</button>
       </div>
-      <div style="display:flex;gap:6px;padding-bottom:8px">
+      <div style="display:flex;gap:6px;padding-bottom:8px;flex-wrap:wrap">
         ${subTab==='cos'?`<button class="btn btn-sm" onclick="openModal('co','${p.id}')">+ CO</button>`:''}
         ${subTab==='rfis'?`<button class="btn btn-sm" onclick="openModal('rfi','${p.id}')">+ RFI</button>`:''}
         ${subTab==='subs'?`<button class="btn btn-sm" onclick="openModal('sub','${p.id}')">+ Submittal</button>`:''}
+        <button class="btn btn-sm btn-deny" onclick="deleteProject('${p.id}')">Delete project</button>
       </div>
     </div>
     <div id="sub-content">${renderSub(p,subTab)}</div>
@@ -1660,6 +1661,26 @@ function reopenProject(pid){
   saveLocal();
   toast(`${pid} reopened as Active`);
   renderProjTable();renderDetail();renderOverview();
+}
+function deleteProject(pid){
+  const p=DB.projects.find(x=>x.id===pid);if(!p)return;
+  const ok=confirm(`Are you sure you want to delete project ${pid} — ${p.name}?`);
+  if(!ok)return;
+
+  DB.projects=DB.projects.filter(x=>x.id!==pid);
+
+  if(selProj===pid){
+    selProj=null;
+    document.getElementById('proj-detail-area').innerHTML='';
+  }
+
+  saveLocal();
+  sheetWrite('deleteProject',{projectId:pid});
+  toast(`Project ${pid} deleted`);
+  renderProjTable();
+  renderOverview();
+  renderAnalytics();
+  if(document.getElementById('view-roster').classList.contains('active')) renderRoster();
 }
 function goSub(tab){subTab=tab;renderDetail();}
 function approveCO(pid,cid){
