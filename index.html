@@ -346,7 +346,23 @@
         </div>
         <div id="dash-cos"></div>
       </div>
-      <div class="card" style="margin-bottom:0"><div class="card-header"><span class="card-title">Open RFIs &amp; submittals</span></div><div id="dash-open"></div></div>
+      <div class="card" style="margin-bottom:0">
+        <div class="card-header" style="flex-wrap:wrap;gap:6px">
+          <span class="card-title">Open RFIs &amp; submittals</span>
+          <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap">
+            <select id="sub-proj-filter" onchange="renderOpenItems()" style="font-size:11px;padding:3px 8px;border-radius:var(--radius);border:0.5px solid var(--border2);background:var(--bg);color:var(--text);max-width:180px">
+              <option value="">— All projects —</option>
+            </select>
+            <label style="display:flex;align-items:center;gap:4px;font-size:11px;color:var(--text2);cursor:pointer;margin:0">
+              <input type="checkbox" id="sub-show-rfis" checked onchange="renderOpenItems()" style="width:auto"> RFIs
+            </label>
+            <label style="display:flex;align-items:center;gap:4px;font-size:11px;color:var(--text2);cursor:pointer;margin:0">
+              <input type="checkbox" id="sub-show-subs" checked onchange="renderOpenItems()" style="width:auto"> SUBs
+            </label>
+          </div>
+        </div>
+        <div id="dash-open"></div>
+      </div>
     </div>
     <div class="card" style="margin-top:16px">
       <div class="card-header"><span class="card-title">Active projects</span></div>
@@ -795,28 +811,43 @@ function parseSubRows(rows) {
   if (rows.length < 2) return {};
   const hdr = rows[0].map(h => (h||'').toLowerCase().trim());
   const col = name => hdr.findIndex(h => h.includes(name));
-  const cProjName = col('project');
-  const cNum   = col('sub#') >= 0 ? col('sub#') : col('submittal');
-  const cMat   = col('material') >= 0 ? col('material') : col('description') >= 0 ? col('description') : col('item');
-  const cCode  = col('cost code') >= 0 ? col('cost code') : col('code');
-  const cSub   = col('submit') >= 0 ? col('submit') : col('date');
-  const cStat  = col('status');
+
+  // Header-based detection
+  let cProjName = col('project');
+  let cNum      = col('sub#') >= 0 ? col('sub#') : col('submittal') >= 0 ? col('submittal') : col('number');
+  let cMat      = col('material') >= 0 ? col('material') : col('description') >= 0 ? col('description') : col('item') >= 0 ? col('item') : col('scope');
+  let cCode     = col('cost code') >= 0 ? col('cost code') : col('code');
+  let cSub      = col('submit') >= 0 ? col('submit') : col('date');
+  let cStat     = col('status');
+
+  // Log headers to console for debugging
+  console.log('Submittal Log headers:', hdr);
+
+  // Hardcoded fallback if headers not found (María confirmed: col C = description)
+  // Typical layout: A=Project, B=Sub#, C=Description, D=CostCode, E=Date, F=Status
+  if(cProjName < 0) cProjName = 0;
+  if(cNum < 0)      cNum      = 1;
+  if(cMat < 0)      cMat      = 2;  // col C (0-indexed = 2) = description
+  if(cCode < 0)     cCode     = 3;
+  if(cSub < 0)      cSub      = 4;
+  if(cStat < 0)     cStat     = 5;
+
   const byProject = {};
   for (let i = 1; i < rows.length; i++) {
     const r = rows[i];
     if (!r || !r[0]) continue;
-    const projRaw = cProjName >= 0 ? (r[cProjName]||'') : (r[0]||'');
+    const projRaw = String(r[cProjName]||'').trim();
     const pidMatch = projRaw.match(/(\d{2}-\d{3,4})/);
     if (!pidMatch) continue;
     const pid = pidMatch[1];
     if (!byProject[pid]) byProject[pid] = [];
-    const num = (cNum >= 0 ? r[cNum] : '') || `SUB-${byProject[pid].length+1}`;
-    const material = (cMat >= 0 ? r[cMat] : '') || '';
-    const rawCode = cCode >= 0 ? (r[cCode]||'') : '';
-    const codeNum = rawCode.match(/(\d{3})/)?.[1] || '';
-    const submitted = parseMonthStr(cSub >= 0 ? (r[cSub]||'') : '') || '—';
-    const status = cStat >= 0 ? (r[cStat]||'Pending review').trim() : 'Pending review';
-    byProject[pid].push({ id: 's'+i, num: String(num).trim(), material: String(material).trim(), code: codeNum, submitted, status });
+    const num      = String(r[cNum]  ||'').trim() || `SUB-${byProject[pid].length+1}`;
+    const material = String(r[cMat]  ||'').trim(); // col C = description
+    const rawCode  = String(r[cCode] ||'').trim();
+    const codeNum  = rawCode.match(/(\d{3})/)?.[1] || rawCode || '';
+    const submitted= parseMonthStr(String(r[cSub]||'').trim()) || '—';
+    const status   = String(r[cStat] ||'Pending review').trim() || 'Pending review';
+    byProject[pid].push({ id:'s'+i, num, material, desc:material, code:codeNum, submitted, status });
   }
   return byProject;
 }
@@ -1186,19 +1217,22 @@ function renderOverview(){
     <div class="metric"><div class="metric-label">Subs in review</div><div class="metric-value">${openSubs.length}</div></div>`;
   // CO list — all with filter buttons
   renderCOList();
-  // RFIs & Subs with project name
-  const items=[
-    ...openRFIs.map(r=>({t:'RFI',n:r.num,d:r.desc,pid:r.pid,pname:r.pname,cls:'b-blue'})),
-    ...openSubs.map(s=>({t:'SUB',n:s.num,d:s.material,pid:s.pid,pname:s.pname,cls:'b-amber'}))
-  ];
-  document.getElementById('dash-open').innerHTML=items.length?items.map(i=>`
-    <div style="padding:8px 0;border-bottom:0.5px solid var(--border);font-size:12px">
-      <div style="display:flex;align-items:center;gap:6px;margin-bottom:2px">
-        <span class="badge ${i.cls}">${i.t}</span><strong>${i.n}</strong>
-        <span style="font-size:10px;color:var(--text3)">${i.pid} — ${i.pname}</span>
-      </div>
-      <div style="color:var(--text2);font-size:11px">${i.d}</div>
-    </div>`).join(''):'<div class="empty">All clear</div>';
+  // RFIs & Subs — populate project filter dropdown and render
+  const allOpenProjs = [...new Set([
+    ...openRFIs.map(r=>r.pid),
+    ...openSubs.map(s=>s.pid)
+  ])].sort();
+  const subProjSel = document.getElementById('sub-proj-filter');
+  if(subProjSel){
+    const cur = subProjSel.value;
+    subProjSel.innerHTML = '<option value="">— All projects —</option>'
+      + allOpenProjs.map(pid=>{
+          const p=DB.projects.find(x=>x.id===pid);
+          return `<option value="${pid}" ${cur===pid?'selected':''}>${pid}${p?' — '+p.name:''}</option>`;
+        }).join('');
+    if(cur) subProjSel.value=cur;
+  }
+  renderOpenItems();
   document.getElementById('dash-tbody').innerHTML=active.map(p=>`
     <tr><td><strong>${p.id}</strong></td><td>${p.name}</td><td>${p.client}</td>
     <td>${fmt(bv(p))}</td><td><strong>${fmt(tv(p))}</strong></td>
@@ -1319,6 +1353,92 @@ function dashSetCOWork(pid, cid, workVal){
   if(p){const co=p.cos.find(c=>c.id===cid);if(co)co.work=workVal;}
   sheetWrite('updateCO',{projectId:pid,num:(sc&&sc.num)||'',newStatus:(sc&&sc.status)||'',work:workVal});
   renderCOList();
+}
+
+
+// ─── OPEN ITEMS (RFIs + Submittals) ──────────────────────────────────────────
+function renderOpenItems(){
+  const el = document.getElementById('dash-open'); if(!el) return;
+  const projFilter = document.getElementById('sub-proj-filter')?.value || '';
+  const showRFIs   = document.getElementById('sub-show-rfis')?.checked !== false;
+  const showSubs   = document.getElementById('sub-show-subs')?.checked !== false;
+
+  const SUB_STATUSES = ['Under review','Pending review','Approved','Rejected','Closed'];
+  const RFI_STATUSES = ['Open','Closed','Responded'];
+
+  let items = [];
+
+  if(showRFIs){
+    DB.projects.forEach(p=>{
+      if(projFilter && p.id !== projFilter) return;
+      (p.rfis||[]).filter(r=>r.status==='Open').forEach(r=>{
+        items.push({t:'RFI', id:r.id, pid:p.id, pname:p.name, num:r.num,
+          desc:r.desc, status:r.status, submitted:r.submitted, response:r.response,
+          statuses:RFI_STATUSES, cls:'b-blue'});
+      });
+    });
+  }
+
+  if(showSubs){
+    DB.projects.forEach(p=>{
+      if(projFilter && p.id !== projFilter) return;
+      (p.subs||[]).filter(s=>s.status==='Under review'||s.status==='Pending review').forEach(s=>{
+        items.push({t:'SUB', id:s.id, pid:p.id, pname:p.name, num:s.num,
+          desc:s.desc||s.material, status:s.status, submitted:s.submitted, code:s.code,
+          statuses:SUB_STATUSES, cls:'b-amber'});
+      });
+    });
+  }
+
+  items.sort((a,b)=>a.pid.localeCompare(b.pid));
+
+  if(!items.length){ el.innerHTML='<div class="empty">No open items'+( projFilter?' for '+projFilter:'')+'</div>'; return; }
+
+  el.innerHTML = items.map(it=>{
+    const statOpts = it.statuses.map(s=>`<option value="${s}" ${it.status===s?'selected':''}>${s}</option>`).join('');
+    const fnName = it.t==='RFI' ? 'dashUpdateRFI' : 'dashUpdateSub';
+    const extra  = it.t==='SUB' && it.code ? `<span class="badge b-gray" style="font-size:9px">${it.code}</span>` : '';
+    return `<div style="padding:9px 0;border-bottom:0.5px solid var(--border);font-size:12px">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
+        <div style="flex:1;min-width:0">
+          <div style="display:flex;align-items:center;gap:5px;margin-bottom:3px;flex-wrap:wrap">
+            <span class="badge ${it.cls}">${it.t}</span>
+            <strong>${it.num}</strong>
+            ${extra}
+            <span style="font-size:10px;color:var(--text3)">${it.pid} — ${it.pname}</span>
+          </div>
+          <div style="color:var(--text2);font-size:11px;margin-bottom:4px">${it.desc||''}</div>
+          <div style="display:flex;align-items:center;gap:6px;flex-wrap:wrap">
+            <select onchange="${fnName}('${it.pid}','${it.id}',this.value)"
+              style="font-size:10px;padding:2px 6px;border-radius:4px;border:0.5px solid var(--border2);background:var(--bg);color:var(--text);cursor:pointer">
+              ${statOpts}
+            </select>
+            ${it.submitted?`<span style="font-size:10px;color:var(--text3)">Submitted: ${it.submitted}</span>`:''}
+          </div>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function dashUpdateSub(pid, sid, newStatus){
+  const p = DB.projects.find(x=>x.id===pid); if(!p) return;
+  const s = p.subs.find(x=>x.id===sid); if(!s) return;
+  const old = s.status; s.status = newStatus;
+  p.history.push({date:todate(),text:s.num+' status: '+old+' → '+newStatus,type:'sub'});
+  sheetWrite('updateSub',{projectId:pid,num:s.num,newStatus});
+  toast(s.num+' → '+newStatus);
+  renderOverview();
+}
+
+function dashUpdateRFI(pid, rid, newStatus){
+  const p = DB.projects.find(x=>x.id===pid); if(!p) return;
+  const r = p.rfis.find(x=>x.id===rid); if(!r) return;
+  const old = r.status; r.status = newStatus;
+  p.history.push({date:todate(),text:r.num+' status: '+old+' → '+newStatus,type:'rfi'});
+  sheetWrite('updateRFI',{projectId:pid,num:r.num,newStatus});
+  toast(r.num+' → '+newStatus);
+  renderOverview();
 }
 
 // ─── OPEN ORDERS ──────────────────────────────────────────────────────────────
@@ -1630,7 +1750,7 @@ function renderSub(p,tab){
   if(tab==='subs'){
     if(!p.subs.length)return'<div class="empty">No submittals yet.</div>';
     return`<div class="tbl-wrap"><table><thead><tr><th style="width:68px">SUB#</th><th>Material / item</th><th style="width:58px">Code</th><th style="width:85px">Submitted</th><th style="width:92px">Status</th><th style="width:130px">Action</th></tr></thead>
-    <tbody>${p.subs.map(s=>`<tr><td><strong>${s.num}</strong></td><td>${s.material}</td><td><span class="badge b-gray" style="font-size:10px">${s.code||'—'}</span></td><td>${s.submitted}</td><td><span class="badge ${bc(s.status)}">${s.status}</span></td>
+    <tbody>${p.subs.map(s=>`<tr><td><strong>${s.num}</strong></td><td>${s.desc||s.material}</td><td><span class="badge b-gray" style="font-size:10px">${s.code||'—'}</span></td><td>${s.submitted}</td><td><span class="badge ${bc(s.status)}">${s.status}</span></td>
     <td>${(s.status==='Under review'||s.status==='Pending review')?`<div style="display:flex;gap:4px"><button class="btn btn-sm btn-approve" onclick="approveItem('${p.id}','${s.id}','sub')">Approve</button><button class="btn btn-sm btn-deny" onclick="denyItem('${p.id}','${s.id}','sub')">Reject</button></div>`:`<span style="font-size:11px;color:var(--text3)">${s.status}</span>`}</td></tr>`).join('')}</tbody></table></div>`;
   }
   if(tab==='history'){
