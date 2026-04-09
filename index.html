@@ -1860,46 +1860,86 @@ function renderRoster(){
     return`<tr style="${bgStyle}"><td class="ic" style="max-width:110px">${nameCell(item.id,type)}</td><td class="ic" data-info-edit="${item.id}" style="max-width:70px;font-size:10px;padding:3px 4px;cursor:pointer;white-space:normal;word-break:break-word;vertical-align:top" ondblclick="editInfoCell('${item.id}','${type}')" title="Double-click to edit notes">${info}</td>${dayCells(item,type)}</tr>`;
   };
 
-  if(show('staff')){
-    const teams=[...new Set(STAFF.map(e=>e.team))];
-    teams.forEach(team=>{
-      const members=STAFF.filter(e=>e.team===team&&passFilter(e,'staff'));
-      if(!members.length)return;
-      const rows=members.map(e=>row(e,'staff')).filter(Boolean);
-      if(!rows.length)return;
-      h+=mkSec(`${team} · ${members.length} people`,TEAM_COLORS[team]||'#888');
-      h+=rows.join('');
+  if(dayMode){
+    // ── DAY MODE: collect ALL assigned rows, group by job number ─────────────
+    const dayKey=`${calYear}-${calMonth+1}-${rosterDayFilter}`;
+    const allDayRows=[];
+
+    // Collect from all sections
+    const addRows=(items,type,bgStyle='')=>{
+      items.filter(e=>passFilter(e,type)).forEach(item=>{
+        const extra=dayViewCells(item);
+        if(!extra)return;
+        const asgn=String(item.a?.[dayKey]||'').trim();
+        const firstJob=asgn.split(',')[0].trim()||'_unassigned';
+        allDayRows.push({job:firstJob, html:`<tr style="${bgStyle}"><td class="ic" style="max-width:150px">${nameCell(item.id,type)}</td>${extra}</tr>`});
+      });
+    };
+
+    if(show('staff'))   addRows(STAFF,'staff');
+    if(show('extra'))   addRows(EXTRA,'extra','background:rgba(250,238,218,0.2)');
+    if(show('equip'))   addRows(EQUIP,'equip','background:rgba(230,241,251,0.2)');
+    if(show('rentals')) addRows(RENTALS,'rental','background:rgba(234,243,222,0.2)');
+
+    // Sort by job number
+    allDayRows.sort((a,b)=>a.job.localeCompare(b.job));
+
+    // Render grouped by job number with section headers
+    let curJob='';
+    allDayRows.forEach(r=>{
+      if(r.job!==curJob){
+        curJob=r.job;
+        if(curJob==='_unassigned'){
+          h+=mkSec('Unassigned','#888');
+        } else {
+          const proj=DB.projects.find(p=>p.id===curJob);
+          const jobLabel=proj?`${curJob} — ${proj.name}`:curJob;
+          const jobColor=pc(curJob)||'#888';
+          h+=mkSec(jobLabel,jobColor);
+        }
+      }
+      h+=r.html;
     });
-  }
-  if(show('extra')){
-    const filtered=EXTRA.filter(e=>passFilter(e,'extra'));
-    if(filtered.length){
-      const rows=filtered.map(ew=>{
-        if(dayMode){const extra=dayViewCells(ew);if(!extra)return '';return`<tr style="background:rgba(250,238,218,0.2)"><td class="ic" style="max-width:150px">${nameCell(ew.id,'extra')}</td>${extra}</tr>`;}
-        return`<tr style="background:rgba(250,238,218,0.2)"><td class="ic">${nameCell(ew.id,'extra')}</td><td class="ic">${ewWeekSummary(ew)}</td>${dayCells(ew,'extra')}</tr>`;
-      }).filter(Boolean);
-      if(rows.length){h+=mkSec(`Extra workers · ${filtered.length} people`,'#BA7517');h+=rows.join('');}
+
+    if(!allDayRows.length) h+=`<tr><td colspan="4" class="empty">No assignments for this day.</td></tr>`;
+
+  } else {
+    // ── MONTH MODE: render grouped by team/section as before ─────────────────
+    if(show('staff')){
+      const teams=[...new Set(STAFF.map(e=>e.team))];
+      teams.forEach(team=>{
+        const members=STAFF.filter(e=>e.team===team&&passFilter(e,'staff'));
+        if(!members.length)return;
+        const rows=members.map(e=>row(e,'staff')).filter(Boolean);
+        if(!rows.length)return;
+        h+=mkSec(`${team} · ${members.length} people`,TEAM_COLORS[team]||'#888');
+        h+=rows.join('');
+      });
     }
-  }
-  if(show('equip')){
-    const cats=[...new Set(EQUIP.map(e=>e.cat))];
-    cats.forEach(cat=>{
-      const items=EQUIP.filter(e=>e.cat===cat&&passFilter(e,'equip'));
-      if(!items.length)return;
-      const rows=items.map(eq=>row(eq,'equip','background:rgba(230,241,251,0.2)')).filter(Boolean);
-      if(!rows.length)return;
-      h+=mkSec(`${cat} · ${items.length} units`,'#185FA5');
-      h+=rows.join('');
-    });
-  }
-  if(show('rentals')){
-    const filtered=RENTALS.filter(e=>passFilter(e,'rental'));
-    if(filtered.length){
-      const rows=filtered.map(r=>{
-        if(dayMode){const extra=dayViewCells(r);if(!extra)return '';return`<tr style="background:rgba(234,243,222,0.2)"><td class="ic" style="max-width:150px">${nameCell(r.id,'rental')}</td>${extra}</tr>`;}
-        return`<tr style="background:rgba(234,243,222,0.2)"><td class="ic">${nameCell(r.id,'rental')}</td><td class="ic"></td>${dayCells(r,'rental')}</tr>`;
-      }).filter(Boolean);
-      if(rows.length){h+=mkSec(`Rentals · ${filtered.length} items`,'#3B6D11');h+=rows.join('');}
+    if(show('extra')){
+      const filtered=EXTRA.filter(e=>passFilter(e,'extra'));
+      if(filtered.length){
+        const rows=filtered.map(ew=>row(ew,'extra','background:rgba(250,238,218,0.2)')).filter(Boolean);
+        if(rows.length){h+=mkSec(`Extra workers · ${filtered.length} people`,'#BA7517');h+=rows.join('');}
+      }
+    }
+    if(show('equip')){
+      const cats=[...new Set(EQUIP.map(e=>e.cat))];
+      cats.forEach(cat=>{
+        const items=EQUIP.filter(e=>e.cat===cat&&passFilter(e,'equip'));
+        if(!items.length)return;
+        const rows=items.map(eq=>row(eq,'equip','background:rgba(230,241,251,0.2)')).filter(Boolean);
+        if(!rows.length)return;
+        h+=mkSec(`${cat} · ${items.length} units`,'#185FA5');
+        h+=rows.join('');
+      });
+    }
+    if(show('rentals')){
+      const filtered=RENTALS.filter(e=>passFilter(e,'rental'));
+      if(filtered.length){
+        const rows=filtered.map(r=>row(r,'rental','background:rgba(234,243,222,0.2)')).filter(Boolean);
+        if(rows.length){h+=mkSec(`Rentals · ${filtered.length} items`,'#3B6D11');h+=rows.join('');}
+      }
     }
   }
   h+='</tbody>';
@@ -2490,10 +2530,10 @@ async function forceSaveToCloud() {
 
 function buildRosterData() {
   return {
-    staff:   STAFF.map(e=>({id:e.id,a:e.a||{},notes:e.notes||{},wh:e.wh||{},cc:e.cc||{},co:e.co||{},confirmed:e.confirmed||{},name:e.name})),
-    extra:   EXTRA.map(e=>({id:e.id,a:e.a||{},notes:e.notes||{},wh:e.wh||{},cc:e.cc||{},co:e.co||{},confirmed:e.confirmed||{},name:e.name,project:e.project})),
-    equip:   EQUIP.map(e=>({id:e.id,a:e.a||{},notes:e.notes||{},wh:e.wh||{},cc:e.cc||{},co:e.co||{},confirmed:e.confirmed||{},name:e.name})),
-    rentals: RENTALS.map(e=>({id:e.id,a:e.a||{},notes:e.notes||{},wh:e.wh||{},cc:e.cc||{},co:e.co||{},confirmed:e.confirmed||{},name:e.name})),
+    staff:   STAFF.map(e=>({id:e.id,a:e.a||{},notes:e.notes||{},wh:e.wh||{},cc:e.cc||{},co:e.co||{},confirmed:e.confirmed||{},pour:e.pour||{},name:e.name})),
+    extra:   EXTRA.map(e=>({id:e.id,a:e.a||{},notes:e.notes||{},wh:e.wh||{},cc:e.cc||{},co:e.co||{},confirmed:e.confirmed||{},pour:e.pour||{},name:e.name,project:e.project})),
+    equip:   EQUIP.map(e=>({id:e.id,a:e.a||{},notes:e.notes||{},wh:e.wh||{},cc:e.cc||{},co:e.co||{},confirmed:e.confirmed||{},pour:e.pour||{},name:e.name})),
+    rentals: RENTALS.map(e=>({id:e.id,a:e.a||{},notes:e.notes||{},wh:e.wh||{},cc:e.cc||{},co:e.co||{},confirmed:e.confirmed||{},pour:e.pour||{},name:e.name})),
     extraList: EXTRA.filter(e=>e.id.startsWith('ew')&&!['ew1','ew2','ew3','ew4','ew5','ew6','ew7','ew8'].includes(e.id)),
     staffList: STAFF.filter(e=>!['e1','e2','e3','e4','e5','e6','e7','e8','e9','e10','e11','e12','e13','e14','e15','e16','e17','e18'].includes(e.id)),
   };
@@ -2540,15 +2580,8 @@ async function loadFromCloud() {
 
 function saveLocal() {
   try {
-    // Save roster assignments + notes for all items
-    const rosterData = {
-      staff: STAFF.map(e => ({ id:e.id, a:e.a||{}, notes:e.notes||{}, wh:e.wh||{} })),
-      extra: EXTRA.map(e => ({ id:e.id, a:e.a||{}, notes:e.notes||{}, wh:e.wh||{}, project:e.project })),
-      equip: EQUIP.map(e => ({ id:e.id, a:e.a||{}, notes:e.notes||{}, wh:e.wh||{} })),
-      rentals: RENTALS.map(e => ({ id:e.id, a:e.a||{}, notes:e.notes||{}, wh:e.wh||{}, cc:e.cc||{}, co:e.co||{}, confirmed:e.confirmed||{}, pour:e.pour||{}, name:e.name })),
-      extraList: EXTRA.filter(e => e.id.startsWith('ew') && !['ew1','ew2','ew3','ew4','ew5','ew6','ew7','ew8'].includes(e.id)),
-      staffList: STAFF.filter(e => !['e1','e2','e3','e4','e5','e6','e7','e8','e9','e10','e11','e12','e13','e14','e15','e16','e17'].includes(e.id)),
-    };
+    // Use buildRosterData() to ensure ALL fields are saved (a, notes, wh, cc, co, confirmed, pour, name)
+    const rosterData = buildRosterData();
     localStorage.setItem('zlc_roster', JSON.stringify(rosterData));
     // Save open orders
     localStorage.setItem('zlc_orders', JSON.stringify(DB.openOrders||[]));
