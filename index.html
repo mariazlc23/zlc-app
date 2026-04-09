@@ -2861,33 +2861,45 @@ function saveToCloud(rosterData) {
 async function _doCloudSave(rosterData) {
   if (_cloudSaveInProgress) return;
   _cloudSaveInProgress = true;
-  const compressed = compressRoster(rosterData);
-  const staffCount = compressed.staff.length;
-  const mid = Math.ceil(staffCount / 2);
-  const staff1 = compressed.staff.slice(0, mid);
-  const staff2block = {
-    staff:     compressed.staff.slice(mid),
-    extra:     compressed.extra,
-    equip:     compressed.equip,
-    rentals:   compressed.rentals,
-    extraList: compressed.extraList,
-    staffList: compressed.staffList,
-  };
   setCloudStatus('⏳ Saving...');
   try {
-    await jsonpSave('staff1', staff1);
-    console.log('✓ staff1 saved (' + staff1.length + ' people)');
-    await new Promise(r=>setTimeout(r,500));
-    await jsonpSave('staff2', staff2block);
-    console.log('✓ staff2 saved (' + staff2block.staff.length + ' people + extra/equip)');
-    await new Promise(r=>setTimeout(r,500));
+    const c = compressRoster(rosterData);
+    // Split staff into chunks of 3 people each (keeps payload under 14KB)
+    const CHUNK = 3;
+    const allPeople = c.staff;
+    const chunks = [];
+    for(let i=0; i<allPeople.length; i+=CHUNK) chunks.push(allPeople.slice(i,i+CHUNK));
+    console.log('Saving ' + allPeople.length + ' staff in ' + chunks.length + ' chunks of ' + CHUNK);
+
+    for(let i=0; i<chunks.length; i++){
+      await jsonpSave('sc'+i, chunks[i]);
+      console.log('✓ chunk sc'+i+' saved ('+chunks[i].length+' people)');
+      if(i < chunks.length-1) await new Promise(r=>setTimeout(r,400));
+    }
+
+    // Save extra/equip/rentals + metadata as one block
+    const meta = {
+      extra:     c.extra,
+      equip:     c.equip,
+      rentals:   c.rentals,
+      extraList: c.extraList,
+      staffList: c.staffList,
+      chunkCount: chunks.length,
+    };
+    await jsonpSave('scMeta', meta);
+    console.log('✓ meta saved (extra/equip/rentals, chunks='+chunks.length+')');
+
+    await new Promise(r=>setTimeout(r,400));
     await jsonpSave('orders', DB.openOrders||[]);
     console.log('✓ orders saved');
+
     const t = new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'});
     setCloudStatus('✓ Saved ' + t);
+    toast('✓ Saved to cloud');
   } catch(e) {
     console.error('Cloud save failed:', e);
-    setCloudStatus('✗ Save failed: ' + String(e).slice(0,40));
+    setCloudStatus('✗ ' + String(e).slice(0,50));
+    toast('✗ Save failed — check console');
   } finally {
     _cloudSaveInProgress = false;
   }
@@ -2946,23 +2958,45 @@ async function loadFromCloud() {
     }
     const d = json.data;
     console.log('Cloud data keys:', Object.keys(d));
-    // Build merged roster
     let changed = false;
-    const staff2block = d.staff2 || {};
-    const allStaff = [...(d.staff1||[]), ...(staff2block.staff||[])];
-    if(allStaff.length || d.roster) {
-      const mergedRoster = d.roster || {
+
+    // Reconstruct staff from chunks (sc0, sc1, sc2...)
+    const meta = d.scMeta || {};
+    const chunkCount = meta.chunkCount || 0;
+    let allStaff = [];
+    if(chunkCount > 0) {
+      for(let i=0; i<chunkCount; i++) {
+        allStaff = allStaff.concat(d['sc'+i] || []);
+      }
+      console.log('✓ Reconstructed ' + allStaff.length + ' staff from ' + chunkCount + ' chunks');
+    }
+
+    // Fallback: try old format keys
+    if(!allStaff.length && d.staff1) {
+      const s2 = d.staff2 || {};
+      allStaff = [...(d.staff1||[]), ...(s2.staff||[])];
+      if(!meta.extra) { meta.extra=s2.extra||[]; meta.equip=s2.equip||[]; meta.rentals=s2.rentals||[]; }
+    }
+    if(!allStaff.length && d.roster) {
+      applyRosterData(d.roster);
+      localStorage.setItem('zlc_roster', JSON.stringify(d.roster));
+      changed = true;
+      console.log('✓ Loaded from legacy roster key');
+    } else if(allStaff.length) {
+      const mergedRoster = {
         staff:     allStaff,
-        extra:     staff2block.extra    || [],
-        equip:     staff2block.equip    || [],
-        rentals:   staff2block.rentals  || [],
-        extraList: staff2block.extraList|| [],
-        staffList: staff2block.staffList|| [],
+        extra:     meta.extra     || [],
+        equip:     meta.equip     || [],
+        rentals:   meta.rentals   || [],
+        extraList: meta.extraList || [],
+        staffList: meta.staffList || [],
       };
       applyRosterData(mergedRoster);
       localStorage.setItem('zlc_roster', JSON.stringify(mergedRoster));
       changed = true;
-      console.log('✓ Roster loaded: ' + allStaff.length + ' staff');
+      console.log('✓ Roster applied: ' + allStaff.length + ' staff');
+    } else {
+      console.log('No roster data found in cloud. Keys:', Object.keys(d).join(', '));
     }
     if(d.orders)    { DB.openOrders=d.orders; localStorage.setItem('zlc_orders',JSON.stringify(d.orders)); changed=true; }
     if(d.historical){ DB.historical=d.historical; localStorage.setItem('zlc_historical',JSON.stringify(d.historical)); changed=true; }
