@@ -453,6 +453,40 @@
 // ─── DATA ───────────────────────────────────────────────────────────────────
 const CODES_MAP={'001':'Hard demo','002':'Soft demo','003':'Excavation','004':'Concrete','005':'Utilities','006':'Paving','000':'Corporate'};
 const CODE_COLORS={'001':'#D85A30','002':'#BA7517','003':'#1D9E75','004':'#378ADD','005':'#7F77DD','006':'#D4537E','000':'#888780'};
+
+// ─── DUMP SITES (for Driver multi-assign) ────────────────────────────────────
+const DUMP_SITES = [
+  {name:'Alco / Account',              address:'1091 Doolittle Dr, San Leandro, CA 94577',  type:'Metal'},
+  {name:'Argent / Account',            address:'8300 Baldwin St, Oakland, CA 94621',          type:'Concrete'},
+  {name:'Berkeley Asphalt / CC on file', address:'699 Virginia St, Berkeley, CA 94710',     type:'Asphalt'},
+  {name:'Bertolotti Transfer / CC on hand', address:'231 Flamingo Dr, Modesto, CA 95358',   type:'C&D'},
+  {name:'Blue Line Transfer / CC on hand', address:'500 East Jamie Ct, South San Francisco, CA 94080', type:'Concrete'},
+  {name:'Certified Blue Recycling / CC on file', address:'2075 Williams St, San Leandro, CA 94577', type:'C&D'},
+  {name:'County Quarry',               address:'5501 Imhoff Dr, Martinez, CA 94553',          type:'Asphalt'},
+  {name:'Devlin / Account',            address:'889 Devlin Road, American Canyon',            type:'C&D'},
+  {name:'Gallagher and Burk / CC on file', address:'344 High St, Oakland, CA 94601',          type:'Asphalt'},
+  {name:'Granite Rock (SSF) / CC on file', address:'1321 Lowrie Ave, South San Francisco, CA 94080', type:'Asphalt'},
+  {name:'Granite Rock San Jose / CC on file', address:'100 Granite Rock Way, San Jose, CA 95136', type:'Asphalt'},
+  {name:'Marin Resource Recovery / CC on hand', address:'565 Jacoby St, San Rafael, CA 94901', type:'C&D'},
+  {name:'Ranch (form to fill)',        address:'5280 Aspen Rd, Oakley, CA',                    type:'Dirt', url:'https://forms.gle/ev7D5d6Y9UYCjXrh7'},
+  {name:'Recology Hay Road / CC on hand', address:'855½ Davis St, Vacaville, CA 95687',       type:'Dirt'},
+  {name:'Reed & Graham / CC on file',  address:'690 Sunol St, San Jose, CA 95126',             type:'Asphalt'},
+  {name:'Smart Demolition / CC on hand', address:'1225 Van Dyke Ave, San Francisco, CA 94124', type:'Concrete'},
+  {name:'Stevens Creek Quarry / Account', address:'12100 Stevens Canyon Rd., Cupertino, CA 95014', type:'Concrete'},
+  {name:'Vulcan 3rd St',               address:'San Francisco, CA 94130',                      type:'Baserock'},
+  {name:'Zanker / CC on file',         address:'675 Los Esteros Rd, San Jose, CA 95134',       type:'C&D'},
+  {name:'Sunol Recycle',               address:'7999 Athenour Way, Sunol, CA 94586',            type:'Class 2 Permeable'},
+  {name:'Contra Costa Transfer Station', address:'951 Waterbird Way, Martinez, CA 94553',      type:'C&D'},
+  {name:'SCQ Sunnyvale',               address:'301 Carl Rd, Sunnyvale, CA 94089',              type:'Asphalt'},
+  {name:'Potrero Hills',               address:'3675 Potrero Hills Lane, Suisun, CA 94585',    type:'Dirt'},
+  {name:'Jr Hauling',                  address:'5419 Weber Rd, Vacaville, CA 95687',            type:'Dirt'},
+];
+const DUMP_TYPE_COLORS = {
+  'Asphalt':'#854F0B', 'Concrete':'#185FA5', 'C&D':'#3B6D11',
+  'Dirt':'#8B6914', 'Metal':'#5A5A6A', 'Baserock':'#4A3F7A',
+  'Class 2 Permeable':'#0F6E56'
+};
+
 const TEAM_COLORS={Xolos:'#3bccb7',Chingones:'#4a86e8',Poblanos:'#cc00cc',Lobos:'#9900ff','Guerreros Z':'#c9a200',Warehouse:'#888780',Driver:'#D85A30',Joaquin:'#a61c00'};
 const PROJ_COLORS={'25-006':'#cc00cc','26-002':'#009999','25-064':'#3bccb7','25-087':'#4a86e8','24-102':'#9999bb','25-061':'#9900ff','26-006':'#c9a200','25-103':'#7bafd4','25-105':'#a64d79','26-003':'#999999','26-004':'#E33F91','25-036':'#134f5c','25-076':'#f6b26b','25-075':'#A64B3C','24-112':'#00cc00','24-126':'#ead1dc','23-134':'#a61c00','26-001':'#D6D60F','26-005':'#6E2C7B','25-063':'#674ea7','25-081':'#45818e','25-085':'#fff2cc','25-089':'#d0e0e3','25-094':'#4DA44D','25-102':'#d9ead3','OFF':'#cc3333','Warehouse':'#666666'};
 const MONTHS=['January','February','March','April','May','June','July','August','September','October','November','December'];
@@ -1798,8 +1832,10 @@ function renderRoster(){
   // Check if item matches the project filter in visible range
   const matchesProjFilter=item=>days.some(d=>{
     const key=`${calYear}-${calMonth+1}-${d}`;
-    const asgn=item.a?.[key]||'';
-    return asgn.split(',').map(x=>x.trim()).includes(rosterProjFilter);
+    const raw=item.a?.[key]||'';
+    const sels=parseMultiAssign(raw);
+    if(sels.length) return sels.filter(s=>s.type==='job').some(s=>s.id===rosterProjFilter);
+    return raw.split(',').map(x=>x.trim()).includes(rosterProjFilter);
   });
   const passFilter=(item,type)=>{
     if(dayMode){
@@ -1860,9 +1896,35 @@ function renderRoster(){
     const pour=item.pour?.[key]||'';
     const conf=item.confirmed?.[key]!==false;
     if(!asgn&&!note&&!wh)return null;
-    // Col 1: Trabajo + CostCode
+    // Col 1: Trabajo + CostCode (handles multi-assign JSON)
     let trabajoHtml='';
-    if(asgn){
+    const multiParsed=item.multi?parseMultiAssign(asgn):null;
+    if(multiParsed&&multiParsed.length){
+      const jobs=multiParsed.filter(s=>s.type==='job');
+      const dumps=multiParsed.filter(s=>s.type==='dump');
+      jobs.forEach(s=>{
+        const bg2=pc(s.id)||'#888';const tc2=ptc(bg2);
+        const proj=DB.projects.find(p=>p.id===s.id);
+        const ccName=s.cc?(CODES_MAP[s.cc]||s.cc):'';
+        trabajoHtml+='<div style="margin-bottom:4px">'
+          +'<span style="display:inline-block;padding:2px 8px;border-radius:99px;background:'+bg2+';color:'+tc2+';font-size:11px;font-weight:700">'+s.id+'</span>'
+          +(proj?'<div style="font-size:10px;color:var(--text2);margin-top:1px;padding-left:2px">'+proj.name+'</div>':'')
+          +(s.cc?'<div style="font-size:10px;color:var(--blue);font-weight:600;padding-left:2px">'+s.cc+' — '+ccName+'</div>':'')
+          +'</div>';
+      });
+      if(dumps.length){
+        trabajoHtml+='<div style="margin-top:4px;padding-top:4px;border-top:0.5px dashed var(--border)">'
+          +'<div style="font-size:9px;font-weight:700;color:#854F0B;margin-bottom:2px">🗑️ DUMP SITES</div>'
+          +dumps.map(s=>{
+            const col=DUMP_TYPE_COLORS[s.siteType||'']||'#888';
+            return'<div style="font-size:10px;color:var(--text);margin-bottom:2px">'
+              +'<span style="display:inline-block;width:7px;height:7px;border-radius:50%;background:'+col+';margin-right:3px"></span>'
+              +'<strong>'+s.name+'</strong>'
+              +'<div style="font-size:9px;color:var(--text3);padding-left:10px">'+s.address+'</div></div>';
+          }).join('')
+          +'</div>';
+      }
+    } else if(asgn){
       asgn.split(',').forEach(a=>{
         const a2=a.trim();const isNEW=a2==='NEW';
         const bg2=isNEW?'#FFEBEE':pc(a2);const tc2=isNEW?'#C62828':bg2?ptc(bg2):'var(--text2)';
@@ -1898,11 +1960,23 @@ function renderRoster(){
     const dw=dow(calYear,calMonth,d),wk=dw===0||dw===6,key=`${calYear}-${calMonth+1}-${d}`,asgn=item.a?.[key]||'',bg=asgn?pc(asgn):'',isT=d===todayD,tc=bg?ptc(bg):'';
     const note=item.notes?.[key]||'';
     const pour=item.pour?.[key]||'';
-    const titleText=asgn?(note?`${asgn} — ${note}`:asgn):'click to assign';
+    // Handle multi-assign JSON format
+    const multiSels=item.multi?parseMultiAssign(asgn):null;
+    const titleText=asgn?(note?asgn+' — '+note:asgn):'click to assign';
     const noteDot=note?`<span style="position:absolute;top:1px;right:1px;width:5px;height:5px;border-radius:50%;background:${tc||'#fff'};opacity:0.8;flex-shrink:0"></span>`:'';
     const pourIcon=pour?`<span style="position:absolute;bottom:1px;left:1px;font-size:8px;line-height:1">🪣</span>`:''; // pour emoji
     const conf=item.confirmed?.[key]!==false;
     const warnOverlay=!conf&&asgn?'<span style="position:absolute;top:0;left:0;font-size:11px;line-height:1">⚠️</span>':'';
+    // Multi-assign cell: show stacked mini pills for jobs + dump icon
+    if(multiSels&&multiSels.length){
+      const jobs=multiSels.filter(s=>s.type==='job');
+      const dumps=multiSels.filter(s=>s.type==='dump');
+      const bg0=jobs.length?pc(jobs[0].id)||'#888':'#888';
+      const inner=jobs.slice(0,3).map(s=>{const bg=pc(s.id)||'#888';const tc=ptc(bg);return`<div style="font-size:7px;font-weight:700;color:${tc};background:${bg};border-radius:2px;padding:1px 2px;line-height:1.2">${s.id.split('-')[1]||s.id.slice(0,4)}</div>`;}).join('');
+      const dumpDot=dumps.length?`<span style="position:absolute;bottom:1px;right:1px;font-size:9px">🗑️</span>`:'';
+      return`<td class="day-cell${isT?' today-col':''}" style="position:relative;background:${bg0}" onclick="clickCell('${item.id}','${key}','${d}','${type}')" title="${asgn}">
+        <div style="display:flex;flex-direction:column;gap:1px;align-items:center">${inner}</div>${noteDot}${dumpDot}${warnOverlay}</td>`;
+    }
     const isNEW=asgn==='NEW';
     const cellBg=isNEW?'#FFEBEE':bg;const cellTc=isNEW?'#C62828':tc;
     const dispLabel=isNEW?'🆕':asgn==='OFF'?'OFF':asgn.split('-')[1]||asgn.slice(0,4);
@@ -2058,7 +2132,71 @@ function clickCell(itemId,dateKey,day,type){
     }
     return h;
   }
-  // Parse pour data
+  // ── MULTI-ASSIGN MODE (Francisco, Driver 2) ─────────────────────────────────
+  if(item.multi){
+    // Current selections stored as JSON in item.a[dateKey]
+    // Format: JSON array of {type:'job'|'dump', id, name, cc} or legacy string
+    let curSelections=[];
+    try{ curSelections=JSON.parse(cur); }catch(e){
+      // Legacy: comma-separated project IDs
+      if(cur) curSelections=cur.split(',').map(x=>({type:'job',id:x.trim(),name:x.trim(),cc:''}));
+    }
+    const selJobIds=new Set(curSelections.filter(s=>s.type==='job').map(s=>s.id));
+    const selDumpNames=new Set(curSelections.filter(s=>s.type==='dump').map(s=>s.name));
+
+    // Job checkboxes
+    const jobOpts=activeProjs.map(p=>{
+      const checked=selJobIds.has(p.id)?'checked':'';
+      const ccOpts='<option value="">—</option>'+p.codes.map(c=>`<option value="${c.code}">${c.code} — ${CODES_MAP[c.code]||c.code}</option>`).join('');
+      return`<div style="display:flex;align-items:center;gap:6px;padding:4px 0;border-bottom:0.5px solid var(--border)">
+        <input type="checkbox" class="multi-job-cb" value="${p.id}" ${checked} style="width:auto;accent-color:var(--blue)">
+        <span style="display:inline-block;width:10px;height:10px;border-radius:2px;background:${pc(p.id)};flex-shrink:0"></span>
+        <span style="font-size:12px;font-weight:600;flex:1">${p.id}</span>
+        <span style="font-size:11px;color:var(--text2);flex:2">${p.name}</span>
+        <select class="multi-cc-sel" data-pid="${p.id}" style="font-size:10px;padding:2px 4px;border-radius:4px;border:0.5px solid var(--border2);background:var(--bg);color:var(--text);width:110px">${ccOpts}</select>
+      </div>`;
+    }).join('');
+
+    // Dump site checkboxes grouped by type
+    const dumpTypes=[...new Set(DUMP_SITES.map(s=>s.type))].sort();
+    const dumpOpts=dumpTypes.map(t=>{
+      const sites=DUMP_SITES.filter(s=>s.type===t);
+      const color=DUMP_TYPE_COLORS[t]||'#888';
+      return`<div style="margin-bottom:6px">
+        <div style="font-size:10px;font-weight:700;color:${color};text-transform:uppercase;letter-spacing:.05em;margin-bottom:2px">${t}</div>
+        ${sites.map(s=>{
+          const checked=selDumpNames.has(s.name)?'checked':'';
+          const link=s.url?`<a href="${s.url}" target="_blank" style="font-size:9px;color:var(--blue);margin-left:4px">🔗</a>`:'';
+          return`<label style="display:flex;align-items:flex-start;gap:5px;padding:2px 0;cursor:pointer;font-size:11px">
+            <input type="checkbox" class="multi-dump-cb" value="${s.name}" ${checked} style="width:auto;margin-top:2px;accent-color:${color}">
+            <span><strong>${s.name}</strong>${link}<br><span style="color:var(--text3);font-size:9px">${s.address}</span></span>
+          </label>`;
+        }).join('')}
+      </div>`;
+    }).join('');
+
+    showModal(`<div class="modal-title">🚛 Assign · ${item.name}</div>
+      <div style="font-size:12px;color:var(--text2);margin-bottom:12px">${dl}</div>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px">
+        <div>
+          <div style="font-size:11px;font-weight:700;color:var(--text);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;padding-bottom:4px;border-bottom:2px solid var(--blue)">🏗️ Job assignments</div>
+          <div style="max-height:260px;overflow-y:auto">${jobOpts}</div>
+        </div>
+        <div>
+          <div style="font-size:11px;font-weight:700;color:var(--text);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;padding-bottom:4px;border-bottom:2px solid #854F0B">🗑️ Dump sites</div>
+          <div style="max-height:260px;overflow-y:auto">${dumpOpts}</div>
+        </div>
+      </div>
+      <div class="fg" style="margin-top:8px"><label>Notes</label>
+        <textarea id="cp-note" style="min-height:50px;width:100%;font-size:12px;padding:6px 8px;border-radius:var(--radius);border:0.5px solid var(--border2);background:var(--bg);color:var(--text);font-family:inherit;resize:vertical">${curNote}</textarea>
+      </div>
+      <div class="form-actions">
+        ${cur?`<button class="btn btn-deny btn-sm" onclick="clearCell('${itemId}','${dateKey}','${type}')">Clear</button>`:''}
+        <button class="btn" onclick="closeModal()">Cancel</button>
+        <button class="btn btn-primary" onclick="saveMultiCell('${itemId}','${dateKey}','${type}')">Save</button>
+      </div>`, true);
+    return;
+  }
   const pourParts=curPour?curPour.split('|'):[];
   const pourTime=pourParts[0]||'';
   const pourPsi=pourParts[1]||'';
@@ -2110,6 +2248,48 @@ function clickCell(itemId,dateKey,day,type){
       <button class="btn" onclick="closeModal()">Cancel</button>
       <button class="btn btn-primary" onclick="saveCell('${itemId}','${dateKey}','${type}')">Save</button>
     </div>`);
+}
+
+function saveMultiCell(id,key,type){
+  const item=getItem(id,type);
+  if(!item.a)item.a={};if(!item.notes)item.notes={};
+  if(!item.confirmed)item.confirmed={};
+
+  // Collect job selections with cost codes
+  const jobSelections=[...document.querySelectorAll('.multi-job-cb:checked')].map(cb=>{
+    const pid=cb.value;
+    const ccSel=document.querySelector(`.multi-cc-sel[data-pid="${pid}"]`);
+    const cc=ccSel?ccSel.value:'';
+    const proj=DB.projects.find(p=>p.id===pid);
+    return{type:'job',id:pid,name:proj?proj.name:pid,cc};
+  });
+
+  // Collect dump site selections
+  const dumpSelections=[...document.querySelectorAll('.multi-dump-cb:checked')].map(cb=>{
+    const site=DUMP_SITES.find(s=>s.name===cb.value);
+    return{type:'dump',id:cb.value,name:cb.value,siteType:site?site.type:'',address:site?site.address:''};
+  });
+
+  const allSels=[...jobSelections,...dumpSelections];
+  const note=(document.getElementById('cp-note')?.value||'').trim();
+
+  if(allSels.length) item.a[key]=JSON.stringify(allSels);
+  else delete item.a[key];
+  if(note) item.notes[key]=note; else delete item.notes[key];
+  item.confirmed[key]=true;
+
+  saveLocal();closeModal();renderRoster();
+}
+
+// Helper to parse multi-assign value (handles both JSON and legacy comma-string)
+function parseMultiAssign(val){
+  if(!val)return[];
+  try{
+    const parsed=JSON.parse(val);
+    if(Array.isArray(parsed))return parsed;
+  }catch(e){}
+  // Legacy: comma-separated project IDs
+  return val.split(',').map(x=>({type:'job',id:x.trim(),name:x.trim(),cc:''}));
 }
 
 function togglePourFields(checked){
