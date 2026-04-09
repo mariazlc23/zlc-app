@@ -1116,16 +1116,12 @@ function renderOverview(){
   const contracted=active.reduce((a,p)=>a+tv(p),0);
   // 2026 won = base project values + approved COs
   const projs2026=DB.projects.filter(p=>p.id.startsWith('26-'));
-  const won2026base=projs2026.reduce((a,p)=>a+tv(p),0);
-  const approvedCOs2026=(DB.allSheetCOs||[]).filter(c=>c.pid&&c.pid.startsWith('26-')&&/approv/i.test(c.status||''));
-  const approvedCOVal2026=approvedCOs2026.reduce((a,c)=>a+(c.value||0),0);
-  const projCOVal2026=projs2026.flatMap(p=>(p.cos||[]).filter(c=>/approv/i.test(c.status||'')).map(c=>c.value||0)).reduce((a,v)=>a+v,0);
-  const won2026=won2026base+approvedCOVal2026+projCOVal2026;
-  const coApprCount=approvedCOs2026.length+projs2026.flatMap(p=>(p.cos||[]).filter(c=>/approv/i.test(c.status||''))).length;
+  // 2026 won = sum of base contracted values (cost codes) for 26-xxx projects only
+  const won2026=projs2026.reduce((a,p)=>a+bv(p),0);
   document.getElementById('dash-metrics').innerHTML=`
     <div class="metric"><div class="metric-label">Active projects</div><div class="metric-value">${active.length}</div></div>
     <div class="metric"><div class="metric-label">Active contracted</div><div class="metric-value" style="font-size:18px">${fmt(contracted)}</div></div>
-    <div class="metric"><div class="metric-label">2026 won + COs</div><div class="metric-value" style="font-size:18px">${fmt(won2026)}</div><div class="metric-sub">${projs2026.length} projects · ${coApprCount} COs approved</div></div>
+    <div class="metric"><div class="metric-label">2026 won</div><div class="metric-value" style="font-size:18px">${fmt(won2026)}</div><div class="metric-sub">${projs2026.length} projects</div></div>
     <div class="metric"><div class="metric-label">Pending COs</div><div class="metric-value">${pendCOs.length}</div><div class="metric-sub">${fmt(pendVal)} in review</div></div>
     <div class="metric"><div class="metric-label">Open RFIs</div><div class="metric-value">${openRFIs.length}</div></div>
     <div class="metric"><div class="metric-label">Subs in review</div><div class="metric-value">${openSubs.length}</div></div>`;
@@ -1913,8 +1909,7 @@ function renderRoster(){
     .flatMap(e=>Object.values(e.a||{}).flatMap(v=>String(v||'').split(',').map(x=>x.trim())))
     .filter(Boolean);
   const uniq=[...new Set(usedAll)];
-  document.getElementById('roster-legend').innerHTML=uniq.map(p=>{
-    if(p==='OFF') return `<span class="li"><span class="lsq" style="background:#FCEBEB;border:0.5px solid #F09595"></span>OFF</span>`;
+  document.getElementById('roster-legend').innerHTML=uniq.filter(p=>p!=='OFF').map(p=>{
     if(p==='Warehouse') return `<span class="li"><span class="lsq" style="background:${pc('Warehouse')}"></span>Warehouse</span>`;
     if(p==='NEW') return `<span class="li"><span class="lsq" style="background:#FFEBEE;border:1px dashed #E24B4A"></span>🆕 New</span>`;
     const proj=DB.projects.find(x=>x.id===p);
