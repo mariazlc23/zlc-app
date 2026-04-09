@@ -1870,11 +1870,14 @@ function setRosterDayFilter(d){
   // Normalize to YYYY-M-D format regardless of what browser sends
   const raw=(d||'').trim();
   if(raw){
-    // Try to parse and normalize
-    const dt=new Date(raw);
-    if(!isNaN(dt)){
-      // Store as YYYY-M-D (no zero-padding, matches assignment key format)
-      rosterDayFilter=`${dt.getFullYear()}-${dt.getMonth()+1}-${dt.getDate()}`;
+    // Parse directly from string to avoid timezone issues
+    // HTML date input always gives YYYY-MM-DD
+    const parts=raw.split(/[-\/]/).map(Number);
+    if(parts.length===3){
+      const [a,b,c]=parts;
+      // Detect YYYY-MM-DD vs MM/DD/YYYY
+      if(a>100){ rosterDayFilter=`${a}-${b}-${c}`; }      // YYYY-MM-DD
+      else      { rosterDayFilter=`${c}-${a}-${b}`; }      // MM/DD/YYYY → YYYY-M-D
     } else {
       rosterDayFilter=raw;
     }
