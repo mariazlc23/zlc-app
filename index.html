@@ -2973,7 +2973,13 @@ async function _doCloudSave(rosterData) {
     toast('✓ Saved to cloud');
   } catch(e) {
     console.error('Cloud save failed:', e);
-    setCloudStatus('✗ ' + String(e).slice(0,50));
+    const emsg = String(e);
+    if(emsg.includes('Unknown') && emsg.includes('save')) {
+      setCloudStatus('✗ Apps Script needs redeploy');
+      toast('⚠️ Apps Script needs a new deployment — see instructions');
+    } else {
+      setCloudStatus('✗ ' + emsg.slice(0,50));
+    }
     toast('✗ Save failed — check console');
   } finally {
     _cloudSaveInProgress = false;
