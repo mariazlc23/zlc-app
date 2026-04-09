@@ -15,7 +15,7 @@
     --amber: #854F0B; --amber-light: #FAEEDA;
     --red: #791F1F; --red-light: #FCEBEB; --red-mid: #F09595;
     --radius: 8px; --radius-lg: 12px;
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, 'Apple Color Emoji', 'Segoe UI Emoji', 'Noto Color Emoji', 'Twemoji Mozilla', sans-serif;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { background: var(--bg2); color: var(--text); font-size: 14px; line-height: 1.5; min-height: 100vh; }
@@ -257,6 +257,13 @@
 <!-- SIDEBAR -->
 <div class="sidebar">
   <div class="logo">ZLC <span>Corp</span></div>
+  <div style="padding:6px 12px 4px;border-bottom:0.5px solid var(--border);background:var(--bg3)">
+    <div style="display:flex;align-items:center;gap:6px">
+      <span id="cloud-status" style="font-size:10px;color:var(--text3);flex:1">☁️ Not synced yet</span>
+      <button onclick="loadFromCloud()" title="Load from cloud" style="font-size:11px;padding:2px 7px;border-radius:4px;border:0.5px solid var(--border2);background:var(--bg);color:var(--text2);cursor:pointer">↓ Sync</button>
+      <button onclick="forceSaveToCloud()" title="Save to cloud" style="font-size:11px;padding:2px 7px;border-radius:4px;border:0.5px solid var(--border2);background:var(--bg);color:var(--text2);cursor:pointer">↑ Save</button>
+    </div>
+  </div>
   <div class="nav-section">
     <div class="nav-label">Main</div>
     <button class="nav-item active" onclick="goTab('dashboard',this)">
@@ -428,6 +435,9 @@
           <option value="">— All days —</option>
         </select>
         <button class="btn btn-sm btn-ghost" onclick="setRosterDayFilter('');document.getElementById('roster-day-filter').value=''" style="font-size:11px;padding:3px 8px">✕ Clear</button>
+        <span id="cloud-status" style="font-size:11px;color:var(--text3);padding:3px 8px;background:var(--bg3);border-radius:var(--radius);white-space:nowrap">☁️ —</span>
+        <button class="btn btn-sm btn-ghost" onclick="forceSaveToCloud()" title="Force save all data to cloud" style="font-size:11px;padding:3px 8px">💾 Save</button>
+        <button class="btn btn-sm btn-ghost" onclick="loadFromCloud()" title="Reload from cloud" style="font-size:11px;padding:3px 8px">↻ Sync</button>
         <button class="btn btn-sm" onclick="downloadDayPDF()" id="pdf-btn" style="font-size:11px;padding:4px 10px;background:#E24B4A;color:#fff;border:none;border-radius:var(--radius);cursor:pointer;display:none">⬇ Download PDF</button>
       </div>
     </div>
@@ -2007,8 +2017,21 @@ function renderRoster(){
         const extra=dayViewCells(item);
         if(!extra)return;
         const asgn=String(item.a?.[dayKey]||'').trim();
-        const firstJob=asgn.split(',')[0].trim()||'_unassigned';
-        allDayRows.push({job:firstJob, html:`<tr style="${bgStyle}"><td class="ic" style="max-width:150px">${nameCell(item.id,type)}</td>${extra}</tr>`});
+        // For multi-assign (JSON), get ALL job IDs so person appears under each job
+        let jobIds=['_unassigned'];
+        if(asgn){
+          try{
+            const p=JSON.parse(asgn);
+            if(Array.isArray(p)){
+              const jobs=p.filter(s=>s.type==='job');
+              jobIds=jobs.length?jobs.map(s=>s.id):['_unassigned'];
+            } else { jobIds=[asgn.split(',')[0].trim()||'_unassigned']; }
+          }catch(e){ jobIds=[asgn.split(',')[0].trim()||'_unassigned']; }
+        }
+        const firstJob=jobIds[0];
+        const rowHtml=`<tr style="${bgStyle}"><td class="ic" style="max-width:150px">${nameCell(item.id,type)}</td>${extra}</tr>`;
+        // Multi-assign drivers appear under each job they're assigned to
+        jobIds.forEach(jid=>allDayRows.push({job:jid, html:rowHtml}));
       });
     };
 
@@ -2081,13 +2104,31 @@ function renderRoster(){
   h+='</tbody>';
   document.getElementById('roster-tbl').innerHTML=h;
   // Split multi-assign comma values to get individual project IDs
-  const usedAll=[...STAFF,...EXTRA,...EQUIP,...RENTALS]
-    .flatMap(e=>Object.values(e.a||{}).flatMap(v=>String(v||'').split(',').map(x=>x.trim())))
-    .filter(Boolean);
+  // Collect all used project IDs — handle both JSON multi-assign and plain strings
+  const usedAll=[...STAFF,...EXTRA,...EQUIP,...RENTALS].flatMap(e=>{
+    return Object.values(e.a||{}).flatMap(v=>{
+      if(!v)return[];
+      // Try JSON multi-assign format
+      try{
+        const parsed=JSON.parse(v);
+        if(Array.isArray(parsed)){
+          return parsed.filter(s=>s.type==='job').map(s=>s.id).filter(Boolean);
+        }
+      }catch(e){}
+      // Legacy: plain project ID or comma-separated
+      return String(v).split(',').map(x=>x.trim()).filter(Boolean);
+    });
+  });
   const uniq=[...new Set(usedAll)];
-  document.getElementById('roster-legend').innerHTML=uniq.filter(p=>p!=='OFF').map(p=>{
-    if(p==='Warehouse') return `<span class="li"><span class="lsq" style="background:${pc('Warehouse')}"></span>Warehouse</span>`;
-    if(p==='NEW') return `<span class="li"><span class="lsq" style="background:#FFEBEE;border:1px dashed #E24B4A"></span>🆕 New</span>`;
+  // Only show known project IDs (2-digit year + 3-digit number), OFF, Warehouse, NEW
+  const knownProjs=new Set(DB.projects.map(p=>p.id));
+  const validLegendIds=uniq.filter(p=>{
+    if(!p)return false;
+    if(p==='OFF'||p==='Warehouse'||p==='NEW')return false; // handled separately
+    // Must be a known project ID — skip dump site names, JSON fragments, etc.
+    return knownProjs.has(p)||/^\d{2}-\d{3,4}$/.test(p);
+  });
+  document.getElementById('roster-legend').innerHTML=validLegendIds.map(p=>{
     const proj=DB.projects.find(x=>x.id===p);
     const lbl=proj?proj.name:p; // name only, no number
     return `<span class="li"><span class="lsq" style="background:${pc(p)}"></span>${lbl}</span>`;
@@ -2490,7 +2531,6 @@ function openModal(type,pid,extra){
   const activeProjects=DB.projects.filter(p=>p.status==='Active');
   const pOpts=[
     {id:'OFF',name:'OFF / Holiday'},
-    {id:'Warehouse',name:'Warehouse'},
     ...activeProjects.map(p=>({id:p.id,name:p.name}))
   ].map(p=>`<option value="${p.id}"${p.id===pid?' selected':''}>${p.id} — ${p.name}</option>`).join('');
   const total=dim(calYear,calMonth);
@@ -2719,57 +2759,140 @@ function saveExtraW(){
 // Saves roster assignments, notes, extra staff, and manually added projects
 // so data survives page refresh
 // ─── CLOUD PERSISTENCE ───────────────────────────────────────────────────────
-let _cloudQueue = {};
 let _cloudTimer = null;
+
+// Compress roster — only keep items with actual data (assignments, notes, etc.)
+function compressRoster(rd) {
+  const compress = arr => (arr||[])
+    .map(e => {
+      const out = {id: e.id};
+      if(e.name)    out.name    = e.name;
+      if(e.project) out.project = e.project;
+      // Only include non-empty objects
+      if(e.a         && Object.keys(e.a).length)         out.a         = e.a;
+      if(e.notes     && Object.keys(e.notes).length)     out.notes     = e.notes;
+      if(e.wh        && Object.keys(e.wh).length)        out.wh        = e.wh;
+      if(e.cc        && Object.keys(e.cc).length)        out.cc        = e.cc;
+      if(e.co        && Object.keys(e.co).length)        out.co        = e.co;
+      if(e.confirmed && Object.keys(e.confirmed).length) out.confirmed = e.confirmed;
+      if(e.pour      && Object.keys(e.pour).length)      out.pour      = e.pour;
+      return out;
+    })
+    .filter(e => Object.keys(e).length > 1); // skip items with only id
+  return {
+    staff:     compress(rd.staff),
+    extra:     compress(rd.extra),
+    equip:     compress(rd.equip),
+    rentals:   compress(rd.rentals),
+    extraList: rd.extraList||[],
+    staffList: rd.staffList||[],
+  };
+}
+
+// Save one key/value to cloud via JSONP (reliable, gets a response)
+function cloudSaveJSONP(key, value, onDone) {
+  if (!APPS_SCRIPT_URL) return;
+  const body = JSON.stringify({action:'saveAppData', key, value});
+  const encoded = encodeURIComponent(body);
+
+  if (encoded.length > 12000) {
+    // Too large even for JSONP — split: save staff separately from extra/equip
+    console.warn('Cloud save: payload too large for', key, '—', Math.round(encoded.length/1024)+'KB');
+    if(onDone) onDone(false, 'too_large');
+    return;
+  }
+
+  const cbName = '_zlcSave_' + Date.now() + '_' + Math.random().toString(36).slice(2,6);
+  const scriptId = '_zlcSaveScript_' + key.replace(/[^a-zA-Z0-9]/g,'_');
+  // Remove any previous attempt
+  const old = document.getElementById(scriptId); if(old) old.remove();
+
+  window[cbName] = function(r) {
+    delete window[cbName];
+    const el = document.getElementById(scriptId); if(el) el.remove();
+    if(r && r.ok) {
+      console.log('✓ Cloud saved:', key);
+      if(onDone) onDone(true);
+    } else {
+      console.warn('✗ Cloud save failed:', key, r);
+      if(onDone) onDone(false, r);
+    }
+  };
+
+  const url = APPS_SCRIPT_URL + '?callback=' + cbName + '&data=' + encoded;
+  const script = document.createElement('script');
+  script.id  = scriptId;
+  script.src = url;
+  script.onerror = () => {
+    delete window[cbName]; script.remove();
+    console.warn('✗ Cloud save script error:', key);
+    if(onDone) onDone(false, 'script_error');
+  };
+  document.head.appendChild(script);
+  setTimeout(() => { delete window[cbName]; const el=document.getElementById(scriptId); if(el)el.remove(); }, 20000);
+}
 
 function saveToCloud(rosterData) {
   if (!APPS_SCRIPT_URL) return;
-  _cloudQueue = {
-    'roster':     rosterData,
-    'orders':     DB.openOrders||[],
-    'manual':     DB.projects.filter(p=>p._manual),
-    'historical': DB.historical,
-  };
   clearTimeout(_cloudTimer);
-  _cloudTimer = setTimeout(flushCloudQueue, 2000);
-}
+  _cloudTimer = setTimeout(() => {
+    const compressed = compressRoster(rosterData);
+    const status = document.getElementById('cloud-status');
 
-function flushCloudQueue() {
-  if (!APPS_SCRIPT_URL || !Object.keys(_cloudQueue).length) return;
-  const entries = Object.entries(_cloudQueue);
-  _cloudQueue = {};
-  entries.forEach(([key, value], i) => {
-    setTimeout(() => cloudSaveOne(key, value), i * 500);
-  });
-}
+    // Save roster (compressed) — split staff/extra and equip/rentals if needed
+    const rosterForCloud = {
+      staff:     compressed.staff,
+      extra:     compressed.extra,
+      equip:     compressed.equip,
+      rentals:   compressed.rentals,
+      extraList: compressed.extraList,
+      staffList: compressed.staffList,
+    };
 
-function cloudSaveOne(key, value) {
-  const body = JSON.stringify({action:'saveAppData', key, value});
-  fetch(APPS_SCRIPT_URL, {
-    method: 'POST', mode: 'no-cors',
-    headers: {'Content-Type':'text/plain;charset=utf-8'},
-    body: body,
-  }).catch(()=>{});
-  try {
-    const encoded = encodeURIComponent(body);
-    if (encoded.length < 7000) {
-      fetch(APPS_SCRIPT_URL + '?data=' + encoded)
-        .then(r=>r.json()).then(r=>{ if(r.ok) console.log('Cloud saved:',key); })
-        .catch(()=>{});
+    if(status) status.textContent = '⏳ Saving...';
+
+    let saved = 0, total = 0;
+    const done = (ok) => {
+      saved++;
+      if(saved >= total) {
+        if(status) {
+          const t = new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'});
+          status.textContent = '☁️ Saved ' + t;
+        }
+      }
+    };
+
+    // Save roster
+    total++;
+    cloudSaveJSONP('roster', rosterForCloud, done);
+
+    // Save orders
+    if((DB.openOrders||[]).length) {
+      total++;
+      setTimeout(() => cloudSaveJSONP('orders', DB.openOrders, done), 600);
     }
-  } catch(e){}
+
+    // Save historical
+    if((DB.historical||[]).length) {
+      total++;
+      setTimeout(() => cloudSaveJSONP('historical', DB.historical, done), 1200);
+    }
+
+  }, 2500); // 2.5s debounce
 }
 
 async function forceSaveToCloud() {
   const rosterData = buildRosterData();
-  _cloudQueue = {
-    'roster':     rosterData,
-    'orders':     DB.openOrders||[],
-    'manual':     DB.projects.filter(p=>p._manual),
-    'historical': DB.historical,
-  };
-  flushCloudQueue();
-  setTimeout(()=>toast('✓ Saved to cloud'), 2500);
+  const status = document.getElementById('cloud-status');
+  if(status) status.textContent = '⏳ Force saving...';
+  const compressed = compressRoster(rosterData);
+  cloudSaveJSONP('roster', compressed, (ok) => {
+    if(status) status.textContent = ok ? '☁️ Saved ✓' : '✗ Save failed';
+    setTimeout(() => { if(status && status.textContent.includes('Saved')) status.textContent = '☁️ Synced'; }, 3000);
+  });
+  setTimeout(() => cloudSaveJSONP('orders', DB.openOrders||[], ()=>{}), 600);
+  setTimeout(() => cloudSaveJSONP('historical', DB.historical||[], ()=>{}), 1200);
+  toast('Saving to cloud...');
 }
 
 function buildRosterData() {
@@ -2806,21 +2929,61 @@ function applyRosterData(rd) {
 
 async function loadFromCloud() {
   if (!APPS_SCRIPT_URL) return;
-  try {
-    const url = APPS_SCRIPT_URL + '?data=' + encodeURIComponent(JSON.stringify({action:'loadAppData'}));
-    const res = await fetch(url);
-    const json = await res.json();
-    if (!json.ok || !json.data) return;
-    const d = json.data;
-    let changed = false;
-    if (d.roster) { applyRosterData(d.roster); localStorage.setItem('zlc_roster',JSON.stringify(d.roster)); changed=true; }
-    if (d.orders) { DB.openOrders=d.orders; localStorage.setItem('zlc_orders',JSON.stringify(d.orders)); changed=true; }
-    if (d.historical) { DB.historical=d.historical; localStorage.setItem('zlc_historical',JSON.stringify(d.historical)); changed=true; }
-    if (d.manual&&d.manual.length) { d.manual.forEach(p=>{if(!DB.projects.find(x=>x.id===p.id))DB.projects.push(p);}); changed=true; }
-    if (changed) { renderRoster(); renderAnalytics(); renderProjTable(); renderOverview(); toast('✓ Data synced from cloud'); }
-    console.log('Cloud load complete');
-  } catch(e) { console.warn('Cloud load failed:', e.message); }
+  const status = document.getElementById('cloud-status');
+  if(status) status.textContent = '⏳ Loading...';
+
+  const cbName = '_zlcLoad_' + Date.now();
+  const scriptId = '_zlcLoadScript';
+  const old = document.getElementById(scriptId); if(old) old.remove();
+
+  window[cbName] = function(json) {
+    delete window[cbName];
+    const el = document.getElementById(scriptId); if(el) el.remove();
+    try {
+      if (!json || !json.ok || !json.data) {
+        if(status) status.textContent = '☁️ No cloud data yet';
+        console.log('Cloud load: no data');
+        return;
+      }
+      const d = json.data;
+      let changed = false;
+      if (d.roster)    { applyRosterData(d.roster); localStorage.setItem('zlc_roster', JSON.stringify(d.roster)); changed=true; }
+      if (d.orders)    { DB.openOrders=d.orders; localStorage.setItem('zlc_orders', JSON.stringify(d.orders)); changed=true; }
+      if (d.historical){ DB.historical=d.historical; localStorage.setItem('zlc_historical', JSON.stringify(d.historical)); changed=true; }
+      if (d.manual && d.manual.length) { d.manual.forEach(p=>{if(!DB.projects.find(x=>x.id===p.id))DB.projects.push(p);}); changed=true; }
+      const t = new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'});
+      if(status) status.textContent = changed ? '☁️ Synced ' + t : '☁️ Up to date';
+      if(changed) { renderRoster(); renderAnalytics(); renderProjTable(); renderOverview(); }
+      console.log('✓ Cloud load complete, changed:', changed);
+    } catch(e) {
+      console.warn('Cloud load parse error:', e.message);
+      if(status) status.textContent = '✗ Cloud error';
+    }
+  };
+
+  const payload = JSON.stringify({action:'loadAppData'});
+  const url = APPS_SCRIPT_URL + '?callback=' + cbName + '&data=' + encodeURIComponent(payload);
+  const script = document.createElement('script');
+  script.id = scriptId;
+  script.src = url;
+  script.onerror = function() {
+    delete window[cbName]; script.remove();
+    console.warn('Cloud load: script error (Apps Script unreachable)');
+    if(status) status.textContent = '✗ Cloud offline';
+  };
+  document.head.appendChild(script);
+
+  // Timeout after 15s
+  setTimeout(() => {
+    if(window[cbName]) {
+      delete window[cbName];
+      const el = document.getElementById(scriptId); if(el) el.remove();
+      if(status && status.textContent.includes('Loading')) status.textContent = '✗ Cloud timeout';
+      console.warn('Cloud load: timeout');
+    }
+  }, 15000);
 }
+
 
 function saveLocal() {
   try {
