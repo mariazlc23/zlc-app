@@ -141,9 +141,8 @@
   .rt th { background: var(--bg2); padding: 6px 5px; border: 0.5px solid var(--border); color: var(--text2); font-weight: 600; font-size: 10px; white-space: nowrap; text-align: center; min-width: 30px; text-transform: uppercase; letter-spacing: .04em; }
   .rt th.ic { text-align: left; padding: 6px 10px; min-width: auto; }
   .rt td { border: 0.5px solid var(--border); padding: 0; vertical-align: middle; }
-  .rt td.ic { padding: 6px 10px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 140px; }
-  /* Day view note cells — allow full text, no clipping */
-  .rt td.ic.day-note { white-space: normal; overflow: visible; text-overflow: unset; max-width: none; min-width: 180px; }
+  .rt td.ic { padding: 5px 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 110px; }
+  .rt td.ic:nth-child(2) { white-space: normal; word-break: break-word; vertical-align: top; max-width: 70px; }
   .trs td { background: var(--bg2); padding: 5px 10px; font-size: 10px; font-weight: 700; color: var(--text2); text-transform: uppercase; letter-spacing: .07em; border: 0.5px solid var(--border); }
   .day-cell { width: 30px; min-width: 30px; height: 28px; cursor: pointer; text-align: center; }
   .day-cell:hover { outline: 2px solid var(--blue); z-index: 1; position: relative; }
@@ -230,29 +229,20 @@
       height: auto !important; overflow: visible !important; padding: 0 !important; }
     .roster-wrap { overflow: visible !important; max-height: none !important; }
     #pdf-print-header { display: block !important; margin-bottom: 12px; }
-
-    /* Portrait A4 */
-    @page { margin: 10mm; size: A4 portrait; }
-
-    /* Table layout for portrait */
     .rt { font-size: 10px !important; width: 100% !important; border-collapse: collapse !important; table-layout: fixed; }
-    .rt th, .rt td { padding: 5px 6px !important; border: 0.5px solid #ddd !important; word-wrap: break-word; overflow-wrap: break-word; }
-    .rt td.ic, .rt td.day-note { white-space: normal !important; overflow: visible !important;
-      text-overflow: unset !important; max-width: none !important; }
-
-    /* Column widths for portrait day view */
-    .rt th:nth-child(1), .rt td:nth-child(1) { width: 15% !important; }  /* Nombre */
-    .rt th:nth-child(2), .rt td:nth-child(2) { width: 22% !important; }  /* Trabajo */
-    .rt th:nth-child(3), .rt td:nth-child(3) { width: 40% !important; }  /* Detalles */
-    .rt th:nth-child(4), .rt td:nth-child(4) { width: 23% !important; }  /* Warehouse */
-
-    .trs td { font-size: 9px !important; background: #f0f0f0 !important; font-weight: 700 !important; }
-    .badge { font-size: 8px !important; padding: 1px 4px !important; }
-    /* Section header spans full width */
-    .trs td[colspan] { padding: 4px 6px !important; }
-
-    /* Print header */
-    #pdf-print-header { font-size: 11px; }
+    .rt th, .rt td { word-wrap: break-word; overflow-wrap: break-word; }
+    .rt td.ic { white-space: normal !important; overflow: visible !important; max-width: none !important; }
+    .rt th, .rt td { padding: 4px 6px !important; border: 0.5px solid #ddd !important; }
+    .trs td { font-size: 10px !important; background: #f5f5f5 !important; }
+    .day-cell { min-width: 22px !important; }
+    .day-block { font-size: 8px !important; }
+    .ic { min-width: 80px !important; }
+    @page { margin: 10mm; size: A4 portrait; }
+    /* Day view column widths for portrait */
+    .rt th:nth-child(1), .rt td:nth-child(1) { width: 15% !important; }
+    .rt th:nth-child(2), .rt td:nth-child(2) { width: 22% !important; }
+    .rt th:nth-child(3), .rt td:nth-child(3) { width: 40% !important; }
+    .rt th:nth-child(4), .rt td:nth-child(4) { width: 23% !important; }
   }
   #pdf-print-header { display: none; }
 
@@ -284,8 +274,7 @@
   </div>
   <div style="flex:1"></div>
   <div style="padding:12px 16px;border-top:0.5px solid var(--border)">
-    <button id="sync-badge" onclick="syncFromSheets()" style="width:100%;font-size:11px;font-weight:600;padding:7px 12px;border-radius:var(--radius);border:0.5px solid var(--border2);cursor:pointer;transition:all .15s;background:#f0eeea;color:#9e9c97">↻ Sync from Sheets</button>
-    <button onclick="forceSaveToCloud()" title="Save all data to cloud so any device can access it" style="width:100%;margin-top:6px;font-size:11px;font-weight:600;padding:6px 12px;border-radius:var(--radius);border:0.5px solid #185FA5;cursor:pointer;background:#E8F0FE;color:#185FA5">☁ Save to cloud</button>
+    <button id="sync-badge" onclick="syncFromSheets()" style="width:100%;font-size:11px;font-weight:600;padding:7px 12px;border-radius:var(--radius);border:0.5px solid var(--border2);cursor:pointer;transition:all .15s;background:#f0eeea;color:#9e9c97">Sync from Sheets</button>
     <button onclick="testWrite()" style="width:100%;margin-top:6px;font-size:11px;font-weight:600;padding:6px 12px;border-radius:var(--radius);border:0.5px solid var(--border2);cursor:pointer;background:#EAF3DE;color:#27500A">Test Sheet write</button>
     <div id="write-log" style="font-size:10px;color:var(--text3);margin-top:6px;word-break:break-all;line-height:1.4"></div>
     <div style="font-size:10px;color:var(--text3);text-align:center;margin-top:6px">ZLC Project Manager v1.1</div>
@@ -301,7 +290,6 @@
   <div class="dash-tabs">
     <button class="dtab active" onclick="goDash('analytics',this)">Historical analytics</button>
     <button class="dtab" onclick="goDash('overview',this)">Overview</button>
-    <button class="dtab" onclick="goDash('warehouse',this)">Warehouse</button>
   </div>
   <div id="dash-overview" style="display:none">
     <div class="card" style="margin-bottom:16px">
@@ -318,7 +306,7 @@
           <span class="card-title">Change orders</span>
           <div style="display:flex;gap:4px">
             <button class="btn btn-sm btn-ghost" id="co-filter-all" onclick="setCOFilter('all',this)" style="font-size:10px;padding:2px 7px">All</button>
-            <button class="btn btn-sm" id="co-filter-pending" onclick="setCOFilter('pending',this)" style="font-size:10px;padding:2px 7px;background:var(--amber-light);color:var(--amber)">Pending</button>
+            <button class="btn btn-sm" id="co-filter-pending" onclick="setCOFilter('pending',this)" style="font-size:10px;padding:2px 7px;background:var(--blue);color:#fff">Pending</button>
             <button class="btn btn-sm btn-ghost" id="co-filter-done" onclick="setCOFilter('done',this)" style="font-size:10px;padding:2px 7px">Done</button>
           </div>
         </div>
@@ -334,27 +322,6 @@
         <th style="width:65px">Month</th><th style="width:72px">Status</th>
       </tr></thead><tbody id="dash-tbody"></tbody></table></div>
     </div>
-  </div>
-  <div id="dash-warehouse" style="display:none">
-    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:20px">
-      <div>
-        <div style="font-size:18px;font-weight:700;color:var(--text)">📦 Warehouse Dashboard</div>
-        <div style="font-size:12px;color:var(--text2);margin-top:2px" id="wh-subtitle">Loading from ZLC Outlook…</div>
-      </div>
-      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
-        <div style="position:relative">
-          <input id="wh-search" type="text" placeholder="Search..." oninput="filterWarehouse()"
-            style="font-size:12px;padding:5px 10px 5px 28px;border-radius:var(--radius);border:0.5px solid var(--border2);background:var(--bg);color:var(--text);width:160px">
-          <span style="position:absolute;left:8px;top:50%;transform:translateY(-50%);color:var(--text3);font-size:11px">🔍</span>
-        </div>
-        <select id="wh-view" onchange="filterWarehouse()" style="font-size:12px;padding:5px 8px;border-radius:var(--radius);border:0.5px solid var(--border2);background:var(--bg);color:var(--text)">
-          <option value="sections">By section</option>
-          <option value="table">Table view</option>
-        </select>
-        <button class="btn btn-sm btn-ghost" onclick="syncWarehouse()" style="white-space:nowrap">↻ Refresh</button>
-      </div>
-    </div>
-    <div id="wh-dash-content"><div class="empty">Loading…</div></div>
   </div>
   <div id="dash-analytics">
     <div style="display:flex;justify-content:flex-end;margin-bottom:14px">
@@ -387,12 +354,6 @@
         <button class="ft" onclick="setStatusFilter('Pending',this)">Pending</button>
         <button class="ft" onclick="setStatusFilter('Complete',this)">Complete</button>
         <button class="ft" onclick="setStatusFilter('Canceled',this)">Canceled</button>
-      </div>
-      <div style="position:relative;margin-bottom:8px">
-        <input id="proj-search" type="text" placeholder="Search by number or name..."
-          oninput="filterProjTable()"
-          style="font-size:13px;padding:6px 12px 6px 32px;border-radius:var(--radius);border:0.5px solid var(--border2);background:var(--bg);color:var(--text);width:260px">
-        <span style="position:absolute;left:10px;top:50%;transform:translateY(-50%);color:var(--text3);font-size:13px">🔍</span>
       </div>
       <span id="proj-count" style="font-size:12px;color:var(--text2)"></span>
     </div>
@@ -436,8 +397,10 @@
         <button class="btn btn-sm btn-ghost" onclick="setRosterProjFilter('');document.getElementById('roster-proj-filter').value=''" style="font-size:11px;padding:3px 8px">✕ Clear</button>
       </div>
       <div style="display:flex;align-items:center;gap:8px">
-        <label style="font-size:12px;color:var(--text2);white-space:nowrap;margin:0">Filter by date:</label>
-        <input id="roster-day-filter" type="date" onchange="setRosterDayFilter(this.value)" style="font-size:12px;padding:4px 8px;border-radius:var(--radius);border:0.5px solid var(--border2);background:var(--bg);color:var(--text);min-width:150px">
+        <label style="font-size:12px;color:var(--text2);white-space:nowrap;margin:0">Day view:</label>
+        <select id="roster-day-filter" onchange="setRosterDayFilter(this.value)" style="font-size:12px;padding:4px 8px;border-radius:var(--radius);border:0.5px solid var(--border2);background:var(--bg);color:var(--text);min-width:120px">
+          <option value="">— All days —</option>
+        </select>
         <button class="btn btn-sm btn-ghost" onclick="setRosterDayFilter('');document.getElementById('roster-day-filter').value=''" style="font-size:11px;padding:3px 8px">✕ Clear</button>
         <button class="btn btn-sm" onclick="downloadDayPDF()" id="pdf-btn" style="font-size:11px;padding:4px 10px;background:#E24B4A;color:#fff;border:none;border-radius:var(--radius);cursor:pointer;display:none">⬇ Download PDF</button>
       </div>
@@ -476,7 +439,7 @@ const CAT_COLORS={staff:'#185FA5',extra:'#BA7517',equip:'#3B6D11',rental:'#88878
 const SHEET_ID  = '1Y35oa2ebgCisj3PzVs2dTMUN5dY2Hhci4RIt55Kn44Y';
 const API_KEY   = 'AIzaSyCCuKyfurmT2w-L2dn6-XbvupaOmlHufUE';
 // Paste your Apps Script URL below after following setup instructions:
-let APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbykDsi5ymL1xemZKAMNmpdt3Usr8PwkNMTFxqLhdlXa9rV0Twx1hBzgBosDqlSLQvtj/exec';
+let APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbx0sk-p5eqKmmUC85CVIM7gRTPIwahR9YswIMv0tuRvaBIF_nN32xNtQWPdV_yIK2DYSw/exec';
 
 const GIDS = {
   projects: '1735667570',
@@ -692,15 +655,13 @@ function computeCOYearTotals(rows) {
 // CO tab columns vary — we'll read headers to be safe
 function parseCORows(rows) {
   if (rows.length < 2) return {};
-  // Hardcoded columns based on actual sheet structure:
-  // A(0)=EMAIL  B(1)=NAME  C(2)=JOB#  D(3)=CO#/WO#  E(4)=Project name
-  // F(5)=Description  G(6)=AMOUNT  H(7)=STATUS  I(8)=WORK  J(9)=FOLLOW UP DATE
-  const byProject = {};
-  // Also store ALL COs flat for dashboard
+  // Hardcoded columns: A(0)=EMAIL B(1)=NAME C(2)=JOB# D(3)=CO#/WO# E(4)=Project name
+  // F(5)=Description G(6)=AMOUNT H(7)=STATUS I(8)=WORK J(9)=FOLLOW UP DATE
   DB.allSheetCOs = [];
+  const byProject = {};
   for (let i = 1; i < rows.length; i++) {
     const r = rows[i];
-    if (!r || !r[2]) continue; // skip if no job#
+    if (!r || !r[2]) continue;
     const jobRaw = String(r[2]||'').trim();
     const pidMatch = jobRaw.match(/(\d{2}-\d{3,4})/);
     const pid = pidMatch ? pidMatch[1] : jobRaw;
@@ -709,7 +670,7 @@ function parseCORows(rows) {
     const rawVal = String(r[6]||'').replace(/[$,\s]/g,'');
     const value  = parseFloat(rawVal) || 0;
     const status = String(r[7]||'Pending').trim();
-    const work   = String(r[8]||'').trim(); // Done / Not done yet
+    const work   = String(r[8]||'').trim();
     const num    = String(r[3]||'').trim();
     const desc   = String(r[5]||'').trim();
     const projName = String(r[4]||'').trim();
@@ -718,11 +679,10 @@ function parseCORows(rows) {
     const date     = String(r[9]||'').trim();
     const co = { id:'co'+i, num, desc, value, status, work, code:'', date, projName, pmName, pmEmail, pid };
     byProject[pid].push(co);
-    DB.allSheetCOs.push({...co, pid, pname: projName});
+    DB.allSheetCOs.push({...co, pname: projName});
   }
   return byProject;
 }
-
 // ─── PARSE RFIs ───────────────────────────────────────────────────────────────
 function parseRFIRows(rows) {
   if (rows.length < 2) return {};
@@ -889,8 +849,8 @@ let DB = {
   projects: [], // populated from Sheets
   yearTotals: {}, // { year: total } from col J+I of projects tab
   coYearTotals: {}, // { year: total } from approved COs by approval date
-  openOrders: [], // { id, title, desc, priority, project, assignee, due, status, createdAt }
-  allSheetCOs: [], // flat list of all COs from sheet
+  openOrders: [],
+  allSheetCOs: [], // { id, title, desc, priority, project, assignee, due, status, createdAt }
   historical:[
     {year:2023,total:7430000,quarters:{Q1:1520000,Q2:2856932,Q3:1800000,Q4:1253068},codes:{'001':1200000,'002':980000,'003':850000,'004':1900000,'005':1600000,'006':900000}},
     {year:2024,total:5566348,quarters:{Q1:900000,Q2:1061022,Q3:1800000,Q4:1805326},codes:{'001':800000,'002':700000,'003':600000,'004':1500000,'005':1200000,'006':766348}},
@@ -917,8 +877,7 @@ let STAFF=[
   {id:'e14',name:'Hugo',team:'Lobos',certs:[],veh:'Needs attention',a:{},notes:{}},
   {id:'e15',name:'Joaquin',team:'Joaquin',certs:[],veh:'Needs attention',a:{},notes:{}},
   {id:'e16',name:'Hernan',team:'Warehouse',certs:[],veh:'',a:{},notes:{}},
-  {id:'e17',name:'Francisco #5',team:'Driver',certs:['CPR'],veh:'Good',a:{},notes:{},wh:{},multi:true},
-  {id:'e18',name:'Driver 2',team:'Driver',certs:[],veh:'Good',a:{},notes:{},wh:{},multi:true},
+  {id:'e17',name:'Francisco #5',team:'Driver',certs:['CPR'],veh:'Good',a:{},notes:{}},
 ];
 let EXTRA=[
   {id:'ew1',name:'Lazaro',project:'25-061',a:{},notes:{}},{id:'ew2',name:'Jose Ines',project:'25-103',a:{},notes:{}},
@@ -973,7 +932,7 @@ let calYear=2026, calMonth=3, calView='month';
 let annualChart=null, codeRowIdx=1;
 let assignSelected=new Set();
 let rosterProjFilter='';
-let rosterDayFilter=''; // '' = all dates, otherwise exact date in YYYY-MM-DD
+let rosterDayFilter=0; // 0 = all days, number = show only that day
 
 // ─── UTILS ──────────────────────────────────────────────────────────────────
 const fmt=v=>'$'+Math.round(v).toLocaleString();
@@ -996,25 +955,6 @@ function toast(m){const t=document.getElementById('toast');t.textContent=m;t.cla
 function pc(id){if(!id)return '';if(id==='OFF')return '#FCEBEB';return PROJ_COLORS[id]||(()=>{const h=Math.abs([...id].reduce((a,c)=>a*31+c.charCodeAt(0),0)%0xFFFFFF);return '#'+h.toString(16).padStart(6,'0');})();}
 function ptc(bg){if(!bg||bg==='')return '#666';const h=bg.replace('#','');const r=parseInt(h.slice(0,2),16),g=parseInt(h.slice(2,4),16),b=parseInt(h.slice(4,6),16);return(r*299+g*587+b*114)/1000>145?'#2C2C2A':'#F7F7F5';}
 
-function getRosterFilterDateParts(){
-  if(!rosterDayFilter) return null;
-  // rosterDayFilter is now stored as YYYY-M-D (normalized by setRosterDayFilter)
-  const parts = String(rosterDayFilter).split('-').map(Number);
-  if(parts.length!==3 || parts.some(n=>isNaN(n)||!n)) return null;
-  return { year: parts[0], month: parts[1], day: parts[2] };
-}
-function getRosterFilterKey(){
-  const parts = getRosterFilterDateParts();
-  return parts ? `${parts.year}-${parts.month}-${parts.day}` : '';
-}
-function formatRosterFilterLabel(){
-  const parts = getRosterFilterDateParts();
-  if(!parts) return '';
-  const date = new Date(parts.year, parts.month - 1, parts.day);
-  if(isNaN(date)) return '';
-  return date.toLocaleDateString('en-US',{weekday:'short', month:'short', day:'numeric', year:'numeric'});
-}
-
 // ─── NAV ────────────────────────────────────────────────────────────────────
 function goTab(n,b){
   document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
@@ -1030,361 +970,100 @@ function goDash(t,b){
   document.querySelectorAll('.dtab').forEach(x=>x.classList.remove('active'));b.classList.add('active');
   document.getElementById('dash-overview').style.display=t==='overview'?'block':'none';
   document.getElementById('dash-analytics').style.display=t==='analytics'?'block':'none';
-  document.getElementById('dash-warehouse').style.display=t==='warehouse'?'block':'none';
-  if(t==='overview')renderOverview();
-  else if(t==='analytics')renderAnalytics();
-  else if(t==='warehouse')syncWarehouse();
+  if(t==='overview')renderOverview();else renderAnalytics();
 }
 
 // ─── DASHBOARD OVERVIEW ──────────────────────────────────────────────────────
-let coDashFilter = 'pending'; // all | pending | done
-
-function setCOFilter(f, btn) {
-  coDashFilter = f;
-  document.querySelectorAll('#co-filter-all,#co-filter-pending,#co-filter-done').forEach(b=>{
-    b.style.background=''; b.style.color=''; b.classList.add('btn-ghost'); b.classList.remove('btn-primary');
-  });
-  if(btn){ btn.classList.remove('btn-ghost'); btn.style.background='var(--blue)'; btn.style.color='#fff'; }
-  renderCOList();
-}
-
-function renderCOList() {
-  const el = document.getElementById('dash-cos');
-  if(!el) return;
-  // Use real sheet COs (DB.allSheetCOs) — falls back to project-attached COs
-  const src = (DB.allSheetCOs && DB.allSheetCOs.length) ? DB.allSheetCOs
-    : DB.projects.flatMap(p=>p.cos.map(c=>({...c,pid:p.id,pname:p.name||p.id})));
-  let filtered;
-  const statusNorm = s => String(s||'').trim().toUpperCase();
-  if(coDashFilter==='pending')
-    filtered = src.filter(c=>statusNorm(c.status)==='PENDING'||statusNorm(c.status).includes('PEND'));
-  else if(coDashFilter==='done')
-    filtered = src.filter(c=>statusNorm(c.status)==='APPROVED'||statusNorm(c.status).includes('CANC'));
-  else filtered = [...src];
-  filtered.sort((a,b)=>String(a.pid||'').localeCompare(String(b.pid||'')));
-  if(!filtered.length){ el.innerHTML='<div class="empty">No COs found</div>'; return; }
-  el.innerHTML = filtered.map(c=>{
-    const st = String(c.status||'').trim();
-    const statusCls = /approv/i.test(st)?'b-green':/cancel/i.test(st)?'b-red':'b-amber';
-    const workDone  = /^done$/i.test(String(c.work||'').trim());
-    const workBadge = c.work
-      ? `<span class="badge ${workDone?'b-green':'b-red'}" style="font-size:9px;margin-left:4px">${c.work}</span>`
-      : '';
-    const pname = c.pname||c.projName||c.pid||'';
-    return`<div style="display:flex;justify-content:space-between;align-items:flex-start;padding:8px 0;border-bottom:0.5px solid var(--border);font-size:12px;gap:8px">
-      <div style="flex:1;min-width:0">
-        <div style="display:flex;align-items:center;gap:6px;margin-bottom:2px;flex-wrap:wrap">
-          <strong>${c.num||'—'}</strong>
-          <span style="color:var(--text3);font-size:10px">${c.pid} — ${pname}</span>
-          ${workBadge}
-        </div>
-        <div style="color:var(--text2);font-size:11px">${c.desc||''}</div>
-      </div>
-      <div style="text-align:right;flex-shrink:0">
-        ${c.value?`<strong>${fmt(c.value)}</strong>`:''}
-        <div style="margin-top:2px"><span class="badge ${statusCls}">${st}</span></div>
-      </div>
-    </div>`;
-  }).join('');
-}
-
 function renderOverview(){
   renderOrders();
   const active=DB.projects.filter(p=>p.status==='Active');
-  const allCOs=DB.projects.flatMap(p=>p.cos.map(c=>({...c,pid:p.id})));
-  const pendCOs=allCOs.filter(c=>c.status==='Pending');
-  const pendVal=pendCOs.reduce((a,c)=>a+c.value,0);
+  // Use allSheetCOs if available, fall back to project-attached
+  const src=(DB.allSheetCOs&&DB.allSheetCOs.length)?DB.allSheetCOs
+    :DB.projects.flatMap(p=>p.cos.map(c=>({...c,pid:p.id,pname:p.name})));
+  const pendCOs=src.filter(c=>/pend/i.test(c.status||''));
+  const pendVal=pendCOs.reduce((a,c)=>a+(c.value||0),0);
   const openRFIs=DB.projects.flatMap(p=>p.rfis.filter(r=>r.status==='Open').map(r=>({...r,pid:p.id,pname:p.name})));
   const openSubs=DB.projects.flatMap(p=>p.subs.filter(s=>s.status==='Under review'||s.status==='Pending review').map(s=>({...s,pid:p.id,pname:p.name})));
   const contracted=active.reduce((a,p)=>a+tv(p),0);
-  // 2026 base project value
+  // 2026 won = base project values + approved COs
   const projs2026=DB.projects.filter(p=>p.id.startsWith('26-'));
   const won2026base=projs2026.reduce((a,p)=>a+tv(p),0);
-  // Add approved COs for 2026 projects (from DB.allSheetCOs or project-attached COs)
-  const approvedCOs2026=(DB.allSheetCOs||[]).filter(c=>{
-    const pid=String(c.pid||c.projectId||'');
-    return pid.startsWith('26-') && /approv/i.test(String(c.status||''));
-  });
-  const approvedCOVal2026=approvedCOs2026.reduce((a,c)=>a+(parseFloat(c.value)||0),0);
-  // Also check project-attached COs
+  const approvedCOs2026=(DB.allSheetCOs||[]).filter(c=>c.pid&&c.pid.startsWith('26-')&&/approv/i.test(c.status||''));
+  const approvedCOVal2026=approvedCOs2026.reduce((a,c)=>a+(c.value||0),0);
   const projCOVal2026=projs2026.flatMap(p=>(p.cos||[]).filter(c=>/approv/i.test(c.status||'')).map(c=>c.value||0)).reduce((a,v)=>a+v,0);
-  const won2026=won2026base + approvedCOVal2026 + projCOVal2026;
-  const pendCOVal=pendCOs.reduce((a,c)=>a+(c.value||0),0);
+  const won2026=won2026base+approvedCOVal2026+projCOVal2026;
+  const coApprCount=approvedCOs2026.length+projs2026.flatMap(p=>(p.cos||[]).filter(c=>/approv/i.test(c.status||''))).length;
   document.getElementById('dash-metrics').innerHTML=`
     <div class="metric"><div class="metric-label">Active projects</div><div class="metric-value">${active.length}</div></div>
     <div class="metric"><div class="metric-label">Active contracted</div><div class="metric-value" style="font-size:18px">${fmt(contracted)}</div></div>
-    <div class="metric"><div class="metric-label">2026 won + approved COs</div><div class="metric-value" style="font-size:18px">${fmt(won2026)}</div><div class="metric-sub">${projs2026.length} projects · ${approvedCOs2026.length+projs2026.flatMap(p=>(p.cos||[]).filter(c=>/approv/i.test(c.status||''))).length} COs approved</div></div>
+    <div class="metric"><div class="metric-label">2026 won + COs</div><div class="metric-value" style="font-size:18px">${fmt(won2026)}</div><div class="metric-sub">${projs2026.length} projects · ${coApprCount} COs approved</div></div>
     <div class="metric"><div class="metric-label">Pending COs</div><div class="metric-value">${pendCOs.length}</div><div class="metric-sub">${fmt(pendVal)} in review</div></div>
     <div class="metric"><div class="metric-label">Open RFIs</div><div class="metric-value">${openRFIs.length}</div></div>
     <div class="metric"><div class="metric-label">Subs in review</div><div class="metric-value">${openSubs.length}</div></div>`;
-
-  // COs with filter
+  // CO list — all with filter buttons
   renderCOList();
-
-  // RFIs & Subs WITH project name
+  // RFIs & Subs with project name
   const items=[
-    ...openRFIs.map(r=>({t:'RFI', n:r.num, d:r.desc, pid:r.pid, pname:r.pname, cls:'b-blue'})),
-    ...openSubs.map(s=>({t:'SUB', n:s.num, d:s.material, pid:s.pid, pname:s.pname, cls:'b-amber'}))
+    ...openRFIs.map(r=>({t:'RFI',n:r.num,d:r.desc,pid:r.pid,pname:r.pname,cls:'b-blue'})),
+    ...openSubs.map(s=>({t:'SUB',n:s.num,d:s.material,pid:s.pid,pname:s.pname,cls:'b-amber'}))
   ];
   document.getElementById('dash-open').innerHTML=items.length?items.map(i=>`
     <div style="padding:8px 0;border-bottom:0.5px solid var(--border);font-size:12px">
       <div style="display:flex;align-items:center;gap:6px;margin-bottom:2px">
-        <span class="badge ${i.cls}">${i.t}</span>
-        <strong>${i.n}</strong>
+        <span class="badge ${i.cls}">${i.t}</span><strong>${i.n}</strong>
         <span style="font-size:10px;color:var(--text3)">${i.pid} — ${i.pname}</span>
       </div>
-      <div style="color:var(--text2);font-size:11px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${i.d}</div>
+      <div style="color:var(--text2);font-size:11px">${i.d}</div>
     </div>`).join(''):'<div class="empty">All clear</div>';
-
   document.getElementById('dash-tbody').innerHTML=active.map(p=>`
     <tr><td><strong>${p.id}</strong></td><td>${p.name}</td><td>${p.client}</td>
     <td>${fmt(bv(p))}</td><td><strong>${fmt(tv(p))}</strong></td>
     <td>${p.month}</td><td><span class="badge ${bc(p.status)}">${p.status}</span></td></tr>`).join('');
 }
 
-// ─── WAREHOUSE DASHBOARD ─────────────────────────────────────────────────────
-let whRawRows = [];
-const WH_DASHBOARD_GID = '280051356';
-
-async function syncWarehouse() {
-  const el = document.getElementById('wh-dash-content');
-  if(el) el.innerHTML = `<div style="display:flex;align-items:center;justify-content:center;padding:40px;gap:12px;color:var(--text2)"><span style="font-size:20px">⏳</span> Loading from sheet…</div>`;
-  const sub = document.getElementById('wh-subtitle');
-  if(sub) sub.textContent = 'Loading…';
-  try {
-    // Read 4 separate ranges from the warehouse dashboard sheet
-    const sheetName = await getSheetNameByGid(WH_DASHBOARD_GID);
-    if(!sheetName){ el.innerHTML='<div class="empty">Sheet not found (GID 280051356)</div>'; return; }
-
-    const [vehData, driverData, equip1Data, equip2Data] = await Promise.all([
-      fetchRange(`${sheetName}!A2:E14`),
-      fetchRange(`${sheetName}!A22:E35`),
-      fetchRange(`${sheetName}!G2:M13`),
-      fetchRange(`${sheetName}!G15:K65`),
-    ]);
-
-    if(sub) sub.textContent = 'Live from ZLC Outlook · ' + new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'});
-    renderWarehouseDash({ veh:vehData, driver:driverData, equip1:equip1Data, equip2:equip2Data });
-  } catch(e){
-    if(el) el.innerHTML=`<div class="empty">Error: ${e.message}</div>`;
-    console.error('syncWarehouse:', e);
-  }
-}
-
-// Get sheet name by GID by fetching spreadsheet metadata
-async function getSheetNameByGid(gid) {
-  try {
-    const url = `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}?key=${API_KEY}&fields=sheets.properties`;
-    const res = await fetch(url);
-    const data = await res.json();
-    const sheet = (data.sheets||[]).find(s=>String(s.properties.sheetId)===String(gid));
-    return sheet ? sheet.properties.title : null;
-  } catch(e){ return null; }
-}
-
-// Fetch a specific A1 notation range
-async function fetchRange(range) {
-  try {
-    const url = `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/${encodeURIComponent(range)}?key=${API_KEY}`;
-    const res = await fetch(url);
-    const data = await res.json();
-    return data.values || [];
-  } catch(e){ return []; }
-}
-
-function filterWarehouse() {
-  const q    = (document.getElementById('wh-search')?.value||'').toLowerCase().trim();
-  const view = document.getElementById('wh-view')?.value || 'sections';
-  // Re-render with filter
-  if(whRawRows && (whRawRows.veh||whRawRows.driver)) renderWarehouseDash(whRawRows, q);
-}
-
-function renderWarehouseDash(sections, q='') {
-  whRawRows = sections;
-  const el = document.getElementById('wh-dash-content');
-  if(!el) return;
-
-  const view = document.getElementById('wh-view')?.value || 'sections';
-
-  let h = '<div style="display:flex;flex-direction:column;gap:24px">';
-
-  // ── SECTION 1: Vehicles needing attention (A3:E14) ──────────────────────────
-  h += renderWhSection({
-    rows:     sections.veh||[],
-    title:    '🚗 Vehicles needing attention',
-    color:    '#E24B4A',
-    bgLight:  'rgba(226,75,74,0.06)',
-    q,
-    cardMode: true,
+// ─── CO LIST WITH FILTER ──────────────────────────────────────────────────────
+let coDashFilter='pending';
+function setCOFilter(f,btn){
+  coDashFilter=f;
+  document.querySelectorAll('#co-filter-all,#co-filter-pending,#co-filter-done').forEach(b=>{
+    b.style.background='';b.style.color='';b.classList.remove('btn-primary');
   });
-
-  // ── SECTION 2: Driver safety & oil log (A23:E35) ───────────────────────────
-  // Alert: col C (index 2) has a date that has already passed
-  h += renderWhSection({
-    rows:     sections.driver||[],
-    title:    '🧑‍✈️ Driver log — Safety check & oil',
-    color:    '#185FA5',
-    bgLight:  'rgba(24,95,165,0.06)',
-    q,
-    cardMode: false,
-    alertFn:  (row) => {
-      const v = String(row[2]||'').trim(); // Col C = index 2
-      if(!v) return false;
-      const d = new Date(v);
-      return !isNaN(d) && d < new Date();
-    },
-    alertCol: 2, // highlight col C specifically
-  });
-
-  // ── SECTION 3: Damaged equipment (G3:M13) ─────────────────────────────────
-  h += renderWhSection({
-    rows:     sections.equip1||[],
-    title:    '🔧 Damaged equipment',
-    color:    '#BA7517',
-    bgLight:  'rgba(186,117,23,0.06)',
-    q,
-    cardMode: true,
-  });
-
-  // ── SECTION 4: Equipment inventory (G16:K65) ──────────────────────────────
-  // Columns: G=Name, H=Status, I=Location, J=Operator, K=Last Update
-  // Alert: K (index 4) has a date older than 20 days
-  h += renderWhSection({
-    rows:     sections.equip2||[],
-    title:    '📦 Equipment inventory & status',
-    color:    '#3B6D11',
-    bgLight:  'rgba(59,109,17,0.06)',
-    q,
-    cardMode: false,
-    forcedHeaders: ['Equipment', 'Status', 'Location', 'Operator', 'Last Update'],
-    alertFn:  (row) => {
-      const v = String(row[4]||'').trim(); // Col K = index 4 = Last Update
-      if(!v) return false;
-      const d = new Date(v);
-      if(isNaN(d)) return false;
-      const daysDiff = (new Date() - d) / (1000 * 60 * 60 * 24);
-      return daysDiff > 20;
-    },
-    alertCol: 4, // highlight Last Update col
-    alertMsg: (row) => {
-      const v = String(row[4]||'').trim();
-      const d = new Date(v);
-      if(isNaN(d)) return v;
-      const days = Math.floor((new Date() - d) / (1000 * 60 * 60 * 24));
-      return `⚠ ${v} (${days}d ago)`;
-    },
-  });
-
-  h += '</div>';
-  el.innerHTML = h;
+  if(btn){btn.style.background='var(--blue)';btn.style.color='#fff';}
+  renderCOList();
+}
+function renderCOList(){
+  const el=document.getElementById('dash-cos');if(!el)return;
+  const src=(DB.allSheetCOs&&DB.allSheetCOs.length)?DB.allSheetCOs
+    :DB.projects.flatMap(p=>p.cos.map(c=>({...c,pid:p.id,pname:p.name||p.id})));
+  let filtered;
+  if(coDashFilter==='pending') filtered=src.filter(c=>/pend/i.test(c.status||''));
+  else if(coDashFilter==='done') filtered=src.filter(c=>/approv/i.test(c.status||'')||/canc/i.test(c.status||''));
+  else filtered=[...src];
+  filtered.sort((a,b)=>String(a.pid||'').localeCompare(String(b.pid||'')));
+  if(!filtered.length){el.innerHTML='<div class="empty">No COs found</div>';return;}
+  el.innerHTML=filtered.map(c=>{
+    const st=String(c.status||'').trim();
+    const cls=/approv/i.test(st)?'b-green':/canc/i.test(st)?'b-red':'b-amber';
+    const pname=c.pname||c.projName||c.pid||'';
+    const workDone=/^done$/i.test(String(c.work||'').trim());
+    const workBadge=c.work?`<span class="badge ${workDone?'b-green':'b-red'}" style="font-size:9px;margin-left:4px">${c.work}</span>`:'';
+    return`<div style="display:flex;justify-content:space-between;align-items:flex-start;padding:8px 0;border-bottom:0.5px solid var(--border);font-size:12px;gap:8px">
+      <div style="flex:1;min-width:0">
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:2px;flex-wrap:wrap">
+          <strong>${c.num||'—'}</strong>
+          <span style="color:var(--text3);font-size:10px">${c.pid} — ${pname}</span>${workBadge}
+        </div>
+        <div style="color:var(--text2);font-size:11px">${c.desc||''}</div>
+      </div>
+      <div style="text-align:right;flex-shrink:0">
+        ${c.value?`<strong>${fmt(c.value)}</strong>`:''}
+        <div style="margin-top:2px"><span class="badge ${cls}">${st}</span></div>
+      </div>
+    </div>`;
+  }).join('');
 }
 
-function renderWhSection({rows, title, color, bgLight, q, cardMode, alertFn, alertCol, alertMsg, forcedHeaders}) {
-  if(!rows.length) return '';
-
-  const headers = forcedHeaders || rows[0].map(h=>String(h||'').trim()).filter(Boolean);
-  const startIdx = forcedHeaders ? 0 : 1; // if forcedHeaders, no header row to skip
-  let data = rows.slice(startIdx).filter(r=>r.some(c=>String(c||'').trim()));
-  if(q) data = data.filter(r=>r.some(c=>String(c||'').toLowerCase().includes(q)));
-
-  const count = data.length;
-  let inner = '';
-
-  if(!data.length) {
-    inner = `<div style="padding:16px;text-align:center;color:var(--text3);font-size:13px">No data</div>`;
-  } else if(cardMode) {
-    // ── CARD LAYOUT ──────────────────────────────────────────────────────────
-    inner = `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px;padding:16px">`;
-    data.forEach(row=>{
-      const isAlert = alertFn ? alertFn(row) : false;
-      const cardTitle = String(row[0]||'').trim() || '—';
-      const fields = headers.slice(1).map((h,i)=>{
-        const v = String(row[i+1]||'').trim();
-        if(!v) return '';
-        const isAlertCell = alertFn && alertCol === i+1 && alertFn(row);
-        const vHtml = isAlertCell
-          ? `<span style="color:#E24B4A;font-weight:600">⚠ ${v}</span>`
-          : v;
-        return `<div style="display:flex;gap:6px;font-size:12px;padding:2px 0">
-          <span style="color:var(--text3);min-width:80px;font-size:11px;flex-shrink:0">${h}</span>
-          <span style="color:var(--text)">${vHtml}</span></div>`;
-      }).filter(Boolean).join('');
-
-      const borderColor = isAlert ? '#E24B4A' : color;
-      const cardBg = isAlert ? 'rgba(226,75,74,0.04)' : 'var(--bg)';
-      inner += `<div style="background:${cardBg};border:0.5px solid var(--border);border-top:3px solid ${borderColor};border-radius:8px;padding:12px">
-        <div style="font-size:13px;font-weight:600;color:${isAlert?'#E24B4A':'var(--text)'};margin-bottom:8px">
-          ${isAlert?'🚨':''} ${cardTitle}
-        </div>${fields}
-      </div>`;
-    });
-    inner += '</div>';
-
-  } else {
-    // ── TABLE LAYOUT ─────────────────────────────────────────────────────────
-    const alertColH = `<th style="width:24px;padding:6px 4px;border-bottom:2px solid ${color}"></th>`;
-    const thead = `<tr style="background:${bgLight}">${alertColH}${headers.map(h=>`<th style="font-size:11px;white-space:nowrap;padding:8px 10px;border-bottom:2px solid ${color}">${h}</th>`).join('')}</tr>`;
-
-    const tbody = data.map((row, ri)=>{
-      const isAlert = alertFn ? alertFn(row) : false;
-      const rowStyle = isAlert
-        ? 'background:rgba(226,75,74,0.08);border-left:3px solid #E24B4A'
-        : ri%2===0 ? 'background:var(--bg3)' : 'background:var(--bg)';
-
-      const cells = headers.map((h, i)=>{
-        let v = String(row[i]||'').trim();
-        if(!v) return `<td style="font-size:12px;padding:7px 10px;color:var(--text3)">—</td>`;
-
-        // This specific cell is the alert trigger
-        const isTriggerCell = alertFn && alertCol===i && alertFn(row);
-        // Status column coloring
-        const isStatusCol = h.toLowerCase().includes('status')||h.toLowerCase().includes('condition');
-        const isBad  = isStatusCol && /damage|broken|repair|down|fail|no/i.test(v);
-        const isGood = isStatusCol && /ok|good|working|pass|yes|available/i.test(v);
-
-        let vHtml;
-        if(isStatusCol) {
-          const cls = isBad?'b-red':isGood?'b-green':'b-amber';
-          vHtml = `<span class="badge ${cls}">${v}</span>`;
-        } else if(isTriggerCell) {
-          vHtml = `<span style="color:#E24B4A;font-weight:600">${alertMsg ? alertMsg(row) : '⚠ '+v}</span>`;
-        } else {
-          vHtml = v;
-        }
-        return `<td style="font-size:12px;padding:7px 10px">${vHtml}</td>`;
-      }).join('');
-
-      const alertCell = isAlert
-        ? `<td style="padding:6px 4px;text-align:center;font-size:13px">🚨</td>`
-        : `<td style="padding:6px 4px"></td>`;
-
-      return `<tr style="${rowStyle}">${alertCell}${cells}</tr>`;
-    }).join('');
-
-    inner = `<div class="tbl-wrap" style="padding:0">
-      <table><thead>${thead}</thead><tbody>${tbody}</tbody></table></div>`;
-  }
-
-  // Count alerts
-  const alertCount = alertFn ? data.filter(r=>alertFn(r)).length : 0;
-  const alertBadge = alertCount > 0
-    ? `<span style="font-size:11px;background:#E24B4A;color:#fff;padding:2px 8px;border-radius:99px;margin-left:8px">🚨 ${alertCount} alert${alertCount!==1?'s':''}</span>`
-    : '';
-
-  return `<div style="border:0.5px solid var(--border);border-radius:12px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.06)">
-    <div style="background:${color};color:#fff;padding:12px 16px;display:flex;align-items:center;justify-content:space-between">
-      <div style="font-size:14px;font-weight:700;display:flex;align-items:center">${title}${alertBadge}</div>
-      <span style="font-size:11px;background:rgba(255,255,255,0.2);padding:3px 10px;border-radius:99px">${count} item${count!==1?'s':''}</span>
-    </div>
-    ${inner}
-  </div>`;
-}
-
-// ─── PROJECT SEARCH FILTER ────────────────────────────────────────────────────
-function filterProjTable(){
-  const q=(document.getElementById('proj-search')?.value||'').toLowerCase().trim();
-  renderProjTable(q);
-}
+// ─── OPEN ORDERS ──────────────────────────────────────────────────────────────
 const PRI_ORDER = { High:0, Medium:1, Low:2 };
 const PRI_CLASS = { High:'pri-high', Medium:'pri-medium', Low:'pri-low' };
 const PRI_LABEL = { High:'🔴 High', Medium:'🟡 Medium', Low:'🔵 Low' };
@@ -1531,19 +1210,12 @@ function setStatusFilter(status, btn) {
   renderProjTable();
 }
 
-function renderProjTable(searchQ){
-  const q = (searchQ ?? (document.getElementById('proj-search')?.value||'')).toLowerCase().trim();
-  let filtered = projStatusFilter
+function renderProjTable(){
+  const filtered = projStatusFilter
     ? DB.projects.filter(p => p.status === projStatusFilter)
     : DB.projects;
-  if(q) filtered = filtered.filter(p =>
-    p.id.toLowerCase().includes(q) ||
-    p.name.toLowerCase().includes(q) ||
-    (p.client||'').toLowerCase().includes(q) ||
-    (p.pm||'').toLowerCase().includes(q)
-  );
   const count = document.getElementById('proj-count');
-  if(count) count.textContent = `${filtered.length} project${filtered.length!==1?'s':''}${q?' matching "'+q+'"':''}`;
+  if(count) count.textContent = `${filtered.length} project${filtered.length!==1?'s':''}`;
   document.getElementById('proj-tbody').innerHTML = filtered.map(p=>`
     <tr class="clickable${selProj===p.id?' selected':''}" onclick="selProject('${p.id}')">
       <td><strong>${p.id}</strong></td><td>${p.name}</td>
@@ -1612,11 +1284,10 @@ function renderDetail(){
         <button class="stab${subTab==='subs'?' active':''}" onclick="goSub('subs')">Submittals (${p.subs.length})</button>
         <button class="stab${subTab==='history'?' active':''}" onclick="goSub('history')">History</button>
       </div>
-      <div style="display:flex;gap:6px;padding-bottom:8px;flex-wrap:wrap">
+      <div style="display:flex;gap:6px;padding-bottom:8px">
         ${subTab==='cos'?`<button class="btn btn-sm" onclick="openModal('co','${p.id}')">+ CO</button>`:''}
         ${subTab==='rfis'?`<button class="btn btn-sm" onclick="openModal('rfi','${p.id}')">+ RFI</button>`:''}
         ${subTab==='subs'?`<button class="btn btn-sm" onclick="openModal('sub','${p.id}')">+ Submittal</button>`:''}
-        <button class="btn btn-sm btn-deny" onclick="deleteProject('${p.id}')">Delete project</button>
       </div>
     </div>
     <div id="sub-content">${renderSub(p,subTab)}</div>
@@ -1649,22 +1320,10 @@ function renderSub(p,tab){
     }).join('')+`<div style="display:flex;justify-content:space-between;padding:12px 0 4px;font-size:13px;font-weight:600"><span style="color:var(--text2)">Project total</span><span>${fmt(tv(p))}</span></div>`;
   }
   if(tab==='cos'){
-    // Merge project-attached COs with sheet COs for this project
-    const sheetCOs=(DB.allSheetCOs||[]).filter(c=>c.pid===p.id);
-    const attachedIds=new Set((p.cos||[]).map(c=>c.id));
-    const extraCOs=sheetCOs.filter(c=>!attachedIds.has(c.id));
-    const allProjCOs=[...(p.cos||[]),...extraCOs];
-    if(!allProjCOs.length)return'<div class="empty">No change orders yet.</div>';
-    const coRow=c=>{
-      const isPending=/pend/i.test(c.status||'');
-      const approveBtn=isPending
-        ?`<div style="display:flex;gap:4px"><button class="btn btn-sm btn-approve" onclick="approveCO('${p.id}','${c.id}')">✓ Approve</button><button class="btn btn-sm btn-deny" onclick="denyItem('${p.id}','${c.id}','co')">✕ Cancel</button></div>`
-        :`<span style="font-size:11px;color:var(--text3)">${c.status}</span>`;
-      const workBadge=c.work?`<span class="badge ${/done/i.test(c.work)?'b-green':'b-red'}" style="font-size:9px;margin-left:4px">${c.work}</span>`:'';
-      return`<tr><td><strong>${c.num||'—'}</strong></td><td>${c.desc||''}${workBadge}</td><td><span class="badge b-gray" style="font-size:10px">${c.code||'—'}</span></td><td>${fmt(c.value)}</td><td>${c.date||'—'}</td><td><span class="badge ${bc(c.status)}">${c.status}</span></td><td>${approveBtn}</td></tr>`;
-    };
-    return`<div class="tbl-wrap"><table><thead><tr><th style="width:62px">CO#</th><th>Description</th><th style="width:58px">Code</th><th style="width:82px">Value</th><th style="width:72px">Date</th><th style="width:78px">Status</th><th style="width:140px">Action</th></tr></thead>
-    <tbody>${allProjCOs.map(coRow).join('')}</tbody></table></div>`;
+    if(!p.cos.length)return'<div class="empty">No change orders yet.</div>';
+    return`<div class="tbl-wrap"><table><thead><tr><th style="width:62px">CO#</th><th>Description</th><th style="width:58px">Code</th><th style="width:82px">Value</th><th style="width:72px">Date</th><th style="width:78px">Status</th><th style="width:130px">Action</th></tr></thead>
+    <tbody>${p.cos.map(c=>`<tr><td><strong>${c.num}</strong></td><td>${c.desc}</td><td><span class="badge b-gray" style="font-size:10px">${c.code||'—'}</span></td><td>${fmt(c.value)}</td><td>${c.date}</td><td><span class="badge ${bc(c.status)}">${c.status}</span></td>
+    <td>${c.status==='Pending'?`<div style="display:flex;gap:4px"><button class="btn btn-sm btn-approve" onclick="approveCO('${p.id}','${c.id}')">Approve</button><button class="btn btn-sm btn-deny" onclick="denyItem('${p.id}','${c.id}','co')">Cancel</button></div>`:`<span style="font-size:11px;color:var(--text3)">${c.status}</span>`}</td></tr>`).join('')}</tbody></table></div>`;
   }
   if(tab==='rfis'){
     if(!p.rfis.length)return'<div class="empty">No RFIs yet.</div>';
@@ -1703,84 +1362,31 @@ function reopenProject(pid){
   toast(`${pid} reopened as Active`);
   renderProjTable();renderDetail();renderOverview();
 }
-function deleteProject(pid){
-  const p=DB.projects.find(x=>x.id===pid);if(!p)return;
-  const ok=confirm(`Are you sure you want to delete project ${pid} — ${p.name}?`);
-  if(!ok)return;
-
-  DB.projects=DB.projects.filter(x=>x.id!==pid);
-
-  if(selProj===pid){
-    selProj=null;
-    document.getElementById('proj-detail-area').innerHTML='';
-  }
-
-  saveLocal();
-  sheetWrite('deleteProject',{projectId:pid});
-  toast(`Project ${pid} deleted`);
-  renderProjTable();
-  renderOverview();
-  renderAnalytics();
-  if(document.getElementById('view-roster').classList.contains('active')) renderRoster();
-}
 function goSub(tab){subTab=tab;renderDetail();}
 function approveCO(pid,cid){
-  const p=DB.projects.find(x=>x.id===pid);
-  if(!p){toast('Project not found');return;}
-  // Find CO in project-attached list or in flat sheet list
+  const p=DB.projects.find(x=>x.id===pid);if(!p){toast('Project not found');return;}
   let co=p.cos.find(c=>c.id===cid);
   if(!co){
     co=(DB.allSheetCOs||[]).find(c=>c.id===cid&&c.pid===pid);
-    if(co){
-      // Attach to project for local state
-      if(!p.cos) p.cos=[];
-      p.cos.push(co);
-    }
+    if(co){if(!p.cos)p.cos=[];p.cos.push(co);}
   }
   if(!co){toast('CO not found');return;}
   co.status='Approved';
   co.approvalDate=todate();
-  if(!p.history) p.history=[];
-  p.history.push({date:todate(),text:`${co.num} APPROVED — ${co.desc} (+${fmt(co.value)})`,type:'approved'});
-  // Update in DB.allSheetCOs too
-  const sheetCO=(DB.allSheetCOs||[]).find(c=>c.id===cid);
-  if(sheetCO) sheetCO.status='Approved';
-  // Write to sheet
+  p.history.push({date:todate(),text:`${co.num} APPROVED — ${co.desc} (+${fmt(co.value)} · code ${co.code||'—'})`,type:'approved'});
+  // 1. Update CO status in CO sheet (col H)
   sheetWrite('updateCO',{projectId:pid,pm:p.pm||'',pmEmail:p.pmEmail||'',num:co.num,newStatus:'Approved',approvalDate:co.approvalDate});
+  // 2. Write approved CO value as new row in "Whole data Won/Approved" with approval date in col J
   const yr=new Date().getFullYear(),mo=new Date().getMonth()+1;
   sheetWrite('addApprovedCO',{
-    projectId:pid, projectName:p.name||co.projName||'', coNum:co.num, desc:co.desc,
+    projectId:pid, projectName:p.name, coNum:co.num, desc:co.desc,
     code:co.code||'', value:co.value, approvalDate:`${mo}/1/${yr}`,
   });
+  const sc=(DB.allSheetCOs||[]).find(c=>c.id===cid);if(sc)sc.status='Approved';
   saveLocal();
-  toast(`✓ ${co.num} approved — value added to 2026 total`);
+  toast('✓ '+co.num+' approved — value added to 2026 total');
   renderDetail();renderOverview();
 }
-// Inline editing of the Info column in roster
-function editInfoCell(id, type) {
-  const item = getItem(id, type);
-  if(!item) return;
-  const cur = item.note||'';
-  // Find the cell and replace with input
-  const cells = document.querySelectorAll(`[ondblclick="editInfoCell('${id}','${type}')"]`);
-  if(!cells.length) return;
-  const cell = cells[0];
-  cell.innerHTML = `<input id="info-inp-${id}" type="text" value="${cur.replace(/"/g,'&quot;')}"
-    style="width:100%;font-size:10px;padding:2px 3px;border:1.5px solid var(--blue);border-radius:3px;background:var(--bg);color:var(--text);outline:none"
-    onblur="saveInfoCell('${id}','${type}')"
-    onkeydown="if(event.key==='Enter')saveInfoCell('${id}','${type}');if(event.key==='Escape')renderRoster()">`;
-  setTimeout(()=>{ const inp=document.getElementById('info-inp-'+id); if(inp){inp.focus();inp.select();} },10);
-}
-function saveInfoCell(id, type) {
-  const item = getItem(id, type);
-  if(!item) return;
-  const inp = document.getElementById('info-inp-'+id);
-  if(!inp) return;
-  item.note = inp.value.trim();
-  saveLocal();
-  renderRoster();
-}
-
 function approveItem(pid,iid,type){
   const p=DB.projects.find(x=>x.id===pid),item=(type==='rfi'?p.rfis:p.subs).find(i=>i.id===iid);
   item.status=type==='rfi'?'Responded':'Approved';
@@ -1867,65 +1473,54 @@ function setCV(v,b){calView=v;document.querySelectorAll('.vt-btn').forEach(x=>x.
 function setSect(s,b){rosterSect=s;document.querySelectorAll('.ft').forEach(x=>x.classList.remove('active'));b.classList.add('active');renderRoster();}
 function setRosterProjFilter(pid){rosterProjFilter=pid;renderRoster();}
 function setRosterDayFilter(d){
-  // Normalize to YYYY-M-D format regardless of what browser sends
-  const raw=(d||'').trim();
-  if(raw){
-    // Parse directly from string to avoid timezone issues
-    // HTML date input always gives YYYY-MM-DD
-    const parts=raw.split(/[-\/]/).map(Number);
-    if(parts.length===3){
-      const [a,b,c]=parts;
-      // Detect YYYY-MM-DD vs MM/DD/YYYY
-      if(a>100){ rosterDayFilter=`${a}-${b}-${c}`; }      // YYYY-MM-DD
-      else      { rosterDayFilter=`${c}-${a}-${b}`; }      // MM/DD/YYYY → YYYY-M-D
-    } else {
-      rosterDayFilter=raw;
-    }
-  } else {
-    rosterDayFilter='';
-  }
-  // Sync calYear/calMonth to match the picked date
-  const parts=getRosterFilterDateParts();
-  if(parts){
-    calYear=parts.year;
-    calMonth=parts.month-1; // month is 0-indexed for JS Date
-  }
-  const input=document.getElementById('roster-day-filter');
-  if(input && input.value!==rosterDayFilter) input.value=rosterDayFilter;
+  rosterDayFilter=d?parseInt(d):0;
   const btn=document.getElementById('pdf-btn');
   if(btn) btn.style.display=rosterDayFilter?'block':'none';
   renderRoster();
 }
 
 function downloadDayPDF(){
-  if(!rosterDayFilter){ toast('Select a date first'); return; }
-  const dateStr = formatRosterFilterLabel();
+  if(!rosterDayFilter){ toast('Select a day first using the Day view filter'); return; }
+  const DL=['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+  const dw=dow(calYear,calMonth,rosterDayFilter);
+  const dateStr=`${DL[dw]}, ${MONTHS[calMonth]} ${rosterDayFilter}, ${calYear}`;
 
   // Build print header
   const hdr=document.getElementById('pdf-print-header');
   if(hdr){
     hdr.innerHTML=`
-      <div style="display:flex;justify-content:space-between;align-items:flex-end;border-bottom:2px solid #222;padding-bottom:6px;margin-bottom:10px">
+      <div style="display:flex;justify-content:space-between;align-items:flex-end;border-bottom:2px solid #222;padding-bottom:8px;margin-bottom:12px">
         <div>
-          <div style="font-size:22px;font-weight:700;color:#111">ZLC Corp — Daily Schedule</div>
-          <div style="font-size:13px;color:#555;margin-top:2px">${dateStr}</div>
+          <div style="font-size:20px;font-weight:700;color:#111">ZLC Corp — Daily Schedule</div>
+          <div style="font-size:14px;color:#555;margin-top:2px">${dateStr}</div>
         </div>
-        <div style="text-align:right">
-          <div style="font-size:10px;color:#888">ZLC — Project Manager</div>
-          <div style="font-size:10px;color:#888">Generated ${new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})}</div>
-        </div>
+        <div style="font-size:11px;color:#888">Generated ${new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})}</div>
       </div>`;
   }
 
+  // Make sure we're in day view mode before printing
+  const prevDay=rosterDayFilter;
+  if(!rosterDayFilter) setRosterDayFilter(new Date().getDate());
+
+  // Small delay so DOM updates, then print
   setTimeout(()=>{
     window.print();
   }, 150);
 }
 
 function populateRosterDayFilter(){
-  const input=document.getElementById('roster-day-filter');
-  if(!input)return;
-  input.value=rosterDayFilter||'';
+  const sel=document.getElementById('roster-day-filter');
+  if(!sel)return;
+  const cur=sel.value;
+  const dInM=dim(calYear,calMonth);
+  const DL=['Su','Mo','Tu','We','Th','Fr','Sa'];
+  let opts='<option value="">— All days —</option>';
+  for(let d=1;d<=dInM;d++){
+    const dw=dow(calYear,calMonth,d);
+    opts+=`<option value="${d}"${cur==d?' selected':''}>${d} ${DL[dw]} ${MONTHS[calMonth].slice(0,3)}</option>`;
+  }
+  sel.innerHTML=opts;
+  if(cur) sel.value=cur;
 }
 
 function populateRosterProjFilter(){
@@ -1934,7 +1529,7 @@ function populateRosterProjFilter(){
   const cur=sel.value;
   // Collect all project IDs that appear in any assignment
   const allItems=[...STAFF,...EXTRA,...EQUIP,...RENTALS];
-  const usedIds=new Set(allItems.flatMap(e=>Object.values(e.a||{}).flatMap(v=>String(v||'').split(',').map(x=>x.trim()))).filter(Boolean));
+  const usedIds=new Set(allItems.flatMap(e=>Object.values(e.a||{})).filter(Boolean));
   // Also include active projects
   DB.projects.filter(p=>p.status==='Active').forEach(p=>usedIds.add(p.id));
   usedIds.add('OFF');usedIds.add('Warehouse');
@@ -1960,8 +1555,7 @@ function ewWeekSummary(ew) {
   // Find current week bounds (Mon–Sun) relative to calYear/calMonth view
   const today = new Date();
   // Use the currently viewed month's "today" or actual today
-  const parts = getRosterFilterDateParts();
-  const refDate = parts ? new Date(parts.year, parts.month - 1, parts.day) : new Date(calYear, calMonth, today.getDate());
+  const refDate = new Date(calYear, calMonth, rosterDayFilter || today.getDate());
   const dayOfWeek = refDate.getDay(); // 0=Sun,1=Mon...6=Sat
   // Monday of this week
   const monday = new Date(refDate);
@@ -2008,25 +1602,34 @@ function renderRoster(){
   const days=getVisDays();
   const t=new Date(),todayD=t.getMonth()===calMonth&&t.getFullYear()===calYear?t.getDate():null;
   const show=s=>rosterSect==='all'||rosterSect===s;
-  const dayMode=!!rosterDayFilter;
+  const dayMode=rosterDayFilter>0;
 
-  const passFilter=item=>{
+  // Check if item has ANY assignment in the visible range
+  const hasAnyAssignment=item=>days.some(d=>{
+    const key=`${calYear}-${calMonth+1}-${d}`;
+    return !!(item.a?.[key]);
+  });
+  // Check if item matches the project filter in visible range
+  const matchesProjFilter=item=>days.some(d=>{
+    const key=`${calYear}-${calMonth+1}-${d}`;
+    const asgn=item.a?.[key]||'';
+    return asgn.split(',').map(x=>x.trim()).includes(rosterProjFilter);
+  });
+  const passFilter=(item,type)=>{
     if(dayMode){
-      // Day mode: show only people who have something assigned on this day
-      const key=getRosterFilterKey();
-      const asgn=String(item.a?.[key]||'').trim();
-      if(!asgn) return false; // hide unassigned (dayViewCells also returns null, double safety)
-      // If project filter is active, check if this person is on that project
-      if(rosterProjFilter){
-        return asgn.split(',').map(x=>x.trim()).includes(rosterProjFilter);
-      }
-      return true;
+      const key=`${calYear}-${calMonth+1}-${rosterDayFilter}`;
+      const asgn=item.a?.[key]||'';
+      if(!asgn)return false;
+      if(!rosterProjFilter)return true;
+      return asgn.split(',').map(x=>x.trim()).includes(rosterProjFilter);
     }
-    // Month mode with no project filter — show everyone
-    if(!rosterProjFilter) return true;
-    // Month mode with project filter — show only people assigned to that project
-    const checkAsgn=asgn=>String(asgn||'').split(',').map(x=>x.trim()).includes(rosterProjFilter);
-    return days.some(d=>checkAsgn(item.a?.[`${calYear}-${calMonth+1}-${d}`]||''));
+    // Month mode: equip & rentals — only show when assigned
+    if(type==='equip'||type==='rental'){
+      if(!hasAnyAssignment(item))return false;
+    }
+    // Project filter
+    if(rosterProjFilter)return matchesProjFilter(item);
+    return true;
   };
 
   // Build header
@@ -2035,11 +1638,11 @@ function renderRoster(){
     h+=`<th class="ic" style="min-width:140px">Nombre</th>`;
     h+=`<th class="ic" style="min-width:180px">Trabajo · Cost code</th>`;
     h+=`<th class="ic" style="min-width:220px">Detalles del día</th>`;
-    h+=`<th class="ic" style="min-width:180px;background:rgba(255,243,205,0.4)">📦 Warehouse</th>`;
+    h+=`<th class="ic" style="min-width:160px;background:rgba(255,243,205,0.4)">📦 Warehouse</th>`;
   } else {
-    h+=`<th class="ic" style="min-width:130px">Name / Unit</th>`;
-    h+=`<th class="ic" style="min-width:46px;max-width:56px;font-size:10px">Info</th>`;
-    days.forEach(d=>{const dw=dow(calYear,calMonth,d),wk=dw===0||dw===6;h+=`<th style="min-width:30px;${wk?'color:#c9a200':''}">${d}<br><span style="font-size:8px;font-weight:500">${DLBL[dw]}</span></th>`;});
+    h+=`<th class="ic" style="min-width:90px;max-width:110px">Name / Unit</th>`;
+    h+=`<th class="ic" style="min-width:40px;max-width:70px;font-size:10px">Notes</th>`;
+    days.forEach(d=>{const dw=dow(calYear,calMonth,d),wk=dw===0||dw===6;h+=`<th style="min-width:38px;${wk?'color:#c9a200':''}">${d}<br><span style="font-size:8px;font-weight:500">${DLBL[dw]}</span></th>`;});
   }
   h+=`</tr></thead><tbody>`;
 
@@ -2048,116 +1651,89 @@ function renderRoster(){
 
   // Cert badges helper
   const certBadges=item=>{
-    if(!item.certs)return item.note?`<span style="font-size:10px;color:var(--text2)">${item.note}</span>`:'';
     let b='';
-    if(item.certs.includes('H'))b+=`<span class="cert-badge cert-h">H</span>`;
-    if(item.certs.includes('RFT'))b+=`<span class="cert-badge cert-r">RFT</span>`;
-    if(item.certs.includes('EO'))b+=`<span class="cert-badge cert-e">EO</span>`;
-    if(item.certs.includes('SSO'))b+=`<span class="cert-badge cert-s">SSO</span>`;
-    if(item.certs.includes('CPR'))b+=`<span class="cert-badge cert-c">CPR</span>`;
+    if(item.certs){
+      if(item.certs.includes('H'))  b+=`<span class="cert-badge cert-h">H</span>`;
+      if(item.certs.includes('RFT'))b+=`<span class="cert-badge cert-r">RFT</span>`;
+      if(item.certs.includes('EO')) b+=`<span class="cert-badge cert-e">EO</span>`;
+      if(item.certs.includes('SSO'))b+=`<span class="cert-badge cert-s">SSO</span>`;
+      if(item.certs.includes('CPR'))b+=`<span class="cert-badge cert-c">CPR</span>`;
+    }
+    // Always show note text below badges
+    if(item.note) b+=`<div style="font-size:9px;color:var(--text2);margin-top:1px;line-height:1.2;white-space:normal;word-break:break-word">${item.note}</div>`;
     return b;
   };
 
-  // Single-day cells: trabajo+costcode | detalles | warehouse
-  // Returns 3 <td> elements — or null if no assignment and no note
+  // Single-day cells — 3 td: Trabajo+CostCode | Detalles | Warehouse
   const dayViewCells=item=>{
-    const key   = getRosterFilterKey();
-    const asgn  = item.a?.[key]||'';
-    const note  = item.notes?.[key]||'';
-    const wh    = item.wh?.[key]||'';
-    const cc    = item.cc?.[key]||'';
-    const conf  = item.confirmed?.[key]!==false;
-    if(!asgn && !note && !wh) return null;
-
-    // ── Col 1: Trabajo + cost code ────────────────────────────────────────────
-    let trabajoHtml = '';
-    if(asgn) {
+    const key=`${calYear}-${calMonth+1}-${rosterDayFilter}`;
+    const asgn=item.a?.[key]||'';
+    const note=item.notes?.[key]||'';
+    const wh=item.wh?.[key]||'';
+    const cc=item.cc?.[key]||'';
+    const conf=item.confirmed?.[key]!==false;
+    if(!asgn&&!note&&!wh)return null;
+    // Col 1: Trabajo + CostCode
+    let trabajoHtml='';
+    if(asgn){
       asgn.split(',').forEach(a=>{
-        const a2  = a.trim();
-        const isNEW = a2==='NEW';
-        const bg2 = isNEW?'#FFEBEE':pc(a2);
-        const tc2 = isNEW?'#C62828':bg2 ? ptc(bg2) : 'var(--text2)';
-        const proj= DB.projects.find(p=>p.id===a2);
-        const ccVal = (cc && asgn.split(',').length===1) ? cc : '';
-        const ccName= ccVal ? (CODES_MAP[ccVal]||ccVal) : '';
-        trabajoHtml += `<div style="margin-bottom:4px">
-          <span style="display:inline-block;padding:2px 9px;border-radius:99px;background:${bg2||'var(--bg3)'};color:${tc2};font-size:11px;font-weight:700;border:${!conf?'2px solid #E24B4A':'none'}">${isNEW?'🆕 New project':a2}${!conf?' ⚠️':''}</span>
-          ${proj?`<div style="font-size:10px;color:var(--text2);margin-top:1px;padding-left:2px">${proj.name}</div>`:''}
-          ${isNEW?'<div style="font-size:10px;color:#E24B4A;padding-left:2px">Pending number assignment</div>':''}
-          ${ccVal?`<div style="font-size:10px;color:var(--blue);font-weight:600;padding-left:2px">${ccVal} — ${ccName}</div>`:''}
-        </div>`;
+        const a2=a.trim();const isNEW=a2==='NEW';
+        const bg2=isNEW?'#FFEBEE':pc(a2);const tc2=isNEW?'#C62828':bg2?ptc(bg2):'var(--text2)';
+        const proj=DB.projects.find(p=>p.id===a2);
+        const ccVal=(cc&&asgn.split(',').length===1)?cc:'';
+        const ccName=ccVal?(CODES_MAP[ccVal]||ccVal):'';
+        trabajoHtml+='<div style="margin-bottom:4px">'
+          +'<span style="display:inline-block;padding:2px 9px;border-radius:99px;background:'+(bg2||'var(--bg3)')+';color:'+tc2+';font-size:11px;font-weight:700;border:'+(conf?'none':'2px solid #E24B4A')+'">'+(isNEW?'🆕 New':a2)+(conf?'':' ⚠️')+'</span>'
+          +(proj?'<div style="font-size:10px;color:var(--text2);margin-top:1px;padding-left:2px">'+proj.name+'</div>':'')
+          +(isNEW?'<div style="font-size:10px;color:#E24B4A;padding-left:2px">Pending number</div>':'')
+          +(ccVal?'<div style="font-size:10px;color:var(--blue);font-weight:600;padding-left:2px">'+ccVal+' — '+ccName+'</div>':'')
+          +'</div>';
       });
-    } else {
-      trabajoHtml = `<span style="color:var(--text3);font-size:11px">—</span>`;
-    }
-
-    // ── Col 2: Detalles — editable inline, only show if has note ───────────────
-    const noteId=`inline-note-${item.id}-${key.replace(/[^\w]/g,'')}`;
-    const detallesHtml = `<div>
-      <div id="${noteId}-disp" style="font-size:12px;color:var(--text);line-height:1.4;cursor:text;min-height:20px;border-radius:4px;padding:2px 4px"
-        ondblclick="startInlineNoteEdit('${item.id}','${key}','${type||'staff'}')" title="Double-click to edit">
-        ${note||'<span style=\'color:var(--text3);font-size:11px\'>double-click to add note</span>'}
-      </div>
-    </div>`;
-
-    // ── Col 3: Warehouse notes ─────────────────────────────────────────────────
-    const whHtml = wh
-      ? `<span style="font-size:12px;color:#7A5800;line-height:1.4">📦 ${wh}</span>`
-      : `<span style="color:var(--text3);font-size:11px"></span>`;
-
-    return `<td class="ic day-note" style="vertical-align:top;padding:8px 10px">${trabajoHtml}</td>`
-          +`<td class="ic day-note" style="vertical-align:top;padding:8px 10px">${detallesHtml}</td>`
-          +`<td class="ic day-note" style="vertical-align:top;padding:8px 10px;background:rgba(255,243,205,0.2)">${whHtml}</td>`;
+    } else { trabajoHtml='<span style="color:var(--text3);font-size:11px">—</span>'; }
+    // Col 2: Detalles (double-click to edit inline)
+    const safe=key.replace(/[^a-zA-Z0-9]/g,'_');
+    const dispId='inline-note-'+item.id+'-'+safe;
+    const type2=item.certs?'staff':item.veh?'equip':item.team?'staff':'extra';
+    const detallesHtml='<div id="'+dispId+'-disp" ondblclick="startInlineNoteEdit(\''+item.id+'\',\''+key+'\',\''+type2+'\')" title="Double-click to edit" style="font-size:12px;color:var(--text);line-height:1.4;cursor:text;min-height:20px;border-radius:4px;padding:2px 4px">'
+      +(note||'<span style=\'color:var(--text3);font-size:11px\'>dbl-click to add</span>')+'</div>';
+    // Col 3: Warehouse
+    const whHtml=wh?'<span style="font-size:12px;color:#7A5800;line-height:1.4">📦 '+wh+'</span>':'';
+    const tdStyle='vertical-align:top;padding:8px 10px;white-space:normal;overflow:visible;max-width:none;';
+    return`<td class="ic" style="${tdStyle}">${trabajoHtml}</td>`
+          +`<td class="ic" style="${tdStyle}">${detallesHtml}</td>`
+          +`<td class="ic" style="${tdStyle}background:rgba(255,243,205,0.2)">${whHtml}</td>`;
   };
 
-  // All-month cells — supports multi-project comma-separated values
+  // All-month cells
   const dayCells=(item,type)=>days.map(d=>{
-    const dw=dow(calYear,calMonth,d),wk=dw===0||dw===6,key=`${calYear}-${calMonth+1}-${d}`,asgn=item.a?.[key]||'',isT=d===todayD;
+    const dw=dow(calYear,calMonth,d),wk=dw===0||dw===6,key=`${calYear}-${calMonth+1}-${d}`,asgn=item.a?.[key]||'',bg=asgn?pc(asgn):'',isT=d===todayD,tc=bg?ptc(bg):'';
     const note=item.notes?.[key]||'';
-    const conf=item.confirmed?.[key]!==false; // true by default
-    const noteDot=note?`<span style="position:absolute;top:1px;right:1px;width:5px;height:5px;border-radius:50%;background:rgba(255,255,255,0.8);"></span>`:'';
-    const warnIcon=!conf&&asgn?`<span style="position:absolute;top:0;left:0;font-size:9px;line-height:1">⚠️</span>`:'';
-    // Multi: show stacked mini pills
-    if(asgn&&asgn.includes(',')){
-      const parts=asgn.split(',').map(x=>x.trim()).filter(Boolean);
-      const bg0=pc(parts[0])||'var(--bg3)';
-      const inner=parts.map((a)=>{
-        if(a==='NEW') return`<div style="font-size:7px;font-weight:700;color:#fff;background:#E24B4A;border-radius:2px;padding:1px 2px;line-height:1.2">🆕</div>`;
-        const bg=pc(a)||'var(--bg3)';const tc=ptc(bg);
-        return`<div style="font-size:7px;font-weight:700;color:${tc};background:${bg};border-radius:2px;padding:1px 2px;line-height:1.2">${a.split('-')[1]||a.slice(0,4)}</div>`;
-      }).join('');
-      return`<td class="day-cell${isT?' today-col':''}" style="position:relative;background:${bg0};${wk?'filter:brightness(0.97)':(conf?'':'outline:2px solid #E24B4A')}" onclick="clickCell('${item.id}','${key}','${d}','${type}')" title="${asgn+(note?' — '+note:'')}${!conf?' ⚠️ NOT CONFIRMED':''}"><div style="display:flex;flex-direction:column;gap:1px;align-items:center">${inner}</div>${noteDot}${warnIcon}</td>`;
-    }
-    const bg=asgn==='NEW'?'#FFEBEE':asgn?pc(asgn):'';
-    const tc=bg?ptc(bg):'';
     const titleText=asgn?(note?`${asgn} — ${note}`:asgn):'click to assign';
-    const dispLabel=asgn==='NEW'?'🆕':asgn==='OFF'?'OFF':asgn.split('-')[1]||asgn.slice(0,4);
+    const noteDot=note?`<span style="position:absolute;top:1px;right:1px;width:5px;height:5px;border-radius:50%;background:${tc||'#fff'};opacity:0.8;flex-shrink:0"></span>`:'';
+    const conf=item.confirmed?.[key]!==false;
+    const warnOverlay=!conf&&asgn?'<span style="position:absolute;top:0;left:0;font-size:8px;line-height:1">⚠️</span>':'';
+    const isNEW=asgn==='NEW';
+    const cellBg=isNEW?'#FFEBEE':bg;const cellTc=isNEW?'#C62828':tc;
+    const dispLabel=isNEW?'🆕':asgn==='OFF'?'OFF':asgn.split('-')[1]||asgn.slice(0,4);
     const cellBorder=!conf&&asgn?'outline:2px solid #E24B4A;':'';
-    return`<td class="day-cell${isT?' today-col':''}" style="position:relative;${bg?`background:${bg};`:''}${wk&&!bg?'background:rgba(0,0,0,0.02);':''}${cellBorder}" onclick="clickCell('${item.id}','${key}','${d}','${type}')" title="${titleText.replace(/"/g,'&quot;')}${!conf?' ⚠️ NOT CONFIRMED':''}">${asgn?`<div class="day-block" style="color:${asgn==='NEW'?'#C62828':tc}">${dispLabel}</div>`:''}${noteDot}${warnIcon}</td>`;
+    return`<td class="day-cell${isT?' today-col':''}" style="position:relative;${cellBg?`background:${cellBg};`:''}${wk&&!cellBg?'background:rgba(0,0,0,0.02);':''}${cellBorder}" onclick="clickCell('${item.id}','${key}','${d}','${type}')" title="${titleText.replace(/"/g,'&quot;')}${!conf?' ⚠️ NOT CONFIRMED':''}">${asgn?`<div class="day-block" style="color:${cellTc}">${dispLabel}</div>`:''}${noteDot}${warnOverlay}</td>`;
   }).join('');
 
   // Render a row — returns '' if day mode and no assignment/note
-  // dayViewRows collects {proj, html} for sorting in day mode
-  const dayViewRows=[];
   const row=(item,type,bgStyle='')=>{
     const info=certBadges(item);
     if(dayMode){
       const extra=dayViewCells(item);
       if(!extra)return '';
-      const key=getRosterFilterKey();
-      const asgn=item.a?.[key]||'';
-      const projKey=asgn.split(',')[0].trim()||'ZZZ'; // sort by first project
-      const rowHtml=`<tr style="${bgStyle}"><td class="ic day-note" style="vertical-align:top;padding:8px 10px;max-width:150px">${nameCell(item.id,type)}</td>${extra}</tr>`;
-      dayViewRows.push({proj:projKey, html:rowHtml});
-      return ''; // will be added sorted later
+      return`<tr style="${bgStyle}"><td class="ic">${nameCell(item.id,type)}</td><td class="ic">${info}</td>${extra}</tr>`;
     }
-    return`<tr style="${bgStyle}"><td class="ic">${nameCell(item.id,type)}</td><td class="ic" style="max-width:56px;font-size:10px;padding:3px 4px" ondblclick="editInfoCell('${item.id}','${type}')" title="Double-click to edit">${info}</td>${dayCells(item,type)}</tr>`;
+    return`<tr style="${bgStyle}"><td class="ic" style="max-width:110px">${nameCell(item.id,type)}</td><td class="ic" data-info-edit="${item.id}" style="max-width:70px;font-size:10px;padding:3px 4px;cursor:pointer;white-space:normal;word-break:break-word;vertical-align:top" ondblclick="editInfoCell('${item.id}','${type}')" title="Double-click to edit notes">${info}</td>${dayCells(item,type)}</tr>`;
   };
 
   if(show('staff')){
     const teams=[...new Set(STAFF.map(e=>e.team))];
     teams.forEach(team=>{
-      const members=STAFF.filter(e=>e.team===team&&passFilter(e));
+      const members=STAFF.filter(e=>e.team===team&&passFilter(e,'staff'));
       if(!members.length)return;
       const rows=members.map(e=>row(e,'staff')).filter(Boolean);
       if(!rows.length)return;
@@ -2166,10 +1742,10 @@ function renderRoster(){
     });
   }
   if(show('extra')){
-    const filtered=EXTRA.filter(e=>passFilter(e));
+    const filtered=EXTRA.filter(e=>passFilter(e,'extra'));
     if(filtered.length){
       const rows=filtered.map(ew=>{
-        if(dayMode){const extra=dayViewCells(ew);if(!extra)return '';return`<tr style="background:rgba(250,238,218,0.2)"><td class="ic day-note" style="vertical-align:top;padding:8px 10px;max-width:150px">${nameCell(ew.id,'extra')}</td>${extra}</tr>`;}
+        if(dayMode){const extra=dayViewCells(ew);if(!extra)return '';return`<tr style="background:rgba(250,238,218,0.2)"><td class="ic">${nameCell(ew.id,'extra')}</td><td class="ic">${ewWeekSummary(ew)}</td>${extra}</tr>`;}
         return`<tr style="background:rgba(250,238,218,0.2)"><td class="ic">${nameCell(ew.id,'extra')}</td><td class="ic">${ewWeekSummary(ew)}</td>${dayCells(ew,'extra')}</tr>`;
       }).filter(Boolean);
       if(rows.length){h+=mkSec(`Extra workers · ${filtered.length} people`,'#BA7517');h+=rows.join('');}
@@ -2178,7 +1754,7 @@ function renderRoster(){
   if(show('equip')){
     const cats=[...new Set(EQUIP.map(e=>e.cat))];
     cats.forEach(cat=>{
-      const items=EQUIP.filter(e=>e.cat===cat&&passFilter(e));
+      const items=EQUIP.filter(e=>e.cat===cat&&passFilter(e,'equip'));
       if(!items.length)return;
       const rows=items.map(eq=>row(eq,'equip','background:rgba(230,241,251,0.2)')).filter(Boolean);
       if(!rows.length)return;
@@ -2187,58 +1763,35 @@ function renderRoster(){
     });
   }
   if(show('rentals')){
-    const filtered=RENTALS.filter(e=>passFilter(e));
+    const filtered=RENTALS.filter(e=>passFilter(e,'rental'));
     if(filtered.length){
       const rows=filtered.map(r=>{
-        if(dayMode){const extra=dayViewCells(r);if(!extra)return '';return`<tr style="background:rgba(234,243,222,0.2)"><td class="ic day-note" style="vertical-align:top;padding:8px 10px;max-width:150px">${nameCell(r.id,'rental')}</td>${extra}</tr>`;}
+        if(dayMode){const extra=dayViewCells(r);if(!extra)return '';return`<tr style="background:rgba(234,243,222,0.2)"><td class="ic">${nameCell(r.id,'rental')}</td><td class="ic"></td>${extra}</tr>`;}
         return`<tr style="background:rgba(234,243,222,0.2)"><td class="ic">${nameCell(r.id,'rental')}</td><td class="ic"></td>${dayCells(r,'rental')}</tr>`;
       }).filter(Boolean);
       if(rows.length){h+=mkSec(`Rentals · ${filtered.length} items`,'#3B6D11');h+=rows.join('');}
     }
   }
-  // In day view, sort all collected rows by project name and append
-  if(dayMode && dayViewRows.length){
-    dayViewRows.sort((a,b)=>a.proj.localeCompare(b.proj));
-    // Group by project with section headers
-    let curProj='';
-    dayViewRows.forEach(r=>{
-      if(r.proj!==curProj){
-        curProj=r.proj;
-        const proj=DB.projects.find(p=>p.id===curProj);
-        const label=curProj==='ZZZ'?'Unassigned':(proj?`${proj.id} — ${proj.name}`:curProj);
-        const col=pc(curProj)||'#888';
-        h+=`<tr class="trs"><td colspan="4" style="border-left:3px solid ${col}">${label}</td></tr>`;
-      }
-      h+=r.html;
-    });
-  }
   h+='</tbody>';
   document.getElementById('roster-tbl').innerHTML=h;
   const usedAll=[...STAFF,...EXTRA,...EQUIP,...RENTALS].flatMap(e=>Object.values(e.a||{})).filter(Boolean);
   const uniq=[...new Set(usedAll)];
-  document.getElementById('roster-legend').innerHTML=uniq.map(p=>{
-    const proj=DB.projects.find(x=>x.id===p);
-    const lbl=proj?`${p} — ${proj.name}`:p;
-    return`<span class="li"><span class="lsq" style="background:${pc(p)}"></span>${lbl}</span>`;
-  }).join('')+(uniq.length?'<span class="li"><span class="lsq" style="background:#FCEBEB;border:0.5px solid #F09595"></span>OFF</span>':'')+
-    (dayMode?`<span style="font-size:11px;color:var(--text2);margin-left:8px">Showing: ${formatRosterFilterLabel()}</span>`:'');
+  document.getElementById('roster-legend').innerHTML=uniq.map(p=>`<span class="li"><span class="lsq" style="background:${pc(p)}"></span>${p}</span>`).join('')+
+    (uniq.length?'<span class="li"><span class="lsq" style="background:#FCEBEB;border:0.5px solid #F09595"></span>OFF</span>':'')+
+    (dayMode?`<span style="font-size:11px;color:var(--text2);margin-left:8px">Showing: ${DLBL[dow(calYear,calMonth,rosterDayFilter)]} ${rosterDayFilter} ${MONTHS[calMonth]}</span>`:'');
 }
 
 
 function clickCell(itemId,dateKey,day,type){
   const item=getItem(itemId,type);if(!item)return;
-  if(!item.a)item.a={};
-  if(!item.notes)item.notes={};
-  if(!item.wh)item.wh={};
-  if(!item.cc)item.cc={};
-  if(!item.co)item.co={};
-  if(!item.confirmed)item.confirmed={};
+  if(!item.a)item.a={};if(!item.notes)item.notes={};if(!item.wh)item.wh={};
+  if(!item.cc)item.cc={};if(!item.co)item.co={};if(!item.confirmed)item.confirmed={};
   const cur=item.a[dateKey]||'';
   const curNote=item.notes[dateKey]||'';
   const curWh=item.wh[dateKey]||'';
   const curCc=item.cc[dateKey]||'';
   const curCo=item.co[dateKey]||'';
-  const curConf=item.confirmed[dateKey]!==false; // default true
+  const curConf=item.confirmed[dateKey]!==false;
   const d=dateKey.split('-'),dl=`${day} ${MO[parseInt(d[1])-1]} ${d[0]}`;
   const activeProjs=DB.projects.filter(p=>p.status==='Active');
   const allProjs=[
@@ -2247,86 +1800,38 @@ function clickCell(itemId,dateKey,day,type){
     {id:'NEW', name:'🆕 New (no number yet)'},
     ...activeProjs.map(p=>({id:p.id, name:p.name}))
   ];
-
-  // Build cost code + CO options for a given project ID
-  function buildExtraFields(pid, selCc, selCo) {
-    const proj = DB.projects.find(p=>p.id===pid);
-    if(!proj || (pid==='OFF'||pid==='Warehouse'||!pid)) return '';
-    let html='';
-    // Cost codes
-    if(proj.codes && proj.codes.length) {
-      const ccOpts=`<option value="">— Select cost code —</option>`
-        +proj.codes.map(c=>`<option value="${c.code}"${selCc===c.code?' selected':''}>${c.code} — ${CODES_MAP[c.code]||c.code} (${fmt(c.value)})</option>`).join('');
-      html+=`<div class="fg" style="margin-bottom:8px">
-        <label style="font-size:11px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.05em">Cost code</label>
-        <select id="cp-cc" style="width:100%;font-size:13px;padding:6px 8px;border-radius:var(--radius);border:0.5px solid var(--border2);background:var(--bg);color:var(--text)">${ccOpts}</select>
-      </div>`;
+  const pOpts=`<option value="">— Unassigned —</option>`+allProjs.map(p=>`<option value="${p.id}"${cur===p.id?' selected':''}>${p.id==='NEW'?'🆕 New':p.id} — ${p.name}</option>`).join('');
+  // Build cost code + CO options
+  function buildExtraFields(pid,selCc,selCo){
+    const proj=DB.projects.find(p=>p.id===pid);
+    if(!proj||!pid||pid==='OFF'||pid==='Warehouse'||pid==='NEW') return '';
+    let h='';
+    if(proj.codes&&proj.codes.length){
+      const ccOpts=`<option value="">— Select cost code —</option>`+proj.codes.map(c=>`<option value="${c.code}"${selCc===c.code?' selected':''}>${c.code} — ${CODES_MAP[c.code]||c.code} (${fmt(c.value)})</option>`).join('');
+      h+=`<div class="fg" style="margin-bottom:8px"><label style="font-size:11px;font-weight:600;color:var(--text2);text-transform:uppercase">Cost code</label><select id="cp-cc" style="width:100%;font-size:13px;padding:6px 8px;border-radius:var(--radius);border:0.5px solid var(--border2);background:var(--bg);color:var(--text)">${ccOpts}</select></div>`;
     }
-    // COs — only pending or approved
-    const openCOs = (proj.cos||[]).filter(c=>c.status==='Pending'||c.status==='Approved');
-    if(openCOs.length) {
-      const coOpts=`<option value="">— No CO —</option>`
-        +openCOs.map(c=>`<option value="${c.id}"${selCo===c.id?' selected':''}>${c.num} — ${c.desc} (${fmt(c.value)}) [${c.status}]</option>`).join('');
-      html+=`<div class="fg" style="margin-bottom:0">
-        <label style="font-size:11px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.05em">Change order (CO)</label>
-        <select id="cp-co" style="width:100%;font-size:13px;padding:6px 8px;border-radius:var(--radius);border:0.5px solid var(--border2);background:var(--bg);color:var(--text)">${coOpts}</select>
-      </div>`;
+    const openCOs=(proj.cos||[]).filter(c=>c.status==='Pending'||c.status==='Approved');
+    if(openCOs.length){
+      const coOpts=`<option value="">— No CO —</option>`+openCOs.map(c=>`<option value="${c.id}"${selCo===c.id?' selected':''}>${c.num} — ${c.desc} (${fmt(c.value)}) [${c.status}]</option>`).join('');
+      h+=`<div class="fg" style="margin-bottom:0"><label style="font-size:11px;font-weight:600;color:var(--text2);text-transform:uppercase">Change order</label><select id="cp-co" style="width:100%;font-size:13px;padding:6px 8px;border-radius:var(--radius);border:0.5px solid var(--border2);background:var(--bg);color:var(--text)">${coOpts}</select></div>`;
     }
-    return html;
+    return h;
   }
-
-  // Multi-project mode for drivers
-  if(item.multi){
-    const selected=new Set(cur?cur.split(',').map(x=>x.trim()).filter(Boolean):[]);
-    const chkOpts=allProjs.map(p=>
-      `<label style="display:flex;align-items:center;gap:6px;padding:3px 0;font-size:12px;cursor:pointer">
-        <input type="checkbox" value="${p.id}" ${selected.has(p.id)?'checked':''} style="width:auto;accent-color:var(--blue)">
-        <strong>${p.id}</strong> — ${p.name}</label>`
-    ).join('');
-    showModal(`<div class="modal-title">Assign · ${item.name}</div>
-      <div style="font-size:12px;color:var(--text2);margin-bottom:12px">${dl}</div>
-      <div class="fg"><label>Projects for this day (select all that apply)</label>
-        <div style="max-height:220px;overflow-y:auto;border:0.5px solid var(--border2);border-radius:var(--radius);padding:8px">${chkOpts}</div>
-      </div>
-      <div class="fg"><label>Notes for this day</label>
-        <textarea id="cp-note" style="min-height:50px;width:100%;font-size:13px;padding:8px;border-radius:var(--radius);border:0.5px solid var(--border2);background:var(--bg);color:var(--text);font-family:inherit;resize:vertical">${curNote}</textarea></div>
-      <div class="fg" style="background:rgba(255,243,205,0.4);border:0.5px solid #F0C040;border-radius:var(--radius);padding:10px 12px;margin-bottom:0">
-        <label style="color:#7A5800;font-weight:600">📦 Warehouse notes</label>
-        <textarea id="cp-wh" placeholder="Materials, tools needed..." style="min-height:50px;width:100%;font-size:13px;padding:8px;border-radius:var(--radius);border:0.5px solid #F0C040;background:#FFFEF5;color:var(--text);font-family:inherit;resize:vertical;margin-top:6px">${curWh}</textarea>
-      </div>
-      <div class="form-actions">
-        ${cur?`<button class="btn btn-deny btn-sm" onclick="clearCell('${itemId}','${dateKey}','${type}')">Clear</button>`:''}
-        <button class="btn" onclick="closeModal()">Cancel</button>
-        <button class="btn btn-primary" onclick="saveMultiCell('${itemId}','${dateKey}','${type}')">Save</button>
-      </div>`);
-    return;
-  }
-
-  // Standard single-project modal
-  const pOpts=`<option value="">— Unassigned —</option>`+allProjs.map(p=>`<option value="${p.id}"${cur===p.id?' selected':''}>${p.id==='NEW'?'🆕 New project':p.id} — ${p.name}</option>`).join('');
-  const extraFields = buildExtraFields(cur, curCc, curCo);
-
+  const extraFields=buildExtraFields(cur,curCc,curCo);
   showModal(`<div class="modal-title">Assign · ${item.name}</div>
     <div style="font-size:12px;color:var(--text2);margin-bottom:12px">${dl}</div>
     <div class="fg"><label>Project / assignment</label>
-      <select id="cp-proj" onchange="updateCellExtraFields('${itemId}','${dateKey}')">${pOpts}</select>
-    </div>
+      <select id="cp-proj" onchange="updateCellExtraFields('${itemId}','${dateKey}')">${pOpts}</select></div>
     <div style="display:flex;align-items:center;gap:12px;background:var(--bg3);padding:8px 10px;border-radius:var(--radius);margin-bottom:8px">
       <span style="font-size:12px;font-weight:600;color:var(--text)">Confirmed?</span>
-      <label style="display:flex;align-items:center;gap:4px;cursor:pointer;font-size:12px;margin:0">
-        <input type="radio" name="cp-conf" value="yes" ${curConf?'checked':''} style="width:auto;accent-color:#3B6D11"> ✅ Yes
-      </label>
-      <label style="display:flex;align-items:center;gap:4px;cursor:pointer;font-size:12px;margin:0">
-        <input type="radio" name="cp-conf" value="no" ${!curConf?'checked':''} style="width:auto;accent-color:#E24B4A"> ⚠️ Not confirmed
-      </label>
+      <label style="display:flex;align-items:center;gap:4px;cursor:pointer;font-size:12px;margin:0"><input type="radio" name="cp-conf" value="yes" ${curConf?'checked':''} style="width:auto;accent-color:#3B6D11"> ✅ Yes</label>
+      <label style="display:flex;align-items:center;gap:4px;cursor:pointer;font-size:12px;margin:0"><input type="radio" name="cp-conf" value="no" ${!curConf?'checked':''} style="width:auto;accent-color:#E24B4A"> ⚠️ Not confirmed</label>
     </div>
     <div id="cp-extra-fields" style="margin-bottom:0">${extraFields}</div>
     <div class="fg"><label>Notes for this day</label>
       <textarea id="cp-note" placeholder="Site instructions, contact info..." style="min-height:60px;width:100%;font-size:13px;padding:8px;border-radius:var(--radius);border:0.5px solid var(--border2);background:var(--bg);color:var(--text);font-family:inherit;resize:vertical">${curNote}</textarea></div>
     <div class="fg" style="background:rgba(255,243,205,0.4);border:0.5px solid #F0C040;border-radius:var(--radius);padding:10px 12px;margin-bottom:0">
-      <label style="color:#7A5800;font-weight:600;display:flex;align-items:center;gap:6px">
-        <span>📦</span> Warehouse notes
-      </label>
+      <label style="color:#7A5800;font-weight:600">📦 Warehouse notes</label>
       <textarea id="cp-wh" placeholder="e.g. 2x concrete bags, rebar #4, generator..." style="min-height:60px;width:100%;font-size:13px;padding:8px;border-radius:var(--radius);border:0.5px solid #F0C040;background:#FFFEF5;color:var(--text);font-family:inherit;resize:vertical;margin-top:6px">${curWh}</textarea>
     </div>
     <div class="form-actions">
@@ -2336,71 +1841,57 @@ function clickCell(itemId,dateKey,day,type){
     </div>`);
 }
 
-// Called when project dropdown changes — updates cost code + CO fields dynamically
-function updateCellExtraFields(itemId, dateKey) {
-  const pid = document.getElementById('cp-proj')?.value||'';
-  const item = getItem(itemId, 'staff') || getItem(itemId,'extra') || getItem(itemId,'equip') || getItem(itemId,'rental');
-  const curCc = item?.cc?.[dateKey]||'';
-  const curCo = item?.co?.[dateKey]||'';
-  const proj = DB.projects.find(p=>p.id===pid);
-  const el = document.getElementById('cp-extra-fields');
-  if(!el) return;
-  if(!proj || !pid || pid==='OFF' || pid==='Warehouse') { el.innerHTML=''; return; }
-  let html='';
-  if(proj.codes && proj.codes.length) {
-    const ccOpts=`<option value="">— Select cost code —</option>`
-      +proj.codes.map(c=>`<option value="${c.code}"${curCc===c.code?' selected':''}>${c.code} — ${CODES_MAP[c.code]||c.code} (${fmt(c.value)})</option>`).join('');
-    html+=`<div class="fg" style="margin-bottom:8px">
-      <label style="font-size:11px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.05em">Cost code</label>
-      <select id="cp-cc" style="width:100%;font-size:13px;padding:6px 8px;border-radius:var(--radius);border:0.5px solid var(--border2);background:var(--bg);color:var(--text)">${ccOpts}</select>
-    </div>`;
+function updateCellExtraFields(itemId,dateKey){
+  const pid=document.getElementById('cp-proj')?.value||'';
+  const item=getItem(itemId,'staff')||getItem(itemId,'extra')||getItem(itemId,'equip')||getItem(itemId,'rental');
+  const el=document.getElementById('cp-extra-fields');if(!el)return;
+  const proj=DB.projects.find(p=>p.id===pid);
+  if(!proj||!pid||pid==='OFF'||pid==='Warehouse'||pid==='NEW'){el.innerHTML='';return;}
+  let h='';
+  if(proj.codes&&proj.codes.length){
+    const ccOpts=`<option value="">— Select cost code —</option>`+proj.codes.map(c=>`<option value="${c.code}">${c.code} — ${CODES_MAP[c.code]||c.code} (${fmt(c.value)})</option>`).join('');
+    h+=`<div class="fg" style="margin-bottom:8px"><label style="font-size:11px;font-weight:600;color:var(--text2);text-transform:uppercase">Cost code</label><select id="cp-cc" style="width:100%;font-size:13px;padding:6px 8px;border-radius:var(--radius);border:0.5px solid var(--border2);background:var(--bg);color:var(--text)">${ccOpts}</select></div>`;
   }
-  const openCOs = (proj.cos||[]).filter(c=>c.status==='Pending'||c.status==='Approved');
-  if(openCOs.length) {
-    const coOpts=`<option value="">— No CO —</option>`
-      +openCOs.map(c=>`<option value="${c.id}"${curCo===c.id?' selected':''}>${c.num} — ${c.desc} (${fmt(c.value)}) [${c.status}]</option>`).join('');
-    html+=`<div class="fg" style="margin-bottom:0">
-      <label style="font-size:11px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.05em">Change order (CO)</label>
-      <select id="cp-co" style="width:100%;font-size:13px;padding:6px 8px;border-radius:var(--radius);border:0.5px solid var(--border2);background:var(--bg);color:var(--text)">${coOpts}</select>
-    </div>`;
+  const openCOs=(proj.cos||[]).filter(c=>c.status==='Pending'||c.status==='Approved');
+  if(openCOs.length){
+    const coOpts=`<option value="">— No CO —</option>`+openCOs.map(c=>`<option value="${c.id}">${c.num} — ${c.desc} (${fmt(c.value)}) [${c.status}]</option>`).join('');
+    h+=`<div class="fg" style="margin-bottom:0"><label style="font-size:11px;font-weight:600;color:var(--text2);text-transform:uppercase">Change order</label><select id="cp-co" style="width:100%;font-size:13px;padding:6px 8px;border-radius:var(--radius);border:0.5px solid var(--border2);background:var(--bg);color:var(--text)">${coOpts}</select></div>`;
   }
-  el.innerHTML = html;
+  el.innerHTML=h;
 }
 
 function saveCell(id,key,type){
   const item=getItem(id,type);
-  if(!item.a)item.a={};
-  if(!item.notes)item.notes={};
-  if(!item.wh)item.wh={};
-  if(!item.cc)item.cc={};
-  if(!item.co)item.co={};
+  if(!item.a)item.a={};if(!item.notes)item.notes={};if(!item.wh)item.wh={};
+  if(!item.cc)item.cc={};if(!item.co)item.co={};if(!item.confirmed)item.confirmed={};
   const v    = document.getElementById('cp-proj')?.value||'';
   const note = (document.getElementById('cp-note')?.value||'').trim();
   const wh   = (document.getElementById('cp-wh')?.value||'').trim();
   const cc   = document.getElementById('cp-cc')?.value||'';
   const co   = document.getElementById('cp-co')?.value||'';
-  const confRadio = document.querySelector('input[name="cp-conf"]:checked');
-  const conf = confRadio ? confRadio.value !== 'no' : true;
-
-  const prevWh = item.wh[key]||'';
-
+  const confRadio=document.querySelector('input[name="cp-conf"]:checked');
+  const conf=confRadio?confRadio.value!=='no':true;
+  const prevWh=item.wh[key]||'';
   if(v) item.a[key]=v; else delete item.a[key];
   if(note) item.notes[key]=note; else delete item.notes[key];
   if(wh) item.wh[key]=wh; else delete item.wh[key];
   if(cc) item.cc[key]=cc; else delete item.cc[key];
   if(co) item.co[key]=co; else delete item.co[key];
-  if(!item.confirmed) item.confirmed={};
-  item.confirmed[key] = conf;
+  item.confirmed[key]=conf;
 
-  // Write warehouse notes to sheet if changed
+  // If warehouse notes changed and there's a project assigned, write to sheet
   if(wh && wh !== prevWh && v && v !== 'OFF') {
+    // Parse date from key "YYYY-M-D"
     const [yr,mo,dy] = key.split('-');
     const dateStr = `${parseInt(mo)}/${parseInt(dy)}/${yr}`;
     const proj = DB.projects.find(p=>p.id===v);
     const projName = proj ? proj.name : v;
     sheetWrite('addWarehouse', {
-      date: dateStr, worker: item.name,
-      projectId: v, projectName: projName, notes: wh,
+      date:       dateStr,
+      worker:     item.name,
+      projectId:  v,
+      projectName:projName,
+      notes:      wh,
     });
   }
 
@@ -2409,59 +1900,55 @@ function saveCell(id,key,type){
 
 function clearCell(id,key,type){
   const item=getItem(id,type);
-  if(item.a)         delete item.a[key];
-  if(item.notes)     delete item.notes[key];
-  if(item.wh)        delete item.wh[key];
-  if(item.cc)        delete item.cc[key];
-  if(item.co)        delete item.co[key];
-  if(item.confirmed) delete item.confirmed[key];
+  if(item.a)        delete item.a[key];
+  if(item.notes)    delete item.notes[key];
+  if(item.wh)       delete item.wh[key];
+  if(item.cc)       delete item.cc[key];
+  if(item.co)       delete item.co[key];
+  if(item.confirmed)delete item.confirmed[key];
   saveLocal();closeModal();renderRoster();
 }
 
-// Inline note editing in day view — double-click to edit note directly in cell
-function startInlineNoteEdit(id, key, type) {
-  const item = getItem(id,type)||getItem(id,'staff')||getItem(id,'extra')||getItem(id,'equip')||getItem(id,'rental');
-  if(!item) return;
-  const dispId = `inline-note-${id}-${key.replace(/[^\w]/g,'')}`;
-  const disp   = document.getElementById(dispId+'-disp');
-  if(!disp) return;
-  const curNote = item.notes?.[key]||'';
-  disp.innerHTML = `<textarea id="${dispId}-input" style="width:100%;min-height:60px;font-size:12px;padding:4px;border-radius:4px;border:1.5px solid var(--blue);background:var(--bg);color:var(--text);font-family:inherit;resize:vertical;outline:none">${curNote}</textarea>
-    <div style="display:flex;gap:4px;margin-top:4px">
-      <button onclick="saveInlineNote('${id}','${key}','${type}','${dispId}')" class="btn btn-primary" style="font-size:11px;padding:3px 10px">Save</button>
-      <button onclick="renderRoster()" class="btn btn-ghost" style="font-size:11px;padding:3px 8px">Cancel</button>
-    </div>`;
-  setTimeout(()=>{ const inp=document.getElementById(dispId+'-input'); if(inp){inp.focus();inp.setSelectionRange(inp.value.length,inp.value.length);} },10);
+// ─── INLINE NOTE EDIT (day view) ──────────────────────────────────────────────
+function startInlineNoteEdit(id,key,type){
+  const item=getItem(id,type)||getItem(id,'staff')||getItem(id,'extra')||getItem(id,'equip')||getItem(id,'rental');
+  if(!item)return;
+  const safe=key.replace(/[^a-zA-Z0-9]/g,'_');
+  const dispId='inline-note-'+id+'-'+safe;
+  const disp=document.getElementById(dispId+'-disp');if(!disp)return;
+  const cur=item.notes?.[key]||'';
+  disp.innerHTML='<textarea id="'+dispId+'-input" style="width:100%;min-height:60px;font-size:12px;padding:4px;border-radius:4px;border:1.5px solid var(--blue);background:var(--bg);color:var(--text);font-family:inherit;resize:vertical;outline:none">'+cur+'</textarea>'
+    +'<div style="display:flex;gap:4px;margin-top:4px">'
+    +'<button onclick="saveInlineNote(\''+id+'\',\''+key+'\',\''+type+'\',\''+dispId+'\')" class="btn btn-primary" style="font-size:11px;padding:3px 10px">Save</button>'
+    +'<button onclick="renderRoster()" class="btn btn-ghost" style="font-size:11px;padding:3px 8px">Cancel</button></div>';
+  setTimeout(()=>{const inp=document.getElementById(dispId+'-input');if(inp){inp.focus();inp.setSelectionRange(inp.value.length,inp.value.length);}},10);
+}
+function saveInlineNote(id,key,type,dispId){
+  const item=getItem(id,type)||getItem(id,'staff')||getItem(id,'extra')||getItem(id,'equip')||getItem(id,'rental');
+  if(!item)return;
+  const inp=document.getElementById(dispId+'-input');if(!inp)return;
+  const note=inp.value.trim();
+  if(!item.notes)item.notes={};
+  if(note)item.notes[key]=note;else delete item.notes[key];
+  saveLocal();renderRoster();
 }
 
-function saveInlineNote(id, key, type, dispId) {
-  const item = getItem(id,type)||getItem(id,'staff')||getItem(id,'extra')||getItem(id,'equip')||getItem(id,'rental');
-  if(!item) return;
-  const inp = document.getElementById(dispId+'-input');
-  if(!inp) return;
-  const note = inp.value.trim();
-  if(!item.notes) item.notes={};
-  if(note) item.notes[key]=note; else delete item.notes[key];
-  saveLocal();
-  renderRoster();
+// ─── INLINE INFO EDIT ─────────────────────────────────────────────────────────
+function editInfoCell(id,type){
+  const item=getItem(id,type);if(!item)return;
+  const cells=document.querySelectorAll('[data-info-edit="'+id+'"]');
+  if(!cells.length)return;
+  const cell=cells[0];const cur=item.note||'';
+  cell.innerHTML='<input id="info-inp-'+id+'" type="text" value="'+cur.replace(/"/g,'&quot;')+'"'
+    +' style="width:100%;font-size:10px;padding:2px 3px;border:1.5px solid var(--blue);border-radius:3px;background:var(--bg);color:var(--text);outline:none"'
+    +' onblur="saveInfoCell(\''+id+'\',\''+type+'\')"'
+    +' onkeydown="if(event.key===\'Enter\')saveInfoCell(\''+id+'\',\''+type+'\');if(event.key===\'Escape\')renderRoster()">';
+  setTimeout(()=>{const inp=document.getElementById('info-inp-'+id);if(inp){inp.focus();inp.select();}},10);
 }
-
-function saveMultiCell(id,key,type){
-  const item=getItem(id,type);
-  if(!item.a)item.a={};if(!item.notes)item.notes={};if(!item.wh)item.wh={};
-  const checked=[...document.querySelectorAll('#modal-area input[type=checkbox]:checked')].map(c=>c.value);
-  const note=(document.getElementById('cp-note')?.value||'').trim();
-  const wh=(document.getElementById('cp-wh')?.value||'').trim();
-  if(checked.length) item.a[key]=checked.join(','); else delete item.a[key];
-  if(note) item.notes[key]=note; else delete item.notes[key];
-  if(wh){ item.wh[key]=wh;
-    const [yr,mo,dy]=key.split('-');
-    checked.filter(v=>v!=='OFF'&&v!=='Warehouse').forEach(v=>{
-      const proj=DB.projects.find(p=>p.id===v);
-      sheetWrite('addWarehouse',{date:`${parseInt(mo)}/${parseInt(dy)}/${yr}`,worker:item.name,projectId:v,projectName:proj?proj.name:v,notes:wh});
-    });
-  } else delete item.wh[key];
-  saveLocal();closeModal();renderRoster();
+function saveInfoCell(id,type){
+  const item=getItem(id,type);if(!item)return;
+  const inp=document.getElementById('info-inp-'+id);if(!inp)return;
+  item.note=inp.value.trim();saveLocal();renderRoster();
 }
 
 // ─── MULTI-ASSIGN ────────────────────────────────────────────────────────────
@@ -2581,16 +2068,10 @@ function openModal(type,pid,extra){
       <div class="fg"><label>Status</label><select id="f-status"><option>Active</option><option>Pending</option><option>Complete</option><option>Canceled</option></select></div>
       <div class="divider"></div>
       <div style="font-size:11px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">Superintendent</div>
-      <div class="fg2">
-        <div class="fg" style="margin-bottom:0"><label>Super name</label><input id="f-super-name" placeholder="Full name"></div>
-        <div class="fg" style="margin-bottom:0"><label>Super email</label><input id="f-super-email" type="email" placeholder="super@email.com"></div>
-      </div>
+      <div class="fg2"><div class="fg" style="margin-bottom:0"><label>Super name</label><input id="f-super-name" placeholder="Full name"></div><div class="fg" style="margin-bottom:0"><label>Super email</label><input id="f-super-email" type="email" placeholder="super@email.com"></div></div>
       <div class="divider"></div>
       <div style="font-size:11px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.06em;margin-bottom:8px">Accounting</div>
-      <div class="fg2">
-        <div class="fg" style="margin-bottom:0"><label>Accounting name</label><input id="f-acct-name" placeholder="Full name"></div>
-        <div class="fg" style="margin-bottom:0"><label>Accounting email</label><input id="f-acct-email" type="email" placeholder="accounting@email.com"></div>
-      </div>
+      <div class="fg2"><div class="fg" style="margin-bottom:0"><label>Accounting name</label><input id="f-acct-name" placeholder="Full name"></div><div class="fg" style="margin-bottom:0"><label>Accounting email</label><input id="f-acct-email" type="email" placeholder="accounting@email.com"></div></div>
       <div class="divider"></div>
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px"><label class="fl" style="margin-bottom:0">Cost codes &amp; values</label><button class="btn btn-sm" onclick="addCodeRow()">+ Add code</button></div>
       <div id="code-rows"><div class="code-row-entry" id="coderow-0"><select style="flex:1;min-width:0">${codeOpts}</select><input type="number" placeholder="Value ($)" style="width:120px"><button class="btn btn-sm btn-deny" onclick="removeCodeRow('coderow-0')">✕</button></div></div>
@@ -2696,18 +2177,18 @@ function saveProject(){
   const client=document.getElementById('f-client').value.trim()||'—';
   const month=document.getElementById('f-month').value;
   const status=document.getElementById('f-status').value;
-  // Super & Accounting — written to col K and M separated by comma
+  // Build a full date string for col J — e.g. "Jan" → "1/1/2026"
+  const moIdx={'Jan':0,'Feb':1,'Mar':2,'Apr':3,'May':4,'Jun':5,'Jul':6,'Aug':7,'Sep':8,'Oct':9,'Nov':10,'Dec':11};
+  const yr=new Date().getFullYear();
+  const mi=moIdx[month]??new Date().getMonth();
+  const fullDate=`${mi+1}/1/${yr}`;
+  DB.projects.push({id:num,name,pm,pmEmail,address,client,codes,month,year:yr,status,notes:'',cos:[],rfis:[],subs:[],history:[{date:todate(),text:`Project created — ${name}`,type:'created'}],_manual:true});
   const superName=document.getElementById('f-super-name')?.value.trim()||'';
   const superEmail=document.getElementById('f-super-email')?.value.trim()||'';
   const acctName=document.getElementById('f-acct-name')?.value.trim()||'';
   const acctEmail=document.getElementById('f-acct-email')?.value.trim()||'';
   const superInfo=[superName,superEmail].filter(Boolean).join(',');
   const acctInfo=[acctName,acctEmail].filter(Boolean).join(',');
-  const moIdx={'Jan':0,'Feb':1,'Mar':2,'Apr':3,'May':4,'Jun':5,'Jul':6,'Aug':7,'Sep':8,'Oct':9,'Nov':10,'Dec':11};
-  const yr=new Date().getFullYear();
-  const mi=moIdx[month]??new Date().getMonth();
-  const fullDate=`${mi+1}/1/${yr}`;
-  DB.projects.push({id:num,name,pm,pmEmail,address,client,codes,month,year:yr,status,notes:'',cos:[],rfis:[],subs:[],history:[{date:todate(),text:`Project created — ${name}`,type:'created'}],_manual:true,superInfo,acctInfo});
   sheetWrite('addProject',{id:num,name,pm,pmEmail,address,client,codes,month:fullDate,status,superInfo,acctInfo});
   saveLocal();closeModal();toast(`Project ${num} saved → Sheets`);renderProjTable();renderOverview();selProject(num);
 }
@@ -2769,40 +2250,11 @@ function saveExtraW(){
 // Saves roster assignments, notes, extra staff, and manually added projects
 // so data survives page refresh
 // ─── CLOUD PERSISTENCE ───────────────────────────────────────────────────────
-// Saves to BOTH localStorage (fast, offline) and Google Sheets (shared across devices)
-// On load: reads from Sheets first, falls back to localStorage if Sheets unavailable
-
-let _saveTimer = null;
-
-function saveLocal() {
-  try {
-    const rosterData = {
-      staff:   STAFF.map(e => ({ id:e.id, a:e.a||{}, notes:e.notes||{}, wh:e.wh||{}, cc:e.cc||{}, co:e.co||{}, name:e.name })),
-      extra:   EXTRA.map(e => ({ id:e.id, a:e.a||{}, notes:e.notes||{}, wh:e.wh||{}, cc:e.cc||{}, co:e.co||{}, name:e.name, project:e.project })),
-      equip:   EQUIP.map(e => ({ id:e.id, a:e.a||{}, notes:e.notes||{}, wh:e.wh||{}, cc:e.cc||{}, co:e.co||{}, name:e.name })),
-      rentals: RENTALS.map(e => ({ id:e.id, a:e.a||{}, notes:e.notes||{}, wh:e.wh||{}, cc:e.cc||{}, co:e.co||{}, name:e.name })),
-      extraList: EXTRA.filter(e => e.id.startsWith('ew') && !['ew1','ew2','ew3','ew4','ew5','ew6','ew7','ew8'].includes(e.id)),
-      staffList: STAFF.filter(e => !['e1','e2','e3','e4','e5','e6','e7','e8','e9','e10','e11','e12','e13','e14','e15','e16','e17','e18'].includes(e.id)),
-    };
-    // 1. Save to localStorage immediately (fast, works offline)
-    localStorage.setItem('zlc_roster', JSON.stringify(rosterData));
-    localStorage.setItem('zlc_orders', JSON.stringify(DB.openOrders||[]));
-    localStorage.setItem('zlc_manual_projects', JSON.stringify(DB.projects.filter(p=>p._manual)));
-    localStorage.setItem('zlc_historical', JSON.stringify(DB.historical));
-
-    // 2. Debounce cloud save — wait 1.5s after last change before writing to sheet
-    // Auto cloud save after 2s of inactivity
-    saveToCloud(rosterData);
-  } catch(e) { console.warn('saveLocal error:', e); }
-}
-
-// Cloud save queue — batches changes and sends automatically
 let _cloudQueue = {};
 let _cloudTimer = null;
 
 function saveToCloud(rosterData) {
   if (!APPS_SCRIPT_URL) return;
-  // Queue the data — will be sent after 2 seconds of inactivity
   _cloudQueue = {
     'roster':     rosterData,
     'orders':     DB.openOrders||[],
@@ -2817,7 +2269,6 @@ function flushCloudQueue() {
   if (!APPS_SCRIPT_URL || !Object.keys(_cloudQueue).length) return;
   const entries = Object.entries(_cloudQueue);
   _cloudQueue = {};
-  // Send each key one at a time with 500ms gap
   entries.forEach(([key, value], i) => {
     setTimeout(() => cloudSaveOne(key, value), i * 500);
   });
@@ -2825,27 +2276,22 @@ function flushCloudQueue() {
 
 function cloudSaveOne(key, value) {
   const body = JSON.stringify({action:'saveAppData', key, value});
-  // Try POST first (no URL length limit)
   fetch(APPS_SCRIPT_URL, {
-    method: 'POST',
-    mode: 'no-cors',
+    method: 'POST', mode: 'no-cors',
     headers: {'Content-Type':'text/plain;charset=utf-8'},
     body: body,
   }).catch(()=>{});
-  // Also try GET as backup (smaller payloads)
   try {
     const encoded = encodeURIComponent(body);
-    if (encoded.length < 7000) { // URL limit ~8000 chars
+    if (encoded.length < 7000) {
       fetch(APPS_SCRIPT_URL + '?data=' + encoded)
-        .then(r=>r.json())
-        .then(r=>{ if(r.ok) updateSyncBadge('saved'); })
+        .then(r=>r.json()).then(r=>{ if(r.ok) console.log('Cloud saved:',key); })
         .catch(()=>{});
     }
   } catch(e){}
 }
 
 async function forceSaveToCloud() {
-  updateSyncBadge('saving');
   const rosterData = buildRosterData();
   _cloudQueue = {
     'roster':     rosterData,
@@ -2854,7 +2300,7 @@ async function forceSaveToCloud() {
     'historical': DB.historical,
   };
   flushCloudQueue();
-  setTimeout(()=>{ updateSyncBadge('ok'); toast('✓ Saved to cloud'); }, 3000);
+  setTimeout(()=>toast('✓ Saved to cloud'), 2500);
 }
 
 function buildRosterData() {
@@ -2868,117 +2314,122 @@ function buildRosterData() {
   };
 }
 
-function loadLocal() {
-  try {
-    const rosterRaw = localStorage.getItem('zlc_roster');
-    if (rosterRaw) applyRosterData(JSON.parse(rosterRaw));
-    const histRaw = localStorage.getItem('zlc_historical');
-    if (histRaw) DB.historical = JSON.parse(histRaw);
-    const ordRaw = localStorage.getItem('zlc_orders');
-    if (ordRaw) DB.openOrders = JSON.parse(ordRaw);
-    const manualRaw = localStorage.getItem('zlc_manual_projects');
-    if (manualRaw) {
-      JSON.parse(manualRaw).forEach(p => { if (!DB.projects.find(x=>x.id===p.id)) DB.projects.push(p); });
-    }
-  } catch(e) { console.warn('loadLocal error:', e); }
+function applyRosterData(rd) {
+  (rd.staff||[]).forEach(saved => {
+    const item = STAFF.find(e => e.id === saved.id);
+    if (item) { item.a=saved.a||{}; item.notes=saved.notes||{}; item.wh=saved.wh||{}; item.cc=saved.cc||{}; item.co=saved.co||{}; item.confirmed=saved.confirmed||{}; if(saved.name)item.name=saved.name; }
+  });
+  (rd.extra||[]).forEach(saved => {
+    const item = EXTRA.find(e => e.id === saved.id);
+    if (item) { item.a=saved.a||{}; item.notes=saved.notes||{}; item.wh=saved.wh||{}; item.cc=saved.cc||{}; item.co=saved.co||{}; item.confirmed=saved.confirmed||{}; item.project=saved.project||item.project; if(saved.name)item.name=saved.name; }
+  });
+  (rd.equip||[]).forEach(saved => {
+    const item = EQUIP.find(e => e.id === saved.id);
+    if (item) { item.a=saved.a||{}; item.notes=saved.notes||{}; item.wh=saved.wh||{}; item.cc=saved.cc||{}; item.co=saved.co||{}; item.confirmed=saved.confirmed||{}; if(saved.name)item.name=saved.name; }
+  });
+  (rd.rentals||[]).forEach(saved => {
+    const item = RENTALS.find(e => e.id === saved.id);
+    if (item) { item.a=saved.a||{}; item.notes=saved.notes||{}; item.wh=saved.wh||{}; item.cc=saved.cc||{}; item.co=saved.co||{}; item.confirmed=saved.confirmed||{}; if(saved.name)item.name=saved.name; }
+  });
+  (rd.extraList||[]).forEach(saved => { if(!EXTRA.find(e=>e.id===saved.id)) EXTRA.push(saved); });
+  (rd.staffList||[]).forEach(saved => { if(!STAFF.find(e=>e.id===saved.id)) STAFF.push(saved); });
 }
 
 async function loadFromCloud() {
   if (!APPS_SCRIPT_URL) return;
   try {
     const url = APPS_SCRIPT_URL + '?data=' + encodeURIComponent(JSON.stringify({action:'loadAppData'}));
-    const res  = await fetch(url);
+    const res = await fetch(url);
     const json = await res.json();
     if (!json.ok || !json.data) return;
     const d = json.data;
-
     let changed = false;
-
-    // Restore roster
-    if (d.roster) {
-      applyRosterData(d.roster);
-      localStorage.setItem('zlc_roster', JSON.stringify(d.roster));
-      changed = true;
-    }
-    // Restore orders
-    if (d.orders) {
-      DB.openOrders = d.orders;
-      localStorage.setItem('zlc_orders', JSON.stringify(d.orders));
-      changed = true;
-    }
-    // Restore historical
-    if (d.historical) {
-      DB.historical = d.historical;
-      localStorage.setItem('zlc_historical', JSON.stringify(d.historical));
-      changed = true;
-    }
-    // Restore manual projects
-    if (d.manual && d.manual.length) {
-      d.manual.forEach(p => { if (!DB.projects.find(x=>x.id===p.id)) DB.projects.push(p); });
-      changed = true;
-    }
-
-    if (changed) {
-      renderRoster();
-      renderAnalytics();
-      renderProjTable();
-      renderOverview();
-      toast('✓ Data loaded from cloud');
-    }
+    if (d.roster) { applyRosterData(d.roster); localStorage.setItem('zlc_roster',JSON.stringify(d.roster)); changed=true; }
+    if (d.orders) { DB.openOrders=d.orders; localStorage.setItem('zlc_orders',JSON.stringify(d.orders)); changed=true; }
+    if (d.historical) { DB.historical=d.historical; localStorage.setItem('zlc_historical',JSON.stringify(d.historical)); changed=true; }
+    if (d.manual&&d.manual.length) { d.manual.forEach(p=>{if(!DB.projects.find(x=>x.id===p.id))DB.projects.push(p);}); changed=true; }
+    if (changed) { renderRoster(); renderAnalytics(); renderProjTable(); renderOverview(); toast('✓ Data synced from cloud'); }
     console.log('Cloud load complete');
-  } catch(e) {
-    console.warn('Cloud load failed, using local cache:', e.message);
-  }
+  } catch(e) { console.warn('Cloud load failed:', e.message); }
 }
 
-function applyRosterData(rd) {
-  (rd.staff||[]).forEach(saved => {
-    const item = STAFF.find(e => e.id === saved.id);
-    if (item) {
-      item.a = saved.a||{}; item.notes = saved.notes||{};
-      item.wh = saved.wh||{}; item.cc = saved.cc||{}; item.co = saved.co||{}; item.confirmed = saved.confirmed||{};
-      if (saved.name) item.name = saved.name; // restore renamed names
+function saveLocal() {
+  try {
+    // Save roster assignments + notes for all items
+    const rosterData = {
+      staff: STAFF.map(e => ({ id:e.id, a:e.a||{}, notes:e.notes||{}, wh:e.wh||{} })),
+      extra: EXTRA.map(e => ({ id:e.id, a:e.a||{}, notes:e.notes||{}, wh:e.wh||{}, project:e.project })),
+      equip: EQUIP.map(e => ({ id:e.id, a:e.a||{}, notes:e.notes||{}, wh:e.wh||{} })),
+      rentals: RENTALS.map(e => ({ id:e.id, a:e.a||{}, notes:e.notes||{}, wh:e.wh||{}, cc:e.cc||{}, co:e.co||{}, confirmed:e.confirmed||{}, name:e.name })),
+      extraList: EXTRA.filter(e => e.id.startsWith('ew') && !['ew1','ew2','ew3','ew4','ew5','ew6','ew7','ew8'].includes(e.id)),
+      staffList: STAFF.filter(e => !['e1','e2','e3','e4','e5','e6','e7','e8','e9','e10','e11','e12','e13','e14','e15','e16','e17'].includes(e.id)),
+    };
+    localStorage.setItem('zlc_roster', JSON.stringify(rosterData));
+    // Save open orders
+    localStorage.setItem('zlc_orders', JSON.stringify(DB.openOrders||[]));
+    // Save manually added projects (those not from the sheet)
+    const manualProjects = DB.projects.filter(p => p._manual);
+    localStorage.setItem('zlc_manual_projects', JSON.stringify(manualProjects));
+    // Save historical overrides
+    localStorage.setItem('zlc_historical', JSON.stringify(DB.historical));
+    // Auto cloud save after 2s
+    saveToCloud(rosterData);
+  } catch(e) { console.warn('saveLocal error:', e); }
+}
+
+function loadLocal() {
+  try {
+    // Restore roster assignments + notes
+    const rosterRaw = localStorage.getItem('zlc_roster');
+    if (rosterRaw) {
+      const rd = JSON.parse(rosterRaw);
+      // Restore assignments and notes into existing items
+      (rd.staff||[]).forEach(saved => {
+        const item = STAFF.find(e => e.id === saved.id);
+        if (item) { item.a=saved.a||{}; item.notes=saved.notes||{}; item.wh=saved.wh||{}; item.cc=saved.cc||{}; item.co=saved.co||{}; item.confirmed=saved.confirmed||{}; if(saved.name)item.name=saved.name; }
+      });
+      (rd.extra||[]).forEach(saved => {
+        const item = EXTRA.find(e => e.id === saved.id);
+        if (item) { item.a = saved.a||{}; item.notes = saved.notes||{}; item.wh = saved.wh||{}; item.project = saved.project||item.project; }
+      });
+      (rd.equip||[]).forEach(saved => {
+        const item = EQUIP.find(e => e.id === saved.id);
+        if (item) { item.a=saved.a||{}; item.notes=saved.notes||{}; item.wh=saved.wh||{}; item.cc=saved.cc||{}; item.co=saved.co||{}; item.confirmed=saved.confirmed||{}; if(saved.name)item.name=saved.name; }
+      });
+      (rd.rentals||[]).forEach(saved => {
+        const item = RENTALS.find(e => e.id === saved.id);
+        if (item) { item.a=saved.a||{}; item.notes=saved.notes||{}; item.wh=saved.wh||{}; item.cc=saved.cc||{}; item.co=saved.co||{}; item.confirmed=saved.confirmed||{}; if(saved.name)item.name=saved.name; }
+      });
+      // Restore extra workers added by user
+      (rd.extraList||[]).forEach(saved => {
+        if (!EXTRA.find(e => e.id === saved.id)) EXTRA.push(saved);
+      });
+      // Restore staff added by user
+      (rd.staffList||[]).forEach(saved => {
+        if (!STAFF.find(e => e.id === saved.id)) STAFF.push(saved);
+      });
     }
-  });
-  (rd.extra||[]).forEach(saved => {
-    const item = EXTRA.find(e => e.id === saved.id);
-    if (item) {
-      item.a = saved.a||{}; item.notes = saved.notes||{};
-      item.wh = saved.wh||{}; item.cc = saved.cc||{}; item.co = saved.co||{};
-      item.project = saved.project||item.project;
-      if (saved.name) item.name = saved.name;
+    // Restore historical overrides
+    const histRaw = localStorage.getItem('zlc_historical');
+    if (histRaw) DB.historical = JSON.parse(histRaw);
+    // Restore open orders
+    const ordRaw = localStorage.getItem('zlc_orders');
+    if (ordRaw) DB.openOrders = JSON.parse(ordRaw);
+    // Restore manually added projects (will be merged after sheet sync)
+    const manualRaw = localStorage.getItem('zlc_manual_projects');
+    if (manualRaw) {
+      const manual = JSON.parse(manualRaw);
+      manual.forEach(p => { if (!DB.projects.find(x => x.id === p.id)) DB.projects.push(p); });
     }
-  });
-  (rd.equip||[]).forEach(saved => {
-    const item = EQUIP.find(e => e.id === saved.id);
-    if (item) {
-      item.a = saved.a||{}; item.notes = saved.notes||{};
-      item.wh = saved.wh||{}; item.cc = saved.cc||{}; item.co = saved.co||{};
-      if (saved.name) item.name = saved.name;
-    }
-  });
-  (rd.rentals||[]).forEach(saved => {
-    const item = RENTALS.find(e => e.id === saved.id);
-    if (item) {
-      item.a = saved.a||{}; item.notes = saved.notes||{};
-      item.wh = saved.wh||{}; item.cc = saved.cc||{}; item.co = saved.co||{};
-      if (saved.name) item.name = saved.name;
-    }
-  });
-  (rd.extraList||[]).forEach(saved => {
-    if (!EXTRA.find(e => e.id === saved.id)) EXTRA.push(saved);
-  });
-  (rd.staffList||[]).forEach(saved => {
-    if (!STAFF.find(e => e.id === saved.id)) STAFF.push(saved);
-  });
+  } catch(e) { console.warn('loadLocal error:', e); }
 }
 
 // ─── INIT ─────────────────────────────────────────────────────────────────────
-loadLocal();         // 1. Load from localStorage instantly (fast, works offline)
+loadLocal();        // 1. Load from localStorage instantly
 renderAnalytics();
 renderProjTable();
-syncFromSheets();    // 2. Sync projects from Google Sheets
-loadFromCloud();     // 3. Load saved app state from cloud (roster, orders, etc.)
+syncFromSheets();   // 2. Sync projects from Sheets
+loadFromCloud();    // 3. Load saved app state from cloud
 </script>
 </body>
 </html>
