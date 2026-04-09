@@ -335,11 +335,11 @@
         <div class="card-header" style="flex-wrap:wrap;gap:6px">
           <span class="card-title">Change orders</span>
           <div style="display:flex;gap:4px;flex-wrap:wrap">
-            <button class="btn btn-sm btn-ghost" id="co-filter-all" onclick="setCOFilter('all',this)" style="font-size:10px;padding:2px 7px">All</button>
-            <button class="btn btn-sm" id="co-filter-pending" onclick="setCOFilter('pending',this)" style="font-size:10px;padding:2px 7px;background:var(--blue);color:#fff">Pending</button>
+            <button class="btn btn-sm btn-ghost" id="co-filter-all"     onclick="setCOFilter('all',this)"     style="font-size:10px;padding:2px 7px">All</button>
+            <button class="btn btn-sm" id="co-filter-pending"           onclick="setCOFilter('pending',this)" style="font-size:10px;padding:2px 7px;background:var(--blue);color:#fff">Pending</button>
             <button class="btn btn-sm btn-ghost" id="co-filter-approved" onclick="setCOFilter('approved',this)" style="font-size:10px;padding:2px 7px">Approved</button>
-            <button class="btn btn-sm btn-ghost" id="co-filter-done" onclick="setCOFilter('done',this)" style="font-size:10px;padding:2px 7px">Work done</button>
-            <button class="btn btn-sm btn-ghost" id="co-filter-notdone" onclick="setCOFilter('notdone',this)" style="font-size:10px;padding:2px 7px">Work not done</button>
+            <button class="btn btn-sm btn-ghost" id="co-filter-done"    onclick="setCOFilter('done',this)"    style="font-size:10px;padding:2px 7px">✅ Work done</button>
+            <button class="btn btn-sm btn-ghost" id="co-filter-notdone" onclick="setCOFilter('notdone',this)" style="font-size:10px;padding:2px 7px">⏳ Not done</button>
           </div>
         </div>
         <div id="dash-cos"></div>
@@ -1218,10 +1218,10 @@ function renderCOList(){
   const src=(DB.allSheetCOs&&DB.allSheetCOs.length)?DB.allSheetCOs
     :DB.projects.flatMap(p=>p.cos.map(c=>({...c,pid:p.id,pname:p.name||p.id})));
   let filtered;
-  if(coDashFilter==='pending')     filtered=src.filter(c=>/pend/i.test(c.status||''));
+  if(coDashFilter==='pending')      filtered=src.filter(c=>/pend/i.test(c.status||''));
   else if(coDashFilter==='approved') filtered=src.filter(c=>/approv/i.test(c.status||''));
-  else if(coDashFilter==='done')   filtered=src.filter(c=>/^done$/i.test(String(c.work||'').trim()));
-  else if(coDashFilter==='notdone')filtered=src.filter(c=>/not/i.test(c.work||''));
+  else if(coDashFilter==='done')     filtered=src.filter(c=>/^done$/i.test(String(c.work||'').trim()));
+  else if(coDashFilter==='notdone')  filtered=src.filter(c=>/not/i.test(c.work||''));
   else filtered=[...src];
   filtered.sort((a,b)=>String(a.pid||'').localeCompare(String(b.pid||'')));
   const filterTotal=filtered.reduce((a,c)=>a+(c.value||0),0);
@@ -1232,21 +1232,69 @@ function renderCOList(){
     const cls=/approv/i.test(st)?'b-green':/canc/i.test(st)?'b-red':'b-amber';
     const pname=c.pname||c.projName||c.pid||'';
     const workDone=/^done$/i.test(String(c.work||'').trim());
-    const workBadge=c.work?`<span class="badge ${workDone?'b-green':'b-red'}" style="font-size:9px;margin-left:4px">${c.work}</span>`:'';
-    return`<div style="display:flex;justify-content:space-between;align-items:flex-start;padding:8px 0;border-bottom:0.5px solid var(--border);font-size:12px;gap:8px">
-      <div style="flex:1;min-width:0">
-        <div style="display:flex;align-items:center;gap:6px;margin-bottom:2px;flex-wrap:wrap">
-          <strong>${c.num||'—'}</strong>
-          <span style="color:var(--text3);font-size:10px">${c.pid} — ${pname}</span>${workBadge}
+    const workBadge=c.work?`<span class="badge ${workDone?'b-green':'b-amber'}" style="font-size:9px;margin-left:4px">${c.work}</span>`:'';
+    const isPending=/pend/i.test(st);
+    const cid=c.id||''; const cpid=c.pid||''; const cnum=(c.num||'').replace(/'/g,"\\'");
+    const actionBtns=isPending?`<div style="display:flex;gap:4px;margin-top:5px">
+        <button class="btn btn-sm btn-approve" style="font-size:10px;padding:2px 8px" onclick="dashApproveCO('${cpid}','${cid}','${cnum}')">✓ Approve</button>
+        <button class="btn btn-sm btn-deny" style="font-size:10px;padding:2px 8px" onclick="dashCancelCO('${cpid}','${cid}','${cnum}')">✕ Cancel</button>
+      </div>`:'';
+    const workToggle=`<select onchange="dashSetCOWork('${cpid}','${cid}',this.value)" style="font-size:10px;padding:1px 4px;border-radius:4px;border:0.5px solid var(--border2);background:var(--bg);color:var(--text);margin-top:3px;cursor:pointer">
+      <option value="" ${!c.work?'selected':''}>— Work status —</option>
+      <option value="Done" ${workDone?'selected':''}>✅ Done</option>
+      <option value="Not done yet" ${/not/i.test(c.work||'')?'selected':''}>⏳ Not done yet</option>
+    </select>`;
+    return`<div style="padding:8px 0;border-bottom:0.5px solid var(--border);font-size:12px">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
+        <div style="flex:1;min-width:0">
+          <div style="display:flex;align-items:center;gap:5px;margin-bottom:2px;flex-wrap:wrap">
+            <strong>${c.num||'—'}</strong>
+            <span class="badge ${cls}" style="font-size:9px">${st}</span>
+            ${workBadge}
+            <span style="color:var(--text3);font-size:10px">${cpid} — ${pname}</span>
+          </div>
+          <div style="color:var(--text2);font-size:11px;margin-bottom:3px">${c.desc||''}</div>
+          ${workToggle}
+          ${actionBtns}
         </div>
-        <div style="color:var(--text2);font-size:11px">${c.desc||''}</div>
-      </div>
-      <div style="text-align:right;flex-shrink:0">
-        ${c.value?`<strong>${fmt(c.value)}</strong>`:''}
-        <div style="margin-top:2px"><span class="badge ${cls}">${st}</span></div>
+        <div style="text-align:right;flex-shrink:0;padding-top:2px">
+          ${c.value?`<strong style="font-size:13px">${fmt(c.value)}</strong>`:''}
+        </div>
       </div>
     </div>`;
   }).join('');
+}
+
+// Dashboard CO actions
+function dashApproveCO(pid, cid, num){
+  // Update in allSheetCOs
+  const sc=(DB.allSheetCOs||[]).find(c=>c.id===cid&&c.pid===pid)||
+            (DB.allSheetCOs||[]).find(c=>c.num===num&&c.pid===pid);
+  if(sc){sc.status='Approved';}
+  // Update in project.cos
+  const p=DB.projects.find(x=>x.id===pid);
+  if(p){const co=p.cos.find(c=>c.id===cid||c.num===num);if(co){co.status='Approved';p.history.push({date:todate(),text:num+' APPROVED via dashboard',type:'approved'});}}
+  sheetWrite('updateCO',{projectId:pid,num,newStatus:'Approved'});
+  renderCOList();renderOverview();
+  toast('✓ '+num+' approved');
+}
+function dashCancelCO(pid, cid, num){
+  const sc=(DB.allSheetCOs||[]).find(c=>c.id===cid&&c.pid===pid)||
+            (DB.allSheetCOs||[]).find(c=>c.num===num&&c.pid===pid);
+  if(sc){sc.status='Canceled';}
+  const p=DB.projects.find(x=>x.id===pid);
+  if(p){const co=p.cos.find(c=>c.id===cid||c.num===num);if(co){co.status='Canceled';p.history.push({date:todate(),text:num+' canceled via dashboard',type:'canceled'});}}
+  sheetWrite('updateCO',{projectId:pid,num,newStatus:'Canceled'});
+  renderCOList();renderOverview();
+  toast('✕ '+num+' canceled');
+}
+function dashSetCOWork(pid, cid, workVal){
+  const sc=(DB.allSheetCOs||[]).find(c=>c.id===cid&&c.pid===pid);
+  if(sc){sc.work=workVal;}
+  const p=DB.projects.find(x=>x.id===pid);
+  if(p){const co=p.cos.find(c=>c.id===cid);if(co)co.work=workVal;}
+  sheetWrite('updateCO',{projectId:pid,num:(sc&&sc.num)||'',newStatus:(sc&&sc.status)||'',work:workVal});
+  renderCOList();
 }
 
 // ─── OPEN ORDERS ──────────────────────────────────────────────────────────────
@@ -2807,28 +2855,55 @@ function compressRoster(rd) {
   };
 }
 
-// Single JSONP save — returns a Promise
+// Single save — tries JSONP first, falls back to fetch POST
 function jsonpSave(key, value) {
   return new Promise((resolve, reject) => {
     if (!APPS_SCRIPT_URL) { reject('No URL'); return; }
     const body = JSON.stringify({action:'saveAppData', key, value});
     const encoded = encodeURIComponent(body);
-    if (encoded.length > 14000) {
-      reject('Payload too large: ' + Math.round(encoded.length/1024) + 'KB for key=' + key);
-      return;
-    }
+
+    // Try JSONP (GET) first — works cross-origin, gives response confirmation
     const cbName = '_zlcSave_' + Date.now() + '_' + Math.random().toString(36).slice(2,5);
     const scriptId = '_zlcScript_' + key.replace(/[^a-zA-Z0-9]/g,'_');
     const old = document.getElementById(scriptId); if(old) old.remove();
     let done = false;
-    const cleanup = () => { done=true; delete window[cbName]; const el=document.getElementById(scriptId); if(el)el.remove(); };
-    window[cbName] = (r) => { cleanup(); if(r&&r.ok) resolve(r); else reject('Apps Script error: '+JSON.stringify(r)); };
+
+    const cleanup = () => {
+      done = true;
+      delete window[cbName];
+      const el = document.getElementById(scriptId); if(el) el.remove();
+    };
+
+    window[cbName] = (r) => {
+      cleanup();
+      if(r && r.ok) { resolve(r); }
+      else { reject('Apps Script returned: ' + JSON.stringify(r)); }
+    };
+
     const script = document.createElement('script');
     script.id = scriptId;
-    script.src = APPS_SCRIPT_URL + '?callback=' + cbName + '&data=' + encoded;
-    script.onerror = () => { cleanup(); reject('Script load error for key=' + key); };
+    script.src = APPS_SCRIPT_URL + '?data=' + encoded + '&callback=' + cbName;
+    script.onerror = () => {
+      cleanup();
+      // JSONP failed — fall back to fetch POST (fire and forget, no CORS)
+      console.warn('JSONP failed for key=' + key + ', trying POST fallback');
+      fetch(APPS_SCRIPT_URL, {
+        method: 'POST',
+        mode: 'no-cors',
+        headers: {'Content-Type': 'text/plain;charset=utf-8'},
+        body: body,
+      }).then(() => {
+        console.log('POST fallback sent for key=' + key + ' (no confirmation possible)');
+        resolve({ok:true, fallback:true});
+      }).catch(e2 => reject('Both JSONP and POST failed: ' + e2));
+    };
     document.head.appendChild(script);
-    setTimeout(() => { if(!done) { cleanup(); reject('Timeout for key=' + key); } }, 15000);
+    setTimeout(() => {
+      if (!done) {
+        cleanup();
+        reject('Timeout 15s for key=' + key);
+      }
+    }, 15000);
   });
 }
 
