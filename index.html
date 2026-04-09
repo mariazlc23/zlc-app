@@ -334,12 +334,14 @@
       <div class="card" style="margin-bottom:0">
         <div class="card-header" style="flex-wrap:wrap;gap:6px">
           <span class="card-title">Change orders</span>
-          <div style="display:flex;gap:4px;flex-wrap:wrap">
-            <button class="btn btn-sm btn-ghost" id="co-filter-all"     onclick="setCOFilter('all',this)"     style="font-size:10px;padding:2px 7px">All</button>
-            <button class="btn btn-sm" id="co-filter-pending"           onclick="setCOFilter('pending',this)" style="font-size:10px;padding:2px 7px;background:var(--blue);color:#fff">Pending</button>
-            <button class="btn btn-sm btn-ghost" id="co-filter-approved" onclick="setCOFilter('approved',this)" style="font-size:10px;padding:2px 7px">Approved</button>
-            <button class="btn btn-sm btn-ghost" id="co-filter-done"    onclick="setCOFilter('done',this)"    style="font-size:10px;padding:2px 7px">✅ Work done</button>
-            <button class="btn btn-sm btn-ghost" id="co-filter-notdone" onclick="setCOFilter('notdone',this)" style="font-size:10px;padding:2px 7px">⏳ Not done</button>
+          <div style="display:flex;gap:4px;flex-wrap:wrap;align-items:center">
+            <button class="btn btn-sm" id="co-filter-pending"  onclick="setCOFilter('pending',this)"  style="font-size:10px;padding:2px 8px;background:var(--blue);color:#fff">Pending</button>
+            <button class="btn btn-sm btn-ghost" id="co-filter-approved" onclick="setCOFilter('approved',this)" style="font-size:10px;padding:2px 8px">Approved</button>
+            <span id="co-work-filters" style="display:flex;gap:4px;margin-left:4px;border-left:1px solid var(--border);padding-left:8px">
+              <button class="btn btn-sm btn-ghost" id="co-filter-all-work" onclick="setCOWorkFilter('all',this)" style="font-size:10px;padding:2px 7px;background:var(--bg3)">All</button>
+              <button class="btn btn-sm btn-ghost" id="co-filter-done"    onclick="setCOWorkFilter('done',this)"    style="font-size:10px;padding:2px 7px">✅ Done</button>
+              <button class="btn btn-sm btn-ghost" id="co-filter-notdone" onclick="setCOWorkFilter('notdone',this)" style="font-size:10px;padding:2px 7px">⏳ Not done</button>
+            </span>
           </div>
         </div>
         <div id="dash-cos"></div>
@@ -1205,12 +1207,30 @@ function renderOverview(){
 
 // ─── CO LIST WITH FILTER ──────────────────────────────────────────────────────
 let coDashFilter='pending';
-function setCOFilter(f,btn){
-  coDashFilter=f;
-  document.querySelectorAll('[id^="co-filter-"]').forEach(b=>{
-    b.style.background='';b.style.color='#888';b.style.border='0.5px solid var(--border2)';
+let coDashWorkFilter = 'all'; // sub-filter for work status within pending
+
+function setCOFilter(f, btn){
+  coDashFilter = f;
+  // Reset main filter buttons
+  ['co-filter-pending','co-filter-approved'].forEach(id=>{
+    const el=document.getElementById(id);
+    if(el){el.style.background='';el.style.color='';el.classList.remove('btn-primary');}
   });
-  if(btn){btn.style.background='var(--blue)';btn.style.color='#fff';btn.style.border='none';}
+  if(btn){btn.style.background='var(--blue)';btn.style.color='#fff';}
+  // Show/hide work sub-filters (only when Pending is active)
+  const workFilters = document.getElementById('co-work-filters');
+  if(workFilters) workFilters.style.display = (f==='pending') ? 'flex' : 'none';
+  if(f !== 'pending') coDashWorkFilter = 'all';
+  renderCOList();
+}
+
+function setCOWorkFilter(f, btn){
+  coDashWorkFilter = f;
+  ['co-filter-all-work','co-filter-done','co-filter-notdone'].forEach(id=>{
+    const el=document.getElementById(id);
+    if(el){el.style.background='var(--bg3)';el.style.color='';}
+  });
+  if(btn){btn.style.background='var(--blue)';btn.style.color='#fff';}
   renderCOList();
 }
 function renderCOList(){
@@ -1218,11 +1238,15 @@ function renderCOList(){
   const src=(DB.allSheetCOs&&DB.allSheetCOs.length)?DB.allSheetCOs
     :DB.projects.flatMap(p=>p.cos.map(c=>({...c,pid:p.id,pname:p.name||p.id})));
   let filtered;
-  if(coDashFilter==='pending')      filtered=src.filter(c=>/pend/i.test(c.status||''));
-  else if(coDashFilter==='approved') filtered=src.filter(c=>/approv/i.test(c.status||''));
-  else if(coDashFilter==='done')     filtered=src.filter(c=>/^done$/i.test(String(c.work||'').trim()));
-  else if(coDashFilter==='notdone')  filtered=src.filter(c=>/not/i.test(c.work||''));
-  else filtered=[...src];
+  if(coDashFilter==='approved'){
+    filtered = src.filter(c=>/approv/i.test(c.status||''));
+  } else {
+    // Default: Pending
+    filtered = src.filter(c=>/pend/i.test(c.status||''));
+    // Apply work sub-filter
+    if(coDashWorkFilter==='done')    filtered=filtered.filter(c=>/^done$/i.test(String(c.work||'').trim()));
+    else if(coDashWorkFilter==='notdone') filtered=filtered.filter(c=>/not/i.test(c.work||'')||!c.work);
+  }
   filtered.sort((a,b)=>String(a.pid||'').localeCompare(String(b.pid||'')));
   const filterTotal=filtered.reduce((a,c)=>a+(c.value||0),0);
   if(!filtered.length){el.innerHTML='<div class="empty">No COs found</div>';return;}
@@ -3157,6 +3181,7 @@ function loadLocal() {
 
 // ─── INIT ─────────────────────────────────────────────────────────────────────
 loadLocal();        // 1. Load from localStorage instantly
+coDashFilter='pending'; coDashWorkFilter='all';
 renderAnalytics();
 renderProjTable();
 syncFromSheets();   // 2. Sync projects from Sheets
