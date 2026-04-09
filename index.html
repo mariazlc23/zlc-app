@@ -290,6 +290,24 @@
   <div class="dash-tabs">
     <button class="dtab active" onclick="goDash('analytics',this)">Historical analytics</button>
     <button class="dtab" onclick="goDash('overview',this)">Overview</button>
+    <button class="dtab" onclick="goDash('warehouse',this)">📦 Warehouse</button>
+  </div>
+  <div id="dash-warehouse" style="display:none">
+    <div style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;margin-bottom:20px">
+      <div>
+        <div style="font-size:18px;font-weight:700;color:var(--text)">📦 Warehouse Dashboard</div>
+        <div style="font-size:12px;color:var(--text2);margin-top:2px" id="wh-subtitle">Loading from ZLC Outlook…</div>
+      </div>
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <div style="position:relative">
+          <input id="wh-search" type="text" placeholder="Search..." oninput="filterWarehouse()"
+            style="font-size:12px;padding:5px 10px 5px 28px;border-radius:var(--radius);border:0.5px solid var(--border2);background:var(--bg);color:var(--text);width:160px">
+          <span style="position:absolute;left:8px;top:50%;transform:translateY(-50%);color:var(--text3);font-size:11px">🔍</span>
+        </div>
+        <button class="btn btn-sm btn-ghost" onclick="syncWarehouse()" style="white-space:nowrap">↻ Refresh</button>
+      </div>
+    </div>
+    <div id="wh-dash-content"><div class="empty">Click ↻ Refresh to load warehouse data from ZLC Outlook.</div></div>
   </div>
   <div id="dash-overview" style="display:none">
     <div class="card" style="margin-bottom:16px">
@@ -961,7 +979,7 @@ function goTab(n,b){
   document.querySelectorAll('.nav-item').forEach(x=>x.classList.remove('active'));
   document.getElementById('view-'+n).classList.add('active');
   b.classList.add('active');
-  if(n==='dashboard'){if(activeDash==='analytics')renderAnalytics();else renderOverview();}
+  if(n==='dashboard'){if(activeDash==='analytics')renderAnalytics();else if(activeDash==='warehouse')syncWarehouse();else renderOverview();}
   if(n==='projects'){renderProjTable();if(selProj)renderDetail();}
   if(n==='roster')renderRoster();
 }
@@ -970,7 +988,118 @@ function goDash(t,b){
   document.querySelectorAll('.dtab').forEach(x=>x.classList.remove('active'));b.classList.add('active');
   document.getElementById('dash-overview').style.display=t==='overview'?'block':'none';
   document.getElementById('dash-analytics').style.display=t==='analytics'?'block':'none';
-  if(t==='overview')renderOverview();else renderAnalytics();
+  document.getElementById('dash-warehouse').style.display=t==='warehouse'?'block':'none';
+  if(t==='overview')renderOverview();
+  else if(t==='analytics')renderAnalytics();
+  else if(t==='warehouse')syncWarehouse();
+}
+
+// ─── WAREHOUSE DASHBOARD ──────────────────────────────────────────────────────
+const WH_DASHBOARD_GID='280051356';
+let whRawRows={};
+
+async function syncWarehouse(){
+  const el=document.getElementById('wh-dash-content');
+  const sub=document.getElementById('wh-subtitle');
+  if(el)el.innerHTML='<div class="empty" style="padding:20px">⏳ Loading from sheet...</div>';
+  try{
+    const sheetName=await getSheetNameByGid(WH_DASHBOARD_GID);
+    if(!sheetName){if(el)el.innerHTML='<div class="empty">Warehouse sheet not found (GID 280051356)</div>';return;}
+    const [vehData,driverData,equip1Data,equip2Data]=await Promise.all([
+      fetchRange(`${sheetName}!A2:E14`),
+      fetchRange(`${sheetName}!A22:E35`),
+      fetchRange(`${sheetName}!G2:M13`),
+      fetchRange(`${sheetName}!G15:K65`),
+    ]);
+    if(sub)sub.textContent='Live from ZLC Outlook · '+new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'});
+    renderWarehouseDash({veh:vehData,driver:driverData,equip1:equip1Data,equip2:equip2Data});
+  }catch(e){if(el)el.innerHTML=`<div class="empty">Error: ${e.message}</div>`;}
+}
+
+async function getSheetNameByGid(gid){
+  try{
+    const url=`https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}?key=${API_KEY}&fields=sheets.properties`;
+    const res=await fetch(url);const data=await res.json();
+    const sheet=(data.sheets||[]).find(s=>String(s.properties.sheetId)===String(gid));
+    return sheet?sheet.properties.title:null;
+  }catch(e){return null;}
+}
+
+async function fetchRange(range){
+  try{
+    const url=`https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/${encodeURIComponent(range)}?key=${API_KEY}`;
+    const res=await fetch(url);const data=await res.json();return data.values||[];
+  }catch(e){return[];}
+}
+
+function filterWarehouse(){
+  const q=(document.getElementById('wh-search')?.value||'').toLowerCase().trim();
+  if(whRawRows&&whRawRows.veh)renderWarehouseDash(whRawRows,q);
+}
+
+function renderWarehouseDash(sections,q=''){
+  whRawRows=sections;
+  const el=document.getElementById('wh-dash-content');if(!el)return;
+  let h='<div style="display:flex;flex-direction:column;gap:24px">';
+  h+=renderWhSection({rows:sections.veh||[],title:'🚗 Vehicles needing attention',color:'#E24B4A',bgLight:'rgba(226,75,74,0.06)',q,cardMode:true});
+  h+=renderWhSection({rows:sections.driver||[],title:'🧑‍✈️ Driver log — Safety check & oil',color:'#185FA5',bgLight:'rgba(24,95,165,0.06)',q,cardMode:false,
+    alertFn:(row)=>{const v=String(row[2]||'').trim();if(!v)return false;const d=new Date(v);return!isNaN(d)&&d<new Date();},alertCol:2});
+  h+=renderWhSection({rows:sections.equip1||[],title:'🔧 Damaged equipment',color:'#BA7517',bgLight:'rgba(186,117,23,0.06)',q,cardMode:true});
+  h+=renderWhSection({rows:sections.equip2||[],title:'📦 Equipment inventory & status',color:'#3B6D11',bgLight:'rgba(59,109,17,0.06)',q,cardMode:false,
+    forcedHeaders:['Equipment','Status','Location','Operator','Last Update'],
+    alertFn:(row)=>{const v=String(row[4]||'').trim();if(!v)return false;const d=new Date(v);if(isNaN(d))return false;return(new Date()-d)/(1000*60*60*24)>20;},
+    alertCol:4,alertMsg:(row)=>{const v=String(row[4]||'').trim();const d=new Date(v);if(isNaN(d))return v;const days=Math.floor((new Date()-d)/(1000*60*60*24));return`⚠ ${v} (${days}d ago)`;}});
+  h+='</div>';el.innerHTML=h;
+}
+
+function renderWhSection({rows,title,color,bgLight,q,cardMode,alertFn,alertCol,alertMsg,forcedHeaders}){
+  if(!rows.length)return'';
+  const headers=forcedHeaders||rows[0].map(h=>String(h||'').trim()).filter(Boolean);
+  const startIdx=forcedHeaders?0:1;
+  let data=rows.slice(startIdx).filter(r=>r.some(c=>String(c||'').trim()));
+  if(q)data=data.filter(r=>r.some(c=>String(c||'').toLowerCase().includes(q)));
+  const count=data.length;if(!count)return'';
+  let inner='';
+  if(cardMode){
+    inner='<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(240px,1fr));gap:12px;padding:16px">';
+    data.forEach(row=>{
+      const isAlert=alertFn?alertFn(row):false;
+      const cardTitle=String(row[0]||'').trim()||'—';
+      const fields=headers.slice(1).map((h,i)=>{const v=String(row[i+1]||'').trim();if(!v)return'';
+        const isTrig=alertFn&&alertCol===i+1&&alertFn(row);
+        const vHtml=isTrig?`<span style="color:#E24B4A;font-weight:600">⚠ ${v}</span>`:v;
+        return`<div style="display:flex;gap:6px;font-size:12px;padding:2px 0"><span style="color:var(--text3);min-width:80px;font-size:11px;flex-shrink:0">${h}</span><span style="color:var(--text)">${vHtml}</span></div>`;
+      }).filter(Boolean).join('');
+      inner+=`<div style="background:var(--bg);border:0.5px solid var(--border);border-top:3px solid ${isAlert?'#E24B4A':color};border-radius:8px;padding:12px">
+        <div style="font-size:13px;font-weight:600;color:${isAlert?'#E24B4A':'var(--text)'};margin-bottom:8px">${isAlert?'🚨':''} ${cardTitle}</div>${fields}</div>`;
+    });
+    inner+='</div>';
+  }else{
+    const alertColH=`<th style="width:24px;padding:6px 4px;border-bottom:2px solid ${color}"></th>`;
+    const thead=`<tr style="background:${bgLight}">${alertColH}${headers.map(h=>`<th style="font-size:11px;white-space:nowrap;padding:8px 10px;border-bottom:2px solid ${color}">${h}</th>`).join('')}</tr>`;
+    const tbody=data.map((row,ri)=>{
+      const isAlert=alertFn?alertFn(row):false;
+      const rowStyle=isAlert?'background:rgba(226,75,74,0.08);border-left:3px solid #E24B4A':ri%2===0?'background:var(--bg3)':'background:var(--bg)';
+      const cells=headers.map((h,i)=>{
+        let v=String(row[i]||'').trim();if(!v)return`<td style="font-size:12px;padding:7px 10px;color:var(--text3)">—</td>`;
+        const isTrig=alertFn&&alertCol===i&&alertFn(row);
+        const isSt=h.toLowerCase().includes('status')||h.toLowerCase().includes('condition');
+        let vHtml=isSt?`<span class="badge ${/damage|broken|repair|down|fail|no/i.test(v)?'b-red':/ok|good|working|pass|yes|available/i.test(v)?'b-green':'b-amber'}">${v}</span>`
+          :isTrig?`<span style="color:#E24B4A;font-weight:600">${alertMsg?alertMsg(row):'⚠ '+v}</span>`:v;
+        return`<td style="font-size:12px;padding:7px 10px">${vHtml}</td>`;
+      }).join('');
+      const alertCell=isAlert?`<td style="padding:6px 4px;text-align:center;font-size:13px">🚨</td>`:`<td></td>`;
+      return`<tr style="${rowStyle}">${alertCell}${cells}</tr>`;
+    }).join('');
+    inner=`<div class="tbl-wrap" style="padding:0"><table><thead>${thead}</thead><tbody>${tbody}</tbody></table></div>`;
+  }
+  const alertCount=alertFn?data.filter(r=>alertFn(r)).length:0;
+  const alertBadge=alertCount>0?`<span style="font-size:11px;background:#E24B4A;color:#fff;padding:2px 8px;border-radius:99px;margin-left:8px">🚨 ${alertCount} alert${alertCount!==1?'s':''}</span>`:'';
+  return`<div style="border:0.5px solid var(--border);border-radius:12px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,0.06)">
+    <div style="background:${color};color:#fff;padding:12px 16px;display:flex;align-items:center;justify-content:space-between">
+      <div style="font-size:14px;font-weight:700;display:flex;align-items:center">${title}${alertBadge}</div>
+      <span style="font-size:11px;background:rgba(255,255,255,0.2);padding:3px 10px;border-radius:99px">${count} item${count!==1?'s':''}</span>
+    </div>${inner}</div>`;
 }
 
 // ─── DASHBOARD OVERVIEW ──────────────────────────────────────────────────────
@@ -1635,10 +1764,10 @@ function renderRoster(){
   // Build header
   let h='<thead><tr>';
   if(dayMode){
-    h+=`<th class="ic" style="min-width:140px">Nombre</th>`;
-    h+=`<th class="ic" style="min-width:180px">Trabajo · Cost code</th>`;
-    h+=`<th class="ic" style="min-width:220px">Detalles del día</th>`;
-    h+=`<th class="ic" style="min-width:160px;background:rgba(255,243,205,0.4)">📦 Warehouse</th>`;
+    h+=`<th class="ic" style="min-width:120px;max-width:150px">Name</th>`;
+    h+=`<th class="ic" style="min-width:180px">Job # · Cost Code</th>`;
+    h+=`<th class="ic" style="min-width:250px">Details</th>`;
+    h+=`<th class="ic" style="min-width:160px;background:rgba(255,243,205,0.4)">📦 Warehouse Details</th>`;
   } else {
     h+=`<th class="ic" style="min-width:90px;max-width:110px">Name / Unit</th>`;
     h+=`<th class="ic" style="min-width:40px;max-width:70px;font-size:10px">Notes</th>`;
@@ -1671,6 +1800,7 @@ function renderRoster(){
     const note=item.notes?.[key]||'';
     const wh=item.wh?.[key]||'';
     const cc=item.cc?.[key]||'';
+    const pour=item.pour?.[key]||'';
     const conf=item.confirmed?.[key]!==false;
     if(!asgn&&!note&&!wh)return null;
     // Col 1: Trabajo + CostCode
@@ -1695,7 +1825,9 @@ function renderRoster(){
     const dispId='inline-note-'+item.id+'-'+safe;
     const type2=item.certs?'staff':item.veh?'equip':item.team?'staff':'extra';
     const detallesHtml='<div id="'+dispId+'-disp" ondblclick="startInlineNoteEdit(\''+item.id+'\',\''+key+'\',\''+type2+'\')" title="Double-click to edit" style="font-size:12px;color:var(--text);line-height:1.4;cursor:text;min-height:20px;border-radius:4px;padding:2px 4px">'
-      +(note||'<span style=\'color:var(--text3);font-size:11px\'>dbl-click to add</span>')+'</div>';
+      +(note||'<span style=\'color:var(--text3);font-size:11px\'>dbl-click to add</span>')
+      +(pour?(function(){var pp=pour.split('|');var parts=[];if(pp[0])parts.push('Time: '+pp[0]);if(pp[1])parts.push('PSI: '+pp[1]);if(pp[2])parts.push('Yards: '+pp[2]);return '<div style="margin-top:4px;font-size:11px;color:#185FA5;font-weight:600">Pour — '+parts.join(' | ')+'</div>';}()):'')
+      +'</div>';      +'</div>';
     // Col 3: Warehouse
     const whHtml=wh?'<span style="font-size:12px;color:#7A5800;line-height:1.4">📦 '+wh+'</span>':'';
     const tdStyle='vertical-align:top;padding:8px 10px;white-space:normal;overflow:visible;max-width:none;';
@@ -1708,15 +1840,17 @@ function renderRoster(){
   const dayCells=(item,type)=>days.map(d=>{
     const dw=dow(calYear,calMonth,d),wk=dw===0||dw===6,key=`${calYear}-${calMonth+1}-${d}`,asgn=item.a?.[key]||'',bg=asgn?pc(asgn):'',isT=d===todayD,tc=bg?ptc(bg):'';
     const note=item.notes?.[key]||'';
+    const pour=item.pour?.[key]||'';
     const titleText=asgn?(note?`${asgn} — ${note}`:asgn):'click to assign';
     const noteDot=note?`<span style="position:absolute;top:1px;right:1px;width:5px;height:5px;border-radius:50%;background:${tc||'#fff'};opacity:0.8;flex-shrink:0"></span>`:'';
+    const pourIcon=pour?`<span style="position:absolute;bottom:1px;left:1px;font-size:8px;line-height:1">🪣</span>`:''; // pour emoji
     const conf=item.confirmed?.[key]!==false;
     const warnOverlay=!conf&&asgn?'<span style="position:absolute;top:0;left:0;font-size:8px;line-height:1">⚠️</span>':'';
     const isNEW=asgn==='NEW';
     const cellBg=isNEW?'#FFEBEE':bg;const cellTc=isNEW?'#C62828':tc;
     const dispLabel=isNEW?'🆕':asgn==='OFF'?'OFF':asgn.split('-')[1]||asgn.slice(0,4);
     const cellBorder=!conf&&asgn?'outline:2px solid #E24B4A;':'';
-    return`<td class="day-cell${isT?' today-col':''}" style="position:relative;${cellBg?`background:${cellBg};`:''}${wk&&!cellBg?'background:rgba(0,0,0,0.02);':''}${cellBorder}" onclick="clickCell('${item.id}','${key}','${d}','${type}')" title="${titleText.replace(/"/g,'&quot;')}${!conf?' ⚠️ NOT CONFIRMED':''}">${asgn?`<div class="day-block" style="color:${cellTc}">${dispLabel}</div>`:''}${noteDot}${warnOverlay}</td>`;
+    return`<td class="day-cell${isT?' today-col':''}" style="position:relative;${cellBg?`background:${cellBg};`:''}${wk&&!cellBg?'background:rgba(0,0,0,0.02);':''}${cellBorder}" onclick="clickCell('${item.id}','${key}','${d}','${type}')" title="${titleText.replace(/"/g,'&quot;')}${!conf?' ⚠️ NOT CONFIRMED':''}">${asgn?`<div class="day-block" style="color:${cellTc}">${dispLabel}</div>`:''}${noteDot}${warnOverlay}${pourIcon}</td>`;
   }).join('');
 
   // Render a row — returns '' if day mode and no assignment/note
@@ -1725,7 +1859,7 @@ function renderRoster(){
     if(dayMode){
       const extra=dayViewCells(item);
       if(!extra)return '';
-      return`<tr style="${bgStyle}"><td class="ic">${nameCell(item.id,type)}</td><td class="ic">${info}</td>${extra}</tr>`;
+      return`<tr style="${bgStyle}"><td class="ic" style="max-width:150px">${nameCell(item.id,type)}</td>${extra}</tr>`;
     }
     return`<tr style="${bgStyle}"><td class="ic" style="max-width:110px">${nameCell(item.id,type)}</td><td class="ic" data-info-edit="${item.id}" style="max-width:70px;font-size:10px;padding:3px 4px;cursor:pointer;white-space:normal;word-break:break-word;vertical-align:top" ondblclick="editInfoCell('${item.id}','${type}')" title="Double-click to edit notes">${info}</td>${dayCells(item,type)}</tr>`;
   };
@@ -1745,7 +1879,7 @@ function renderRoster(){
     const filtered=EXTRA.filter(e=>passFilter(e,'extra'));
     if(filtered.length){
       const rows=filtered.map(ew=>{
-        if(dayMode){const extra=dayViewCells(ew);if(!extra)return '';return`<tr style="background:rgba(250,238,218,0.2)"><td class="ic">${nameCell(ew.id,'extra')}</td><td class="ic">${ewWeekSummary(ew)}</td>${extra}</tr>`;}
+        if(dayMode){const extra=dayViewCells(ew);if(!extra)return '';return`<tr style="background:rgba(250,238,218,0.2)"><td class="ic" style="max-width:150px">${nameCell(ew.id,'extra')}</td>${extra}</tr>`;}
         return`<tr style="background:rgba(250,238,218,0.2)"><td class="ic">${nameCell(ew.id,'extra')}</td><td class="ic">${ewWeekSummary(ew)}</td>${dayCells(ew,'extra')}</tr>`;
       }).filter(Boolean);
       if(rows.length){h+=mkSec(`Extra workers · ${filtered.length} people`,'#BA7517');h+=rows.join('');}
@@ -1766,7 +1900,7 @@ function renderRoster(){
     const filtered=RENTALS.filter(e=>passFilter(e,'rental'));
     if(filtered.length){
       const rows=filtered.map(r=>{
-        if(dayMode){const extra=dayViewCells(r);if(!extra)return '';return`<tr style="background:rgba(234,243,222,0.2)"><td class="ic">${nameCell(r.id,'rental')}</td><td class="ic"></td>${extra}</tr>`;}
+        if(dayMode){const extra=dayViewCells(r);if(!extra)return '';return`<tr style="background:rgba(234,243,222,0.2)"><td class="ic" style="max-width:150px">${nameCell(r.id,'rental')}</td>${extra}</tr>`;}
         return`<tr style="background:rgba(234,243,222,0.2)"><td class="ic">${nameCell(r.id,'rental')}</td><td class="ic"></td>${dayCells(r,'rental')}</tr>`;
       }).filter(Boolean);
       if(rows.length){h+=mkSec(`Rentals · ${filtered.length} items`,'#3B6D11');h+=rows.join('');}
@@ -1774,9 +1908,19 @@ function renderRoster(){
   }
   h+='</tbody>';
   document.getElementById('roster-tbl').innerHTML=h;
-  const usedAll=[...STAFF,...EXTRA,...EQUIP,...RENTALS].flatMap(e=>Object.values(e.a||{})).filter(Boolean);
+  // Split multi-assign comma values to get individual project IDs
+  const usedAll=[...STAFF,...EXTRA,...EQUIP,...RENTALS]
+    .flatMap(e=>Object.values(e.a||{}).flatMap(v=>String(v||'').split(',').map(x=>x.trim())))
+    .filter(Boolean);
   const uniq=[...new Set(usedAll)];
-  document.getElementById('roster-legend').innerHTML=uniq.map(p=>`<span class="li"><span class="lsq" style="background:${pc(p)}"></span>${p}</span>`).join('')+
+  document.getElementById('roster-legend').innerHTML=uniq.map(p=>{
+    if(p==='OFF') return `<span class="li"><span class="lsq" style="background:#FCEBEB;border:0.5px solid #F09595"></span>OFF</span>`;
+    if(p==='Warehouse') return `<span class="li"><span class="lsq" style="background:${pc('Warehouse')}"></span>Warehouse</span>`;
+    if(p==='NEW') return `<span class="li"><span class="lsq" style="background:#FFEBEE;border:1px dashed #E24B4A"></span>🆕 New</span>`;
+    const proj=DB.projects.find(x=>x.id===p);
+    const lbl=proj?proj.name:p; // name only, no number
+    return `<span class="li"><span class="lsq" style="background:${pc(p)}"></span>${lbl}</span>`;
+  }).join('')+
     (uniq.length?'<span class="li"><span class="lsq" style="background:#FCEBEB;border:0.5px solid #F09595"></span>OFF</span>':'')+
     (dayMode?`<span style="font-size:11px;color:var(--text2);margin-left:8px">Showing: ${DLBL[dow(calYear,calMonth,rosterDayFilter)]} ${rosterDayFilter} ${MONTHS[calMonth]}</span>`:'');
 }
@@ -1786,12 +1930,14 @@ function clickCell(itemId,dateKey,day,type){
   const item=getItem(itemId,type);if(!item)return;
   if(!item.a)item.a={};if(!item.notes)item.notes={};if(!item.wh)item.wh={};
   if(!item.cc)item.cc={};if(!item.co)item.co={};if(!item.confirmed)item.confirmed={};
+  if(!item.pour)item.pour={};
   const cur=item.a[dateKey]||'';
   const curNote=item.notes[dateKey]||'';
   const curWh=item.wh[dateKey]||'';
   const curCc=item.cc[dateKey]||'';
   const curCo=item.co[dateKey]||'';
   const curConf=item.confirmed[dateKey]!==false;
+  const curPour=item.pour?.[dateKey]||'';
   const d=dateKey.split('-'),dl=`${day} ${MO[parseInt(d[1])-1]} ${d[0]}`;
   const activeProjs=DB.projects.filter(p=>p.status==='Active');
   const allProjs=[
@@ -1817,6 +1963,11 @@ function clickCell(itemId,dateKey,day,type){
     }
     return h;
   }
+  // Parse pour data
+  const pourParts=curPour?curPour.split('|'):[];
+  const pourTime=pourParts[0]||'';
+  const pourPsi=pourParts[1]||'';
+  const pourYards=pourParts[2]||'';
   const extraFields=buildExtraFields(cur,curCc,curCo);
   showModal(`<div class="modal-title">Assign · ${item.name}</div>
     <div style="font-size:12px;color:var(--text2);margin-bottom:12px">${dl}</div>
@@ -1828,6 +1979,31 @@ function clickCell(itemId,dateKey,day,type){
       <label style="display:flex;align-items:center;gap:4px;cursor:pointer;font-size:12px;margin:0"><input type="radio" name="cp-conf" value="no" ${!curConf?'checked':''} style="width:auto;accent-color:#E24B4A"> ⚠️ Not confirmed</label>
     </div>
     <div id="cp-extra-fields" style="margin-bottom:0">${extraFields}</div>
+    <div class="fg" style="background:rgba(200,230,255,0.3);border:0.5px solid #6AAED6;border-radius:var(--radius);padding:10px 12px;margin-bottom:8px">
+      <label style="color:#185FA5;font-weight:600;display:flex;align-items:center;gap:6px;margin-bottom:8px">
+        <span>🪣</span> Pour — concrete pour details
+        <label style="display:flex;align-items:center;gap:4px;cursor:pointer;font-size:11px;font-weight:400;color:var(--text2);margin:0;margin-left:auto">
+          <input type="checkbox" id="cp-pour-enabled" ${curPour?'checked':''} style="width:auto;accent-color:#185FA5" onchange="togglePourFields(this.checked)"> Enable pour
+        </label>
+      </label>
+      <div id="cp-pour-fields" style="display:${curPour?'flex':'none'};gap:8px;flex-wrap:wrap">
+        <div style="flex:1;min-width:100px">
+          <label style="font-size:11px;color:var(--text2)">Time</label>
+          <input id="cp-pour-time" type="text" value="${pourTime}" placeholder="e.g. 6:00am"
+            style="width:100%;font-size:13px;padding:5px 8px;border-radius:var(--radius);border:0.5px solid #6AAED6;background:var(--bg);color:var(--text)">
+        </div>
+        <div style="flex:1;min-width:80px">
+          <label style="font-size:11px;color:var(--text2)">PSI</label>
+          <input id="cp-pour-psi" type="number" value="${pourPsi}" placeholder="e.g. 3000"
+            style="width:100%;font-size:13px;padding:5px 8px;border-radius:var(--radius);border:0.5px solid #6AAED6;background:var(--bg);color:var(--text)">
+        </div>
+        <div style="flex:1;min-width:80px">
+          <label style="font-size:11px;color:var(--text2)">Yards #</label>
+          <input id="cp-pour-yards" type="number" value="${pourYards}" placeholder="e.g. 50"
+            style="width:100%;font-size:13px;padding:5px 8px;border-radius:var(--radius);border:0.5px solid #6AAED6;background:var(--bg);color:var(--text)">
+        </div>
+      </div>
+    </div>
     <div class="fg"><label>Notes for this day</label>
       <textarea id="cp-note" placeholder="Site instructions, contact info..." style="min-height:60px;width:100%;font-size:13px;padding:8px;border-radius:var(--radius);border:0.5px solid var(--border2);background:var(--bg);color:var(--text);font-family:inherit;resize:vertical">${curNote}</textarea></div>
     <div class="fg" style="background:rgba(255,243,205,0.4);border:0.5px solid #F0C040;border-radius:var(--radius);padding:10px 12px;margin-bottom:0">
@@ -1839,6 +2015,11 @@ function clickCell(itemId,dateKey,day,type){
       <button class="btn" onclick="closeModal()">Cancel</button>
       <button class="btn btn-primary" onclick="saveCell('${itemId}','${dateKey}','${type}')">Save</button>
     </div>`);
+}
+
+function togglePourFields(checked){
+  const el=document.getElementById('cp-pour-fields');
+  if(el)el.style.display=checked?'flex':'none';
 }
 
 function updateCellExtraFields(itemId,dateKey){
@@ -1872,12 +2053,20 @@ function saveCell(id,key,type){
   const confRadio=document.querySelector('input[name="cp-conf"]:checked');
   const conf=confRadio?confRadio.value!=='no':true;
   const prevWh=item.wh[key]||'';
+  // Pour data
+  if(!item.pour)item.pour={};
+  const pourEnabled=document.getElementById('cp-pour-enabled')?.checked;
+  const pourTime=(document.getElementById('cp-pour-time')?.value||'').trim();
+  const pourPsi=(document.getElementById('cp-pour-psi')?.value||'').trim();
+  const pourYards=(document.getElementById('cp-pour-yards')?.value||'').trim();
+  const pourVal=pourEnabled&&(pourTime||pourPsi||pourYards)?[pourTime,pourPsi,pourYards].join('|'):'';
   if(v) item.a[key]=v; else delete item.a[key];
   if(note) item.notes[key]=note; else delete item.notes[key];
   if(wh) item.wh[key]=wh; else delete item.wh[key];
   if(cc) item.cc[key]=cc; else delete item.cc[key];
   if(co) item.co[key]=co; else delete item.co[key];
   item.confirmed[key]=conf;
+  if(pourVal)item.pour[key]=pourVal;else delete item.pour[key];
 
   // If warehouse notes changed and there's a project assigned, write to sheet
   if(wh && wh !== prevWh && v && v !== 'OFF') {
@@ -1906,6 +2095,7 @@ function clearCell(id,key,type){
   if(item.cc)       delete item.cc[key];
   if(item.co)       delete item.co[key];
   if(item.confirmed)delete item.confirmed[key];
+  if(item.pour)     delete item.pour[key];
   saveLocal();closeModal();renderRoster();
 }
 
@@ -2317,19 +2507,19 @@ function buildRosterData() {
 function applyRosterData(rd) {
   (rd.staff||[]).forEach(saved => {
     const item = STAFF.find(e => e.id === saved.id);
-    if (item) { item.a=saved.a||{}; item.notes=saved.notes||{}; item.wh=saved.wh||{}; item.cc=saved.cc||{}; item.co=saved.co||{}; item.confirmed=saved.confirmed||{}; if(saved.name)item.name=saved.name; }
+    if (item) { item.a=saved.a||{}; item.notes=saved.notes||{}; item.wh=saved.wh||{}; item.cc=saved.cc||{}; item.co=saved.co||{}; item.confirmed=saved.confirmed||{}; item.pour=saved.pour||{}; if(saved.name)item.name=saved.name; }
   });
   (rd.extra||[]).forEach(saved => {
     const item = EXTRA.find(e => e.id === saved.id);
-    if (item) { item.a=saved.a||{}; item.notes=saved.notes||{}; item.wh=saved.wh||{}; item.cc=saved.cc||{}; item.co=saved.co||{}; item.confirmed=saved.confirmed||{}; item.project=saved.project||item.project; if(saved.name)item.name=saved.name; }
+    if (item) { item.a=saved.a||{}; item.notes=saved.notes||{}; item.wh=saved.wh||{}; item.cc=saved.cc||{}; item.co=saved.co||{}; item.confirmed=saved.confirmed||{}; item.pour=saved.pour||{}; item.project=saved.project||item.project; if(saved.name)item.name=saved.name; }
   });
   (rd.equip||[]).forEach(saved => {
     const item = EQUIP.find(e => e.id === saved.id);
-    if (item) { item.a=saved.a||{}; item.notes=saved.notes||{}; item.wh=saved.wh||{}; item.cc=saved.cc||{}; item.co=saved.co||{}; item.confirmed=saved.confirmed||{}; if(saved.name)item.name=saved.name; }
+    if (item) { item.a=saved.a||{}; item.notes=saved.notes||{}; item.wh=saved.wh||{}; item.cc=saved.cc||{}; item.co=saved.co||{}; item.confirmed=saved.confirmed||{}; item.pour=saved.pour||{}; if(saved.name)item.name=saved.name; }
   });
   (rd.rentals||[]).forEach(saved => {
     const item = RENTALS.find(e => e.id === saved.id);
-    if (item) { item.a=saved.a||{}; item.notes=saved.notes||{}; item.wh=saved.wh||{}; item.cc=saved.cc||{}; item.co=saved.co||{}; item.confirmed=saved.confirmed||{}; if(saved.name)item.name=saved.name; }
+    if (item) { item.a=saved.a||{}; item.notes=saved.notes||{}; item.wh=saved.wh||{}; item.cc=saved.cc||{}; item.co=saved.co||{}; item.confirmed=saved.confirmed||{}; item.pour=saved.pour||{}; if(saved.name)item.name=saved.name; }
   });
   (rd.extraList||[]).forEach(saved => { if(!EXTRA.find(e=>e.id===saved.id)) EXTRA.push(saved); });
   (rd.staffList||[]).forEach(saved => { if(!STAFF.find(e=>e.id===saved.id)) STAFF.push(saved); });
@@ -2360,7 +2550,7 @@ function saveLocal() {
       staff: STAFF.map(e => ({ id:e.id, a:e.a||{}, notes:e.notes||{}, wh:e.wh||{} })),
       extra: EXTRA.map(e => ({ id:e.id, a:e.a||{}, notes:e.notes||{}, wh:e.wh||{}, project:e.project })),
       equip: EQUIP.map(e => ({ id:e.id, a:e.a||{}, notes:e.notes||{}, wh:e.wh||{} })),
-      rentals: RENTALS.map(e => ({ id:e.id, a:e.a||{}, notes:e.notes||{}, wh:e.wh||{}, cc:e.cc||{}, co:e.co||{}, confirmed:e.confirmed||{}, name:e.name })),
+      rentals: RENTALS.map(e => ({ id:e.id, a:e.a||{}, notes:e.notes||{}, wh:e.wh||{}, cc:e.cc||{}, co:e.co||{}, confirmed:e.confirmed||{}, pour:e.pour||{}, name:e.name })),
       extraList: EXTRA.filter(e => e.id.startsWith('ew') && !['ew1','ew2','ew3','ew4','ew5','ew6','ew7','ew8'].includes(e.id)),
       staffList: STAFF.filter(e => !['e1','e2','e3','e4','e5','e6','e7','e8','e9','e10','e11','e12','e13','e14','e15','e16','e17'].includes(e.id)),
     };
@@ -2386,7 +2576,7 @@ function loadLocal() {
       // Restore assignments and notes into existing items
       (rd.staff||[]).forEach(saved => {
         const item = STAFF.find(e => e.id === saved.id);
-        if (item) { item.a=saved.a||{}; item.notes=saved.notes||{}; item.wh=saved.wh||{}; item.cc=saved.cc||{}; item.co=saved.co||{}; item.confirmed=saved.confirmed||{}; if(saved.name)item.name=saved.name; }
+        if (item) { item.a=saved.a||{}; item.notes=saved.notes||{}; item.wh=saved.wh||{}; item.cc=saved.cc||{}; item.co=saved.co||{}; item.confirmed=saved.confirmed||{}; item.pour=saved.pour||{}; if(saved.name)item.name=saved.name; }
       });
       (rd.extra||[]).forEach(saved => {
         const item = EXTRA.find(e => e.id === saved.id);
@@ -2394,11 +2584,11 @@ function loadLocal() {
       });
       (rd.equip||[]).forEach(saved => {
         const item = EQUIP.find(e => e.id === saved.id);
-        if (item) { item.a=saved.a||{}; item.notes=saved.notes||{}; item.wh=saved.wh||{}; item.cc=saved.cc||{}; item.co=saved.co||{}; item.confirmed=saved.confirmed||{}; if(saved.name)item.name=saved.name; }
+        if (item) { item.a=saved.a||{}; item.notes=saved.notes||{}; item.wh=saved.wh||{}; item.cc=saved.cc||{}; item.co=saved.co||{}; item.confirmed=saved.confirmed||{}; item.pour=saved.pour||{}; if(saved.name)item.name=saved.name; }
       });
       (rd.rentals||[]).forEach(saved => {
         const item = RENTALS.find(e => e.id === saved.id);
-        if (item) { item.a=saved.a||{}; item.notes=saved.notes||{}; item.wh=saved.wh||{}; item.cc=saved.cc||{}; item.co=saved.co||{}; item.confirmed=saved.confirmed||{}; if(saved.name)item.name=saved.name; }
+        if (item) { item.a=saved.a||{}; item.notes=saved.notes||{}; item.wh=saved.wh||{}; item.cc=saved.cc||{}; item.co=saved.co||{}; item.confirmed=saved.confirmed||{}; item.pour=saved.pour||{}; if(saved.name)item.name=saved.name; }
       });
       // Restore extra workers added by user
       (rd.extraList||[]).forEach(saved => {
