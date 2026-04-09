@@ -257,11 +257,13 @@
 <!-- SIDEBAR -->
 <div class="sidebar">
   <div class="logo">ZLC <span>Corp</span></div>
-  <div style="padding:6px 12px 4px;border-bottom:0.5px solid var(--border);background:var(--bg3)">
-    <div style="display:flex;align-items:center;gap:6px">
+  <div style="padding:6px 12px 6px;border-bottom:0.5px solid var(--border);background:var(--bg3)">
+    <div style="display:flex;align-items:center;gap:4px;margin-bottom:4px">
       <span id="cloud-status" style="font-size:10px;color:var(--text3);flex:1">☁️ Not synced yet</span>
-      <button onclick="loadFromCloud()" title="Load from cloud" style="font-size:11px;padding:2px 7px;border-radius:4px;border:0.5px solid var(--border2);background:var(--bg);color:var(--text2);cursor:pointer">↓ Sync</button>
-      <button onclick="forceSaveToCloud()" title="Save to cloud" style="font-size:11px;padding:2px 7px;border-radius:4px;border:0.5px solid var(--border2);background:var(--bg);color:var(--text2);cursor:pointer">↑ Save</button>
+    </div>
+    <div style="display:flex;gap:4px">
+      <button onclick="forceSaveToCloud()" style="flex:1;font-size:11px;padding:3px 6px;border-radius:4px;border:none;background:#185FA5;color:#fff;cursor:pointer;font-weight:600">💾 Save</button>
+      <button onclick="loadFromCloud()" style="flex:1;font-size:11px;padding:3px 6px;border-radius:4px;border:0.5px solid var(--border2);background:var(--bg);color:var(--text2);cursor:pointer">      ↻ Load</button>
     </div>
   </div>
   <div class="nav-section">
@@ -435,7 +437,7 @@
           <option value="">— All days —</option>
         </select>
         <button class="btn btn-sm btn-ghost" onclick="setRosterDayFilter('');document.getElementById('roster-day-filter').value=''" style="font-size:11px;padding:3px 8px">✕ Clear</button>
-        <span id="cloud-status" style="font-size:11px;color:var(--text3);padding:3px 8px;background:var(--bg3);border-radius:var(--radius);white-space:nowrap">☁️ —</span>
+        <span id="cloud-status-2" style="font-size:11px;color:var(--text3);padding:3px 8px;background:var(--bg3);border-radius:var(--radius);white-space:nowrap">☁️ —</span>
         <button class="btn btn-sm btn-ghost" onclick="forceSaveToCloud()" title="Force save all data to cloud" style="font-size:11px;padding:3px 8px">💾 Save</button>
         <button class="btn btn-sm btn-ghost" onclick="loadFromCloud()" title="Reload from cloud" style="font-size:11px;padding:3px 8px">↻ Sync</button>
         <button class="btn btn-sm" onclick="downloadDayPDF()" id="pdf-btn" style="font-size:11px;padding:4px 10px;background:#E24B4A;color:#fff;border:none;border-radius:var(--radius);cursor:pointer;display:none">⬇ Download PDF</button>
@@ -2840,7 +2842,10 @@ function saveToCloud(rosterData) {
 
 function _doCloudSave(rosterData) {
   const compressed = compressRoster(rosterData);
-  const status = document.getElementById('cloud-status');
+  const status = {
+    _els: [document.getElementById('cloud-status'), document.getElementById('cloud-status-2')].filter(Boolean),
+    set textContent(v){ this._els.forEach(el=>{ el.textContent=v; if(v.includes('Saved')||v.includes('Synced')){el.style.color='#3B6D11';el.style.fontWeight='600';}else if(v.includes('✗')){el.style.color='#E24B4A';}else{el.style.color='';el.style.fontWeight='';} }); }
+  };
   if(status) status.textContent = '⏳ Saving...';
 
   // Track saves
@@ -2874,7 +2879,10 @@ function _doCloudSave(rosterData) {
 
 async function forceSaveToCloud() {
   const rosterData = buildRosterData();
-  const status = document.getElementById('cloud-status');
+  const status = {
+    _els: [document.getElementById('cloud-status'), document.getElementById('cloud-status-2')].filter(Boolean),
+    set textContent(v){ this._els.forEach(el=>{ el.textContent=v; if(v.includes('Saved')||v.includes('Synced')){el.style.color='#3B6D11';el.style.fontWeight='600';}else if(v.includes('✗')){el.style.color='#E24B4A';}else{el.style.color='';el.style.fontWeight='';} }); }
+  };
   if(status) status.textContent = '⏳ Saving...';
   toast('Saving to cloud...');
   _doCloudSave(rosterData);
@@ -2915,7 +2923,10 @@ function applyRosterData(rd) {
 
 async function loadFromCloud() {
   if (!APPS_SCRIPT_URL) return;
-  const status = document.getElementById('cloud-status');
+  const status = {
+    _els: [document.getElementById('cloud-status'), document.getElementById('cloud-status-2')].filter(Boolean),
+    set textContent(v){ this._els.forEach(el=>{ el.textContent=v; if(v.includes('Saved')||v.includes('Synced')){el.style.color='#3B6D11';el.style.fontWeight='600';}else if(v.includes('✗')){el.style.color='#E24B4A';}else{el.style.color='';el.style.fontWeight='';} }); }
+  };
   if(status) status.textContent = '⏳ Loading...';
 
   const cbName = '_zlcLoad_' + Date.now();
