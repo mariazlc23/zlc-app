@@ -2765,25 +2765,38 @@ function saveExtraW(){
 // so data survives page refresh
 // ─── CLOUD PERSISTENCE ───────────────────────────────────────────────────────
 let _cloudTimer = null;
+let _cloudSaveInProgress = false;
 
-// Compress roster — only keep items with actual data (assignments, notes, etc.)
+function setCloudStatus(msg) {
+  ['cloud-status','cloud-status-2'].forEach(id=>{
+    const el = document.getElementById(id);
+    if(!el) return;
+    el.textContent = msg;
+    if(msg.includes('✓')||msg.includes('Saved')||msg.includes('Synced')){
+      el.style.color='#3B6D11'; el.style.fontWeight='700';
+    } else if(msg.includes('✗')||msg.includes('Error')){
+      el.style.color='#E24B4A'; el.style.fontWeight='';
+    } else {
+      el.style.color=''; el.style.fontWeight='';
+    }
+  });
+}
+
+// Compress roster — skip items with no data
 function compressRoster(rd) {
-  const compress = arr => (arr||[])
-    .map(e => {
-      const out = {id: e.id};
-      if(e.name)    out.name    = e.name;
-      if(e.project) out.project = e.project;
-      // Only include non-empty objects
-      if(e.a         && Object.keys(e.a).length)         out.a         = e.a;
-      if(e.notes     && Object.keys(e.notes).length)     out.notes     = e.notes;
-      if(e.wh        && Object.keys(e.wh).length)        out.wh        = e.wh;
-      if(e.cc        && Object.keys(e.cc).length)        out.cc        = e.cc;
-      if(e.co        && Object.keys(e.co).length)        out.co        = e.co;
-      if(e.confirmed && Object.keys(e.confirmed).length) out.confirmed = e.confirmed;
-      if(e.pour      && Object.keys(e.pour).length)      out.pour      = e.pour;
-      return out;
-    })
-    .filter(e => Object.keys(e).length > 1); // skip items with only id
+  const compress = arr => (arr||[]).map(e => {
+    const out = {id:e.id};
+    if(e.name)    out.name    = e.name;
+    if(e.project) out.project = e.project;
+    if(e.a         && Object.keys(e.a).length)         out.a         = e.a;
+    if(e.notes     && Object.keys(e.notes).length)     out.notes     = e.notes;
+    if(e.wh        && Object.keys(e.wh).length)        out.wh        = e.wh;
+    if(e.cc        && Object.keys(e.cc).length)        out.cc        = e.cc;
+    if(e.co        && Object.keys(e.co).length)        out.co        = e.co;
+    if(e.confirmed && Object.keys(e.confirmed).length) out.confirmed = e.confirmed;
+    if(e.pour      && Object.keys(e.pour).length)      out.pour      = e.pour;
+    return out;
+  }).filter(e => Object.keys(e).length > 1);
   return {
     staff:     compress(rd.staff),
     extra:     compress(rd.extra),
@@ -2794,47 +2807,49 @@ function compressRoster(rd) {
   };
 }
 
-// Save one key/value to cloud via JSONP (reliable, gets a response)
-function cloudSaveJSONP(key, value, onDone) {
-  if (!APPS_SCRIPT_URL) return;
-  const body = JSON.stringify({action:'saveAppData', key, value});
-  const encoded = encodeURIComponent(body);
-
-  if (encoded.length > 14000) {
-    // Too large even for JSONP
-    console.warn('Cloud save: payload too large for', key, '—', Math.round(encoded.length/1024)+'KB');
-    if(onDone) onDone(false, 'too_large');
-    return;
-  }
-
-  const cbName = '_zlcSave_' + Date.now() + '_' + Math.random().toString(36).slice(2,6);
-  const scriptId = '_zlcSaveScript_' + key.replace(/[^a-zA-Z0-9]/g,'_');
-  // Remove any previous attempt
-  const old = document.getElementById(scriptId); if(old) old.remove();
-
-  window[cbName] = function(r) {
-    delete window[cbName];
-    const el = document.getElementById(scriptId); if(el) el.remove();
-    if(r && r.ok) {
-      console.log('✓ Cloud saved:', key);
-      if(onDone) onDone(true);
-    } else {
-      console.warn('✗ Cloud save failed:', key, r);
-      if(onDone) onDone(false, r);
+// Single JSONP save — returns a Promise
+function jsonpSave(key, value) {
+  return new Promise((resolve, reject) => {
+    if (!APPS_SCRIPT_URL) { reject('No URL'); return; }
+    const body = JSON.stringify({action:'saveAppData', key, value});
+    const encoded = encodeURIComponent(body);
+    if (encoded.length > 14000) {
+      reject('Payload too large: ' + Math.round(encoded.length/1024) + 'KB for key=' + key);
+      return;
     }
-  };
+    const cbName = '_zlcSave_' + Date.now() + '_' + Math.random().toString(36).slice(2,5);
+    const scriptId = '_zlcScript_' + key.replace(/[^a-zA-Z0-9]/g,'_');
+    const old = document.getElementById(scriptId); if(old) old.remove();
+    let done = false;
+    const cleanup = () => { done=true; delete window[cbName]; const el=document.getElementById(scriptId); if(el)el.remove(); };
+    window[cbName] = (r) => { cleanup(); if(r&&r.ok) resolve(r); else reject('Apps Script error: '+JSON.stringify(r)); };
+    const script = document.createElement('script');
+    script.id = scriptId;
+    script.src = APPS_SCRIPT_URL + '?callback=' + cbName + '&data=' + encoded;
+    script.onerror = () => { cleanup(); reject('Script load error for key=' + key); };
+    document.head.appendChild(script);
+    setTimeout(() => { if(!done) { cleanup(); reject('Timeout for key=' + key); } }, 15000);
+  });
+}
 
-  const url = APPS_SCRIPT_URL + '?callback=' + cbName + '&data=' + encoded;
-  const script = document.createElement('script');
-  script.id  = scriptId;
-  script.src = url;
-  script.onerror = () => {
-    delete window[cbName]; script.remove();
-    console.warn('✗ Cloud save script error:', key);
-    if(onDone) onDone(false, 'script_error');
-  };
-  document.head.appendChild(script);
-  setTimeout(() => { delete window[cbName]; const el=document.getElementById(scriptId); if(el)el.remove(); }, 20000);
+// Single JSONP load — returns a Promise
+function jsonpLoad() {
+  return new Promise((resolve, reject) => {
+    if (!APPS_SCRIPT_URL) { reject('No URL'); return; }
+    const cbName = '_zlcLoad_' + Date.now();
+    const scriptId = '_zlcLoadScript';
+    const old = document.getElementById(scriptId); if(old) old.remove();
+    let done = false;
+    const cleanup = () => { done=true; delete window[cbName]; const el=document.getElementById(scriptId); if(el)el.remove(); };
+    window[cbName] = (json) => { cleanup(); resolve(json); };
+    const payload = JSON.stringify({action:'loadAppData'});
+    const script = document.createElement('script');
+    script.id = scriptId;
+    script.src = APPS_SCRIPT_URL + '?callback=' + cbName + '&data=' + encodeURIComponent(payload);
+    script.onerror = () => { cleanup(); reject('Script load error'); };
+    document.head.appendChild(script);
+    setTimeout(() => { if(!done) { cleanup(); reject('Load timeout'); } }, 15000);
+  });
 }
 
 function saveToCloud(rosterData) {
@@ -2843,136 +2858,121 @@ function saveToCloud(rosterData) {
   _cloudTimer = setTimeout(() => _doCloudSave(rosterData), 2500);
 }
 
-function _doCloudSave(rosterData) {
+async function _doCloudSave(rosterData) {
+  if (_cloudSaveInProgress) return;
+  _cloudSaveInProgress = true;
   const compressed = compressRoster(rosterData);
-  const status = {
-    _els: [document.getElementById('cloud-status'), document.getElementById('cloud-status-2')].filter(Boolean),
-    set textContent(v){ this._els.forEach(el=>{ el.textContent=v; if(v.includes('Saved')||v.includes('Synced')){el.style.color='#3B6D11';el.style.fontWeight='600';}else if(v.includes('✗')){el.style.color='#E24B4A';}else{el.style.color='';el.style.fontWeight='';} }); }
+  const staffCount = compressed.staff.length;
+  const mid = Math.ceil(staffCount / 2);
+  const staff1 = compressed.staff.slice(0, mid);
+  const staff2block = {
+    staff:     compressed.staff.slice(mid),
+    extra:     compressed.extra,
+    equip:     compressed.equip,
+    rentals:   compressed.rentals,
+    extraList: compressed.extraList,
+    staffList: compressed.staffList,
   };
-  if(status) status.textContent = '⏳ Saving...';
-
-  // Track saves
-  let pending = 0;
-  const onDone = (ok, err) => {
-    pending--;
-    if(pending <= 0) {
-      const t = new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'});
-      if(status) status.textContent = '☁️ Saved ' + t;
-    }
-  };
-
-  // Split staff into halves to stay under 12KB JSONP limit
-  const mid = Math.ceil((compressed.staff||[]).length / 2);
-  const staff1 = (compressed.staff||[]).slice(0, mid);
-  const staff2 = (compressed.staff||[]).slice(mid);
-
-  // Queue saves with staggered delays (Apps Script has rate limits)
-  const saves = [
-    {key:'staff1',   value: staff1,               delay: 0},
-    {key:'staff2',   value: {staff:staff2, extra:compressed.extra, equip:compressed.equip, rentals:compressed.rentals, extraList:compressed.extraList, staffList:compressed.staffList}, delay: 700},
-    {key:'orders',   value: DB.openOrders||[],     delay: 1400},
-    {key:'historical', value: DB.historical||[],   delay: 2100},
-  ];
-
-  saves.forEach(({key, value, delay}) => {
-    pending++;
-    setTimeout(() => cloudSaveJSONP(key, value, onDone), delay);
-  });
+  setCloudStatus('⏳ Saving...');
+  try {
+    await jsonpSave('staff1', staff1);
+    console.log('✓ staff1 saved (' + staff1.length + ' people)');
+    await new Promise(r=>setTimeout(r,500));
+    await jsonpSave('staff2', staff2block);
+    console.log('✓ staff2 saved (' + staff2block.staff.length + ' people + extra/equip)');
+    await new Promise(r=>setTimeout(r,500));
+    await jsonpSave('orders', DB.openOrders||[]);
+    console.log('✓ orders saved');
+    const t = new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'});
+    setCloudStatus('✓ Saved ' + t);
+  } catch(e) {
+    console.error('Cloud save failed:', e);
+    setCloudStatus('✗ Save failed: ' + String(e).slice(0,40));
+  } finally {
+    _cloudSaveInProgress = false;
+  }
 }
 
 async function forceSaveToCloud() {
+  if (_cloudSaveInProgress) { toast('Save already in progress...'); return; }
   const rosterData = buildRosterData();
   const staffWithData = rosterData.staff.filter(e=>Object.keys(e.a||{}).length>0).length;
-  console.log('Force save: '+staffWithData+' staff have assignments');
-  const status = {
-    _els: [document.getElementById('cloud-status'), document.getElementById('cloud-status-2')].filter(Boolean),
-    set textContent(v){ this._els.forEach(el=>{ el.textContent=v; if(v.includes('Saved')||v.includes('Synced')||v.includes('✓')){el.style.color='#3B6D11';el.style.fontWeight='700';}else if(v.includes('✗')){el.style.color='#E24B4A';el.style.fontWeight='';}else{el.style.color='';el.style.fontWeight='';} }); }
-  };
-  status.textContent = '⏳ Saving '+staffWithData+' people...';
-  toast('💾 Saving to cloud...');
-  _doCloudSave(rosterData);
-  setTimeout(()=>{ status.textContent = '⏳ Verifying...'; loadFromCloud(); }, 8000);
+  console.log('Force save: ' + staffWithData + '/' + rosterData.staff.length + ' staff have assignments');
+  toast('💾 Saving ' + staffWithData + ' people to cloud...');
+  await _doCloudSave(rosterData);
+  // Verify by loading back
+  setTimeout(() => loadFromCloud(), 2000);
 }
+
+function buildRosterData() {
+  return {
+    staff:   STAFF.map(e=>({id:e.id,a:e.a||{},notes:e.notes||{},wh:e.wh||{},cc:e.cc||{},co:e.co||{},confirmed:e.confirmed||{},pour:e.pour||{},name:e.name})),
+    extra:   EXTRA.map(e=>({id:e.id,a:e.a||{},notes:e.notes||{},wh:e.wh||{},cc:e.cc||{},co:e.co||{},confirmed:e.confirmed||{},pour:e.pour||{},name:e.name,project:e.project})),
+    equip:   EQUIP.map(e=>({id:e.id,a:e.a||{},notes:e.notes||{},wh:e.wh||{},cc:e.cc||{},co:e.co||{},confirmed:e.confirmed||{},pour:e.pour||{},name:e.name})),
+    rentals: RENTALS.map(e=>({id:e.id,a:e.a||{},notes:e.notes||{},wh:e.wh||{},cc:e.cc||{},co:e.co||{},confirmed:e.confirmed||{},pour:e.pour||{},name:e.name})),
+    extraList: EXTRA.filter(e=>e.id.startsWith('ew')&&!['ew1','ew2','ew3','ew4','ew5','ew6','ew7','ew8'].includes(e.id)),
+    staffList: STAFF.filter(e=>!['e1','e2','e3','e4','e5','e6','e7','e8','e9','e10','e11','e12','e13','e14','e15','e16','e17','e18'].includes(e.id)),
+  };
+}
+
+function applyRosterData(rd) {
+  const apply = (arr, source) => (arr||[]).forEach(saved => {
+    const item = source.find(e => e.id === saved.id);
+    if (item) {
+      item.a=saved.a||{}; item.notes=saved.notes||{}; item.wh=saved.wh||{};
+      item.cc=saved.cc||{}; item.co=saved.co||{}; item.confirmed=saved.confirmed||{};
+      item.pour=saved.pour||{};
+      if(saved.name)item.name=saved.name;
+      if(saved.project!==undefined)item.project=saved.project;
+    }
+  });
+  apply(rd.staff,   STAFF);
+  apply(rd.extra,   EXTRA);
+  apply(rd.equip,   EQUIP);
+  apply(rd.rentals, RENTALS);
+  (rd.extraList||[]).forEach(s=>{ if(!EXTRA.find(e=>e.id===s.id)) EXTRA.push(s); });
+  (rd.staffList||[]).forEach(s=>{ if(!STAFF.find(e=>e.id===s.id)) STAFF.push(s); });
+}
+
 async function loadFromCloud() {
   if (!APPS_SCRIPT_URL) return;
-  const status = {
-    _els: [document.getElementById('cloud-status'), document.getElementById('cloud-status-2')].filter(Boolean),
-    set textContent(v){ this._els.forEach(el=>{ el.textContent=v; if(v.includes('Saved')||v.includes('Synced')){el.style.color='#3B6D11';el.style.fontWeight='600';}else if(v.includes('✗')){el.style.color='#E24B4A';}else{el.style.color='';el.style.fontWeight='';} }); }
-  };
-  if(status) status.textContent = '⏳ Loading...';
-
-  const cbName = '_zlcLoad_' + Date.now();
-  const scriptId = '_zlcLoadScript';
-  const old = document.getElementById(scriptId); if(old) old.remove();
-
-  window[cbName] = function(json) {
-    delete window[cbName];
-    const el = document.getElementById(scriptId); if(el) el.remove();
-    try {
-      if (!json || !json.ok || !json.data) {
-        if(status) status.textContent = '☁️ No cloud data — press 💾 Save first';
-        console.log('Cloud load: no data');
-        return;
-      }
-      const d = json.data;
-      let changed = false;
-
-      // Build merged roster from split keys (staff1 + staff2 contains extra/equip/rentals)
-      const staff2block = d.staff2 || {};
-      const mergedRoster = {
-        staff:     [...(d.staff1||[]), ...(staff2block.staff||[])],
-        extra:     staff2block.extra    || d.extra    || [],
-        equip:     staff2block.equip    || d.equip    || [],
-        rentals:   staff2block.rentals  || d.rentals  || [],
-        extraList: staff2block.extraList|| d.extraList|| [],
-        staffList: staff2block.staffList|| d.staffList|| [],
+  setCloudStatus('⏳ Loading...');
+  try {
+    const json = await jsonpLoad();
+    if (!json || !json.ok || !json.data) {
+      setCloudStatus('☁️ No data — press 💾 Save first');
+      console.log('Cloud load: no data found in sheet');
+      return;
+    }
+    const d = json.data;
+    console.log('Cloud data keys:', Object.keys(d));
+    // Build merged roster
+    let changed = false;
+    const staff2block = d.staff2 || {};
+    const allStaff = [...(d.staff1||[]), ...(staff2block.staff||[])];
+    if(allStaff.length || d.roster) {
+      const mergedRoster = d.roster || {
+        staff:     allStaff,
+        extra:     staff2block.extra    || [],
+        equip:     staff2block.equip    || [],
+        rentals:   staff2block.rentals  || [],
+        extraList: staff2block.extraList|| [],
+        staffList: staff2block.staffList|| [],
       };
-
-      // Fallback: old format with single 'roster' key
-      if(!d.staff1 && d.roster) {
-        applyRosterData(d.roster);
-        localStorage.setItem('zlc_roster', JSON.stringify(d.roster));
-        changed = true;
-      } else if(d.staff1 || d.staff2) {
-        applyRosterData(mergedRoster);
-        localStorage.setItem('zlc_roster', JSON.stringify(mergedRoster));
-        changed = true;
-      }
-
-      if (d.orders)    { DB.openOrders=d.orders; localStorage.setItem('zlc_orders', JSON.stringify(d.orders)); changed=true; }
-      if (d.historical){ DB.historical=d.historical; localStorage.setItem('zlc_historical', JSON.stringify(d.historical)); changed=true; }
-      if (d.manual && d.manual.length) { d.manual.forEach(p=>{if(!DB.projects.find(x=>x.id===p.id))DB.projects.push(p);}); changed=true; }
-      const t = new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'});
-      if(status) status.textContent = changed ? '☁️ Synced ' + t : '☁️ Up to date';
-      if(changed) { renderRoster(); renderAnalytics(); renderProjTable(); renderOverview(); toast('☁️ Data loaded from cloud'); }
-      console.log('✓ Cloud load complete, changed:', changed);
-    } catch(e) {
-      console.warn('Cloud load parse error:', e.message);
-      if(status) status.textContent = '✗ Cloud error';
+      applyRosterData(mergedRoster);
+      localStorage.setItem('zlc_roster', JSON.stringify(mergedRoster));
+      changed = true;
+      console.log('✓ Roster loaded: ' + allStaff.length + ' staff');
     }
-  };
-
-  const payload = JSON.stringify({action:'loadAppData'});
-  const url = APPS_SCRIPT_URL + '?callback=' + cbName + '&data=' + encodeURIComponent(payload);
-  const script = document.createElement('script');
-  script.id = scriptId;
-  script.src = url;
-  script.onerror = function() {
-    delete window[cbName]; script.remove();
-    console.warn('Cloud load: script error (Apps Script unreachable)');
-    if(status) status.textContent = '✗ Cloud offline';
-  };
-  document.head.appendChild(script);
-
-  // Timeout after 15s
-  setTimeout(() => {
-    if(window[cbName]) {
-      delete window[cbName];
-      const el = document.getElementById(scriptId); if(el) el.remove();
-      if(status && status.textContent.includes('Loading')) status.textContent = '✗ Cloud timeout';
-      console.warn('Cloud load: timeout');
-    }
-  }, 15000);
+    if(d.orders)    { DB.openOrders=d.orders; localStorage.setItem('zlc_orders',JSON.stringify(d.orders)); changed=true; }
+    if(d.historical){ DB.historical=d.historical; localStorage.setItem('zlc_historical',JSON.stringify(d.historical)); changed=true; }
+    const t = new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'});
+    setCloudStatus(changed ? '✓ Synced ' + t : '☁️ Up to date');
+    if(changed) { renderRoster(); renderAnalytics(); renderProjTable(); renderOverview(); toast('☁️ Data loaded from cloud'); }
+  } catch(e) {
+    console.error('Cloud load error:', e);
+    setCloudStatus('✗ Load error — check console');
+  }
 }
 
 
