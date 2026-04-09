@@ -15,7 +15,7 @@
     --amber: #854F0B; --amber-light: #FAEEDA;
     --red: #791F1F; --red-light: #FCEBEB; --red-mid: #F09595;
     --radius: 8px; --radius-lg: 12px;
-    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, 'Apple Color Emoji', 'Segoe UI Emoji', 'Noto Color Emoji', 'Twemoji Mozilla', sans-serif;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', system-ui, sans-serif;
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { background: var(--bg2); color: var(--text); font-size: 14px; line-height: 1.5; min-height: 100vh; }
@@ -2715,12 +2715,61 @@ function saveExtraW(){
   saveLocal();closeModal();renderRoster();toast(`${name} added`);
 }
 
-// ─── LOCAL STORAGE PERSISTENCE ────────────────────────────────────────────────
-// Saves roster assignments, notes, extra staff, and manually added projects
-// so data survives page refresh
-// ─── CLOUD PERSISTENCE ───────────────────────────────────────────────────────
+// ─── CLOUD-ONLY PERSISTENCE ───────────────────────────────────────────────────
+// Staff roster, orders, manual projects, and historical data are stored in cloud.
+// localStorage is intentionally not used so the same data appears in incognito
+// and across browsers/devices.
 let _cloudQueue = {};
 let _cloudTimer = null;
+let _cloudCbIdx = 0;
+let _cloudIsLoading = false;
+let _cloudHasLoaded = false;
+
+function cloudPayload() {
+  return {
+    roster:     buildRosterData(),
+    orders:     DB.openOrders||[],
+    manual:     DB.projects.filter(p=>p._manual),
+    historical: DB.historical,
+  };
+}
+
+function callAppsScriptJSONP(data) {
+  return new Promise((resolve, reject) => {
+    if (!APPS_SCRIPT_URL) { reject(new Error('Missing Apps Script URL')); return; }
+    const cbName = '_zlcCloudCb' + (++_cloudCbIdx);
+    const encoded = encodeURIComponent(JSON.stringify(data));
+    const script = document.createElement('script');
+    let finished = false;
+
+    function cleanup() {
+      finished = true;
+      try { delete window[cbName]; } catch(e) {}
+      if (script.parentNode) script.parentNode.removeChild(script);
+    }
+
+    window[cbName] = function(result) {
+      cleanup();
+      resolve(result);
+    };
+
+    script.src = APPS_SCRIPT_URL + '?data=' + encoded + '&callback=' + cbName;
+    script.async = true;
+    script.onerror = function() {
+      cleanup();
+      reject(new Error('JSONP request failed'));
+    };
+
+    document.head.appendChild(script);
+
+    setTimeout(() => {
+      if (!finished) {
+        cleanup();
+        reject(new Error('JSONP timeout'));
+      }
+    }, 15000);
+  });
+}
 
 function saveToCloud(rosterData) {
   if (!APPS_SCRIPT_URL) return;
@@ -2731,7 +2780,7 @@ function saveToCloud(rosterData) {
     'historical': DB.historical,
   };
   clearTimeout(_cloudTimer);
-  _cloudTimer = setTimeout(flushCloudQueue, 2000);
+  _cloudTimer = setTimeout(flushCloudQueue, 1200);
 }
 
 function flushCloudQueue() {
@@ -2739,37 +2788,49 @@ function flushCloudQueue() {
   const entries = Object.entries(_cloudQueue);
   _cloudQueue = {};
   entries.forEach(([key, value], i) => {
-    setTimeout(() => cloudSaveOne(key, value), i * 500);
+    setTimeout(() => cloudSaveOne(key, value), i * 250);
   });
 }
 
 function cloudSaveOne(key, value) {
-  const body = JSON.stringify({action:'saveAppData', key, value});
-  fetch(APPS_SCRIPT_URL, {
-    method: 'POST', mode: 'no-cors',
-    headers: {'Content-Type':'text/plain;charset=utf-8'},
-    body: body,
-  }).catch(()=>{});
+  const bodyObj = {action:'saveAppData', key, value};
+  const body = JSON.stringify(bodyObj);
+
+  try {
+    if (navigator.sendBeacon) {
+      const blob = new Blob([body], {type:'text/plain;charset=utf-8'});
+      navigator.sendBeacon(APPS_SCRIPT_URL, blob);
+    } else {
+      fetch(APPS_SCRIPT_URL, {
+        method: 'POST',
+        mode: 'no-cors',
+        keepalive: true,
+        headers: {'Content-Type':'text/plain;charset=utf-8'},
+        body: body,
+      }).catch(()=>{});
+    }
+  } catch(e) {}
+
   try {
     const encoded = encodeURIComponent(body);
     if (encoded.length < 7000) {
-      fetch(APPS_SCRIPT_URL + '?data=' + encoded)
-        .then(r=>r.json()).then(r=>{ if(r.ok) console.log('Cloud saved:',key); })
-        .catch(()=>{});
+      callAppsScriptJSONP(bodyObj)
+        .then(r => { if (r && r.ok) console.log('Cloud saved:', key); })
+        .catch(() => {});
     }
-  } catch(e){}
+  } catch(e) {}
 }
 
 async function forceSaveToCloud() {
-  const rosterData = buildRosterData();
+  const payload = cloudPayload();
   _cloudQueue = {
-    'roster':     rosterData,
-    'orders':     DB.openOrders||[],
-    'manual':     DB.projects.filter(p=>p._manual),
-    'historical': DB.historical,
+    'roster':     payload.roster,
+    'orders':     payload.orders,
+    'manual':     payload.manual,
+    'historical': payload.historical,
   };
   flushCloudQueue();
-  setTimeout(()=>toast('✓ Saved to cloud'), 2500);
+  setTimeout(()=>toast('✓ Saved to cloud'), 1500);
 }
 
 function buildRosterData() {
@@ -2804,203 +2865,89 @@ function applyRosterData(rd) {
   (rd.staffList||[]).forEach(saved => { if(!STAFF.find(e=>e.id===saved.id)) STAFF.push(saved); });
 }
 
-function applyCloudDataPayload(json) {
-  if (!json || !json.ok || !json.data) return false;
-  const d = json.data;
+function applyCloudData(d) {
   let changed = false;
-  if (d.roster) {
-    applyRosterData(d.roster);
-    localStorage.setItem('zlc_roster', JSON.stringify(d.roster));
-    changed = true;
-  }
-  if (d.orders) {
-    DB.openOrders = d.orders;
-    localStorage.setItem('zlc_orders', JSON.stringify(d.orders));
-    changed = true;
-  }
-  if (d.historical) {
-    DB.historical = d.historical;
-    localStorage.setItem('zlc_historical', JSON.stringify(d.historical));
-    changed = true;
-  }
+  if (d.roster) { applyRosterData(d.roster); changed = true; }
+  if (d.orders) { DB.openOrders = d.orders; changed = true; }
+  if (d.historical) { DB.historical = d.historical; changed = true; }
   if (d.manual && d.manual.length) {
-    d.manual.forEach(p => { if (!DB.projects.find(x => x.id === p.id)) DB.projects.push(p); });
-    localStorage.setItem('zlc_manual_projects', JSON.stringify(d.manual));
+    d.manual.forEach(p => { if (!DB.projects.find(x=>x.id===p.id)) DB.projects.push(p); });
     changed = true;
-  }
-  if (changed) {
-    renderRoster();
-    renderAnalytics();
-    renderProjTable();
-    renderOverview();
   }
   return changed;
 }
 
-function loadFromCloudJSONP(timeoutMs = 12000) {
-  return new Promise((resolve, reject) => {
-    if (!APPS_SCRIPT_URL) { resolve(false); return; }
-    const cbName = '_zlcLoadCb' + (++_zlcCbIdx);
-    const payload = encodeURIComponent(JSON.stringify({ action:'loadAppData' }));
-    const src = APPS_SCRIPT_URL + '?data=' + payload + '&callback=' + cbName;
-    let done = false;
-
-    const cleanup = () => {
-      delete window[cbName];
-      const el = document.getElementById('_zlc_script_' + cbName);
-      if (el) el.remove();
-    };
-
-    const timer = setTimeout(() => {
-      if (done) return;
-      done = true;
-      cleanup();
-      reject(new Error('Cloud JSONP timeout'));
-    }, timeoutMs);
-
-    window[cbName] = function(result) {
-      if (done) return;
-      done = true;
-      clearTimeout(timer);
-      cleanup();
-      resolve(applyCloudDataPayload(result));
-    };
-
-    const script = document.createElement('script');
-    script.id = '_zlc_script_' + cbName;
-    script.src = src;
-    script.onerror = function() {
-      if (done) return;
-      done = true;
-      clearTimeout(timer);
-      cleanup();
-      reject(new Error('Cloud JSONP failed'));
-    };
-    document.head.appendChild(script);
-  });
-}
-
 async function loadFromCloud() {
-  if (!APPS_SCRIPT_URL) return false;
-  const url = APPS_SCRIPT_URL + '?data=' + encodeURIComponent(JSON.stringify({action:'loadAppData'}));
+  if (!APPS_SCRIPT_URL || _cloudIsLoading) return;
+  _cloudIsLoading = true;
   try {
-    const res = await fetch(url, { cache: 'no-store' });
-    const json = await res.json();
-    const changed = applyCloudDataPayload(json);
-    if (changed) toast('✓ Data synced from cloud');
-    console.log('Cloud load complete');
-    return changed;
-  } catch(e) {
-    console.warn('Cloud fetch load failed:', e.message);
+    let json = null;
+    const bodyObj = {action:'loadAppData'};
+
     try {
-      const changed = await loadFromCloudJSONP();
-      if (changed) toast('✓ Data synced from cloud');
-      console.log('Cloud load complete (JSONP)');
-      return changed;
-    } catch(err) {
-      console.warn('Cloud JSONP load failed:', err.message);
-      return false;
+      const url = APPS_SCRIPT_URL + '?data=' + encodeURIComponent(JSON.stringify(bodyObj));
+      const res = await fetch(url, {cache:'no-store'});
+      json = await res.json();
+    } catch(fetchErr) {
+      json = await callAppsScriptJSONP(bodyObj);
     }
+
+    if (!json || !json.ok || !json.data) return;
+    const changed = applyCloudData(json.data);
+    _cloudHasLoaded = true;
+
+    if (changed) {
+      renderRoster();
+      renderAnalytics();
+      renderProjTable();
+      renderOverview();
+      toast('✓ Data loaded from cloud');
+    }
+    console.log('Cloud load complete');
+  } catch(e) {
+    console.warn('Cloud load failed:', e.message);
+  } finally {
+    _cloudIsLoading = false;
   }
 }
 
 function saveLocal() {
   try {
-    // Use buildRosterData() to ensure ALL fields are saved (a, notes, wh, cc, co, confirmed, pour, name)
     const rosterData = buildRosterData();
-    localStorage.setItem('zlc_roster', JSON.stringify(rosterData));
-    // Save open orders
-    localStorage.setItem('zlc_orders', JSON.stringify(DB.openOrders||[]));
-    // Save manually added projects (those not from the sheet)
-    const manualProjects = DB.projects.filter(p => p._manual);
-    localStorage.setItem('zlc_manual_projects', JSON.stringify(manualProjects));
-    // Save historical overrides
-    localStorage.setItem('zlc_historical', JSON.stringify(DB.historical));
-    // Auto cloud save after 2s
     saveToCloud(rosterData);
-  } catch(e) { console.warn('saveLocal error:', e); }
+  } catch(e) { console.warn('cloud save error:', e); }
 }
 
 function loadLocal() {
-  try {
-    // Restore roster assignments + notes
-    const rosterRaw = localStorage.getItem('zlc_roster');
-    if (rosterRaw) {
-      const rd = JSON.parse(rosterRaw);
-      // Restore assignments and notes into existing items
-      (rd.staff||[]).forEach(saved => {
-        const item = STAFF.find(e => e.id === saved.id);
-        if (item) { item.a=saved.a||{}; item.notes=saved.notes||{}; item.wh=saved.wh||{}; item.cc=saved.cc||{}; item.co=saved.co||{}; item.confirmed=saved.confirmed||{}; item.pour=saved.pour||{}; if(saved.name)item.name=saved.name; }
-      });
-      (rd.extra||[]).forEach(saved => {
-        const item = EXTRA.find(e => e.id === saved.id);
-        if (item) { item.a=saved.a||{}; item.notes=saved.notes||{}; item.wh=saved.wh||{}; item.cc=saved.cc||{}; item.co=saved.co||{}; item.confirmed=saved.confirmed||{}; item.pour=saved.pour||{}; item.project=saved.project||item.project; if(saved.name)item.name=saved.name; }
-      });
-      (rd.equip||[]).forEach(saved => {
-        const item = EQUIP.find(e => e.id === saved.id);
-        if (item) { item.a=saved.a||{}; item.notes=saved.notes||{}; item.wh=saved.wh||{}; item.cc=saved.cc||{}; item.co=saved.co||{}; item.confirmed=saved.confirmed||{}; item.pour=saved.pour||{}; if(saved.name)item.name=saved.name; }
-      });
-      (rd.rentals||[]).forEach(saved => {
-        const item = RENTALS.find(e => e.id === saved.id);
-        if (item) { item.a=saved.a||{}; item.notes=saved.notes||{}; item.wh=saved.wh||{}; item.cc=saved.cc||{}; item.co=saved.co||{}; item.confirmed=saved.confirmed||{}; item.pour=saved.pour||{}; if(saved.name)item.name=saved.name; }
-      });
-      // Restore extra workers added by user
-      (rd.extraList||[]).forEach(saved => {
-        if (!EXTRA.find(e => e.id === saved.id)) EXTRA.push(saved);
-      });
-      // Restore staff added by user
-      (rd.staffList||[]).forEach(saved => {
-        if (!STAFF.find(e => e.id === saved.id)) STAFF.push(saved);
-      });
-    }
-    // Restore historical overrides
-    const histRaw = localStorage.getItem('zlc_historical');
-    if (histRaw) DB.historical = JSON.parse(histRaw);
-    // Restore open orders
-    const ordRaw = localStorage.getItem('zlc_orders');
-    if (ordRaw) DB.openOrders = JSON.parse(ordRaw);
-    // Restore manually added projects (will be merged after sheet sync)
-    const manualRaw = localStorage.getItem('zlc_manual_projects');
-    if (manualRaw) {
-      const manual = JSON.parse(manualRaw);
-      manual.forEach(p => { if (!DB.projects.find(x => x.id === p.id)) DB.projects.push(p); });
-    }
-  } catch(e) { console.warn('loadLocal error:', e); }
+  // Intentionally disabled: app now loads from cloud only.
+  return;
 }
 
-// ─── INIT ─────────────────────────────────────────────────────────────────────
-function saveAppStateNow() {
+window.addEventListener('beforeunload', () => {
   try {
-    const rosterData = buildRosterData();
-    _cloudQueue = {
-      'roster':     rosterData,
-      'orders':     DB.openOrders||[],
-      'manual':     DB.projects.filter(p=>p._manual),
-      'historical': DB.historical,
-    };
-    flushCloudQueue();
-  } catch(e) {
-    console.warn('saveAppStateNow error:', e);
-  }
-}
+    const payload = cloudPayload();
+    ['roster','orders','manual','historical'].forEach(key => {
+      const value = payload[key];
+      const body = JSON.stringify({action:'saveAppData', key, value});
+      if (navigator.sendBeacon) {
+        navigator.sendBeacon(APPS_SCRIPT_URL, new Blob([body], {type:'text/plain;charset=utf-8'}));
+      }
+    });
+  } catch(e) {}
+});
 
 document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'hidden') saveAppStateNow();
+  if (document.visibilityState === 'hidden') {
+    try { forceSaveToCloud(); } catch(e) {}
+  }
 });
-window.addEventListener('pagehide', saveAppStateNow);
-window.addEventListener('beforeunload', saveAppStateNow);
 
-async function initApp() {
-  loadLocal();        // 1. Load local cache immediately if available
-  renderRoster();
-  renderAnalytics();
-  renderProjTable();
-  renderOverview();
-  await loadFromCloud();  // 2. Cloud is the shared source of truth across browsers/devices
-  syncFromSheets();       // 3. Sync projects from Sheets
-}
+// ─── INIT ─────────────────────────────────────────────────────────────────────
+renderAnalytics();
+renderProjTable();
+syncFromSheets();   // Projects from Sheets
+loadFromCloud();    // Shared app state from cloud only
 
-initApp();
 </script>
 </body>
 </html>
