@@ -2,6 +2,9 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>ZLC — Project Manager</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
@@ -286,7 +289,7 @@
     <button id="sync-badge" onclick="syncFromSheets()" style="width:100%;font-size:11px;font-weight:600;padding:7px 12px;border-radius:var(--radius);border:0.5px solid var(--border2);cursor:pointer;transition:all .15s;background:#f0eeea;color:#9e9c97">Sync from Sheets</button>
     <button onclick="testWrite()" style="width:100%;margin-top:6px;font-size:11px;font-weight:600;padding:6px 12px;border-radius:var(--radius);border:0.5px solid var(--border2);cursor:pointer;background:#EAF3DE;color:#27500A">Test Sheet write</button>
     <div id="write-log" style="font-size:10px;color:var(--text3);margin-top:6px;word-break:break-all;line-height:1.4"></div>
-    <div style="font-size:10px;color:var(--text3);text-align:center;margin-top:6px">ZLC Project Manager v1.1</div>
+    <div style="font-size:10px;color:var(--text3);text-align:center;margin-top:6px">ZLC Project Manager v1.2</div>
   </div>
 </div>
 
@@ -2879,48 +2882,17 @@ function _doCloudSave(rosterData) {
 
 async function forceSaveToCloud() {
   const rosterData = buildRosterData();
+  const staffWithData = rosterData.staff.filter(e=>Object.keys(e.a||{}).length>0).length;
+  console.log('Force save: '+staffWithData+' staff have assignments');
   const status = {
     _els: [document.getElementById('cloud-status'), document.getElementById('cloud-status-2')].filter(Boolean),
-    set textContent(v){ this._els.forEach(el=>{ el.textContent=v; if(v.includes('Saved')||v.includes('Synced')){el.style.color='#3B6D11';el.style.fontWeight='600';}else if(v.includes('✗')){el.style.color='#E24B4A';}else{el.style.color='';el.style.fontWeight='';} }); }
+    set textContent(v){ this._els.forEach(el=>{ el.textContent=v; if(v.includes('Saved')||v.includes('Synced')||v.includes('✓')){el.style.color='#3B6D11';el.style.fontWeight='700';}else if(v.includes('✗')){el.style.color='#E24B4A';el.style.fontWeight='';}else{el.style.color='';el.style.fontWeight='';} }); }
   };
-  if(status) status.textContent = '⏳ Saving...';
-  toast('Saving to cloud...');
+  status.textContent = '⏳ Saving '+staffWithData+' people...';
+  toast('💾 Saving to cloud...');
   _doCloudSave(rosterData);
-  setTimeout(() => loadFromCloud(), 6000); // verify by reloading
+  setTimeout(()=>{ status.textContent = '⏳ Verifying...'; loadFromCloud(); }, 8000);
 }
-
-function buildRosterData() {
-  return {
-    staff:   STAFF.map(e=>({id:e.id,a:e.a||{},notes:e.notes||{},wh:e.wh||{},cc:e.cc||{},co:e.co||{},confirmed:e.confirmed||{},pour:e.pour||{},name:e.name})),
-    extra:   EXTRA.map(e=>({id:e.id,a:e.a||{},notes:e.notes||{},wh:e.wh||{},cc:e.cc||{},co:e.co||{},confirmed:e.confirmed||{},pour:e.pour||{},name:e.name,project:e.project})),
-    equip:   EQUIP.map(e=>({id:e.id,a:e.a||{},notes:e.notes||{},wh:e.wh||{},cc:e.cc||{},co:e.co||{},confirmed:e.confirmed||{},pour:e.pour||{},name:e.name})),
-    rentals: RENTALS.map(e=>({id:e.id,a:e.a||{},notes:e.notes||{},wh:e.wh||{},cc:e.cc||{},co:e.co||{},confirmed:e.confirmed||{},pour:e.pour||{},name:e.name})),
-    extraList: EXTRA.filter(e=>e.id.startsWith('ew')&&!['ew1','ew2','ew3','ew4','ew5','ew6','ew7','ew8'].includes(e.id)),
-    staffList: STAFF.filter(e=>!['e1','e2','e3','e4','e5','e6','e7','e8','e9','e10','e11','e12','e13','e14','e15','e16','e17','e18'].includes(e.id)),
-  };
-}
-
-function applyRosterData(rd) {
-  (rd.staff||[]).forEach(saved => {
-    const item = STAFF.find(e => e.id === saved.id);
-    if (item) { item.a=saved.a||{}; item.notes=saved.notes||{}; item.wh=saved.wh||{}; item.cc=saved.cc||{}; item.co=saved.co||{}; item.confirmed=saved.confirmed||{}; item.pour=saved.pour||{}; if(saved.name)item.name=saved.name; }
-  });
-  (rd.extra||[]).forEach(saved => {
-    const item = EXTRA.find(e => e.id === saved.id);
-    if (item) { item.a=saved.a||{}; item.notes=saved.notes||{}; item.wh=saved.wh||{}; item.cc=saved.cc||{}; item.co=saved.co||{}; item.confirmed=saved.confirmed||{}; item.pour=saved.pour||{}; item.project=saved.project||item.project; if(saved.name)item.name=saved.name; }
-  });
-  (rd.equip||[]).forEach(saved => {
-    const item = EQUIP.find(e => e.id === saved.id);
-    if (item) { item.a=saved.a||{}; item.notes=saved.notes||{}; item.wh=saved.wh||{}; item.cc=saved.cc||{}; item.co=saved.co||{}; item.confirmed=saved.confirmed||{}; item.pour=saved.pour||{}; if(saved.name)item.name=saved.name; }
-  });
-  (rd.rentals||[]).forEach(saved => {
-    const item = RENTALS.find(e => e.id === saved.id);
-    if (item) { item.a=saved.a||{}; item.notes=saved.notes||{}; item.wh=saved.wh||{}; item.cc=saved.cc||{}; item.co=saved.co||{}; item.confirmed=saved.confirmed||{}; item.pour=saved.pour||{}; if(saved.name)item.name=saved.name; }
-  });
-  (rd.extraList||[]).forEach(saved => { if(!EXTRA.find(e=>e.id===saved.id)) EXTRA.push(saved); });
-  (rd.staffList||[]).forEach(saved => { if(!STAFF.find(e=>e.id===saved.id)) STAFF.push(saved); });
-}
-
 async function loadFromCloud() {
   if (!APPS_SCRIPT_URL) return;
   const status = {
@@ -2938,7 +2910,7 @@ async function loadFromCloud() {
     const el = document.getElementById(scriptId); if(el) el.remove();
     try {
       if (!json || !json.ok || !json.data) {
-        if(status) status.textContent = '☁️ No cloud data yet';
+        if(status) status.textContent = '☁️ No cloud data — press 💾 Save first';
         console.log('Cloud load: no data');
         return;
       }
