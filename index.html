@@ -1096,11 +1096,23 @@ function renderOverview(){
   const openRFIs=DB.projects.flatMap(p=>p.rfis.filter(r=>r.status==='Open').map(r=>({...r,pid:p.id,pname:p.name})));
   const openSubs=DB.projects.flatMap(p=>p.subs.filter(s=>s.status==='Under review'||s.status==='Pending review').map(s=>({...s,pid:p.id,pname:p.name})));
   const contracted=active.reduce((a,p)=>a+tv(p),0);
-  const won2026=DB.projects.filter(p=>p.id.startsWith('26-')).reduce((a,p)=>a+tv(p),0);
+  // 2026 base project value
+  const projs2026=DB.projects.filter(p=>p.id.startsWith('26-'));
+  const won2026base=projs2026.reduce((a,p)=>a+tv(p),0);
+  // Add approved COs for 2026 projects (from DB.allSheetCOs or project-attached COs)
+  const approvedCOs2026=(DB.allSheetCOs||[]).filter(c=>{
+    const pid=String(c.pid||c.projectId||'');
+    return pid.startsWith('26-') && /approv/i.test(String(c.status||''));
+  });
+  const approvedCOVal2026=approvedCOs2026.reduce((a,c)=>a+(parseFloat(c.value)||0),0);
+  // Also check project-attached COs
+  const projCOVal2026=projs2026.flatMap(p=>(p.cos||[]).filter(c=>/approv/i.test(c.status||'')).map(c=>c.value||0)).reduce((a,v)=>a+v,0);
+  const won2026=won2026base + approvedCOVal2026 + projCOVal2026;
+  const pendCOVal=pendCOs.reduce((a,c)=>a+(c.value||0),0);
   document.getElementById('dash-metrics').innerHTML=`
     <div class="metric"><div class="metric-label">Active projects</div><div class="metric-value">${active.length}</div></div>
     <div class="metric"><div class="metric-label">Active contracted</div><div class="metric-value" style="font-size:18px">${fmt(contracted)}</div></div>
-    <div class="metric"><div class="metric-label">2026 won</div><div class="metric-value" style="font-size:18px">${fmt(won2026)}</div><div class="metric-sub">${DB.projects.filter(p=>p.id.startsWith('26-')).length} projects</div></div>
+    <div class="metric"><div class="metric-label">2026 won + approved COs</div><div class="metric-value" style="font-size:18px">${fmt(won2026)}</div><div class="metric-sub">${projs2026.length} projects · ${approvedCOs2026.length+projs2026.flatMap(p=>(p.cos||[]).filter(c=>/approv/i.test(c.status||''))).length} COs approved</div></div>
     <div class="metric"><div class="metric-label">Pending COs</div><div class="metric-value">${pendCOs.length}</div><div class="metric-sub">${fmt(pendVal)} in review</div></div>
     <div class="metric"><div class="metric-label">Open RFIs</div><div class="metric-value">${openRFIs.length}</div></div>
     <div class="metric"><div class="metric-label">Subs in review</div><div class="metric-value">${openSubs.length}</div></div>`;
@@ -1636,10 +1648,22 @@ function renderSub(p,tab){
     }).join('')+`<div style="display:flex;justify-content:space-between;padding:12px 0 4px;font-size:13px;font-weight:600"><span style="color:var(--text2)">Project total</span><span>${fmt(tv(p))}</span></div>`;
   }
   if(tab==='cos'){
-    if(!p.cos.length)return'<div class="empty">No change orders yet.</div>';
-    return`<div class="tbl-wrap"><table><thead><tr><th style="width:62px">CO#</th><th>Description</th><th style="width:58px">Code</th><th style="width:82px">Value</th><th style="width:72px">Date</th><th style="width:78px">Status</th><th style="width:130px">Action</th></tr></thead>
-    <tbody>${p.cos.map(c=>`<tr><td><strong>${c.num}</strong></td><td>${c.desc}</td><td><span class="badge b-gray" style="font-size:10px">${c.code||'—'}</span></td><td>${fmt(c.value)}</td><td>${c.date}</td><td><span class="badge ${bc(c.status)}">${c.status}</span></td>
-    <td>${c.status==='Pending'?`<div style="display:flex;gap:4px"><button class="btn btn-sm btn-approve" onclick="approveCO('${p.id}','${c.id}')">Approve</button><button class="btn btn-sm btn-deny" onclick="denyItem('${p.id}','${c.id}','co')">Cancel</button></div>`:`<span style="font-size:11px;color:var(--text3)">${c.status}</span>`}</td></tr>`).join('')}</tbody></table></div>`;
+    // Merge project-attached COs with sheet COs for this project
+    const sheetCOs=(DB.allSheetCOs||[]).filter(c=>c.pid===p.id);
+    const attachedIds=new Set((p.cos||[]).map(c=>c.id));
+    const extraCOs=sheetCOs.filter(c=>!attachedIds.has(c.id));
+    const allProjCOs=[...(p.cos||[]),...extraCOs];
+    if(!allProjCOs.length)return'<div class="empty">No change orders yet.</div>';
+    const coRow=c=>{
+      const isPending=/pend/i.test(c.status||'');
+      const approveBtn=isPending
+        ?`<div style="display:flex;gap:4px"><button class="btn btn-sm btn-approve" onclick="approveCO('${p.id}','${c.id}')">✓ Approve</button><button class="btn btn-sm btn-deny" onclick="denyItem('${p.id}','${c.id}','co')">✕ Cancel</button></div>`
+        :`<span style="font-size:11px;color:var(--text3)">${c.status}</span>`;
+      const workBadge=c.work?`<span class="badge ${/done/i.test(c.work)?'b-green':'b-red'}" style="font-size:9px;margin-left:4px">${c.work}</span>`:'';
+      return`<tr><td><strong>${c.num||'—'}</strong></td><td>${c.desc||''}${workBadge}</td><td><span class="badge b-gray" style="font-size:10px">${c.code||'—'}</span></td><td>${fmt(c.value)}</td><td>${c.date||'—'}</td><td><span class="badge ${bc(c.status)}">${c.status}</span></td><td>${approveBtn}</td></tr>`;
+    };
+    return`<div class="tbl-wrap"><table><thead><tr><th style="width:62px">CO#</th><th>Description</th><th style="width:58px">Code</th><th style="width:82px">Value</th><th style="width:72px">Date</th><th style="width:78px">Status</th><th style="width:140px">Action</th></tr></thead>
+    <tbody>${allProjCOs.map(coRow).join('')}</tbody></table></div>`;
   }
   if(tab==='rfis'){
     if(!p.rfis.length)return'<div class="empty">No RFIs yet.</div>';
@@ -1700,21 +1724,62 @@ function deleteProject(pid){
 }
 function goSub(tab){subTab=tab;renderDetail();}
 function approveCO(pid,cid){
-  const p=DB.projects.find(x=>x.id===pid),co=p.cos.find(c=>c.id===cid);
+  const p=DB.projects.find(x=>x.id===pid);
+  if(!p){toast('Project not found');return;}
+  // Find CO in project-attached list or in flat sheet list
+  let co=p.cos.find(c=>c.id===cid);
+  if(!co){
+    co=(DB.allSheetCOs||[]).find(c=>c.id===cid&&c.pid===pid);
+    if(co){
+      // Attach to project for local state
+      if(!p.cos) p.cos=[];
+      p.cos.push(co);
+    }
+  }
+  if(!co){toast('CO not found');return;}
   co.status='Approved';
   co.approvalDate=todate();
-  p.history.push({date:todate(),text:`${co.num} APPROVED — ${co.desc} (+${fmt(co.value)} · code ${co.code||'—'})`,type:'approved'});
-  // 1. Update CO status in CO sheet (col H)
+  if(!p.history) p.history=[];
+  p.history.push({date:todate(),text:`${co.num} APPROVED — ${co.desc} (+${fmt(co.value)})`,type:'approved'});
+  // Update in DB.allSheetCOs too
+  const sheetCO=(DB.allSheetCOs||[]).find(c=>c.id===cid);
+  if(sheetCO) sheetCO.status='Approved';
+  // Write to sheet
   sheetWrite('updateCO',{projectId:pid,pm:p.pm||'',pmEmail:p.pmEmail||'',num:co.num,newStatus:'Approved',approvalDate:co.approvalDate});
-  // 2. Write approved CO value as new row in "Whole data Won/Approved" with approval date in col J
   const yr=new Date().getFullYear(),mo=new Date().getMonth()+1;
   sheetWrite('addApprovedCO',{
-    projectId:pid, projectName:p.name, coNum:co.num, desc:co.desc,
+    projectId:pid, projectName:p.name||co.projName||'', coNum:co.num, desc:co.desc,
     code:co.code||'', value:co.value, approvalDate:`${mo}/1/${yr}`,
   });
-  toast(`${co.num} approved — value written to sheet`);
+  saveLocal();
+  toast(`✓ ${co.num} approved — value added to 2026 total`);
   renderDetail();renderOverview();
 }
+// Inline editing of the Info column in roster
+function editInfoCell(id, type) {
+  const item = getItem(id, type);
+  if(!item) return;
+  const cur = item.note||'';
+  // Find the cell and replace with input
+  const cells = document.querySelectorAll(`[ondblclick="editInfoCell('${id}','${type}')"]`);
+  if(!cells.length) return;
+  const cell = cells[0];
+  cell.innerHTML = `<input id="info-inp-${id}" type="text" value="${cur.replace(/"/g,'&quot;')}"
+    style="width:100%;font-size:10px;padding:2px 3px;border:1.5px solid var(--blue);border-radius:3px;background:var(--bg);color:var(--text);outline:none"
+    onblur="saveInfoCell('${id}','${type}')"
+    onkeydown="if(event.key==='Enter')saveInfoCell('${id}','${type}');if(event.key==='Escape')renderRoster()">`;
+  setTimeout(()=>{ const inp=document.getElementById('info-inp-'+id); if(inp){inp.focus();inp.select();} },10);
+}
+function saveInfoCell(id, type) {
+  const item = getItem(id, type);
+  if(!item) return;
+  const inp = document.getElementById('info-inp-'+id);
+  if(!inp) return;
+  item.note = inp.value.trim();
+  saveLocal();
+  renderRoster();
+}
+
 function approveItem(pid,iid,type){
   const p=DB.projects.find(x=>x.id===pid),item=(type==='rfi'?p.rfis:p.subs).find(i=>i.id===iid);
   item.status=type==='rfi'?'Responded':'Approved';
@@ -1802,6 +1867,13 @@ function setSect(s,b){rosterSect=s;document.querySelectorAll('.ft').forEach(x=>x
 function setRosterProjFilter(pid){rosterProjFilter=pid;renderRoster();}
 function setRosterDayFilter(d){
   rosterDayFilter=(d||'').trim();
+  // Sync calYear/calMonth to the selected date so cells render correctly
+  if(rosterDayFilter){
+    const parts=rosterDayFilter.split('-').map(Number);
+    if(parts.length===3 && parts[0] && parts[1] && parts[2]){
+      calYear=parts[0]; calMonth=parts[1]-1; // month is 0-indexed
+    }
+  }
   const parts=getRosterFilterDateParts();
   if(parts){
     calYear=parts.year;
@@ -1928,15 +2000,25 @@ function renderRoster(){
   const dayMode=!!rosterDayFilter;
 
   const passFilter=item=>{
-    if(!rosterProjFilter)return true;
+    if(!rosterProjFilter && !dayMode) return true;
     if(dayMode){
+      // Day mode: show only people assigned on that specific day
       const key=getRosterFilterKey();
-      return (item.a?.[key]||'')===rosterProjFilter;
+      const asgn=item.a?.[key]||'';
+      if(!asgn) return false;
+      if(!rosterProjFilter) return true; // show all assigned
+      // Support multi-project (comma separated)
+      return asgn.split(',').map(x=>x.trim()).includes(rosterProjFilter);
     }
-    return days.some(d=>{
-      const key=`${calYear}-${calMonth+1}-${d}`;
-      return(item.a?.[key]||'')===rosterProjFilter;
-    });
+    // Month mode with project filter: show only people with that project in visible range
+    if(rosterProjFilter){
+      return days.some(d=>{
+        const key=`${calYear}-${calMonth+1}-${d}`;
+        const asgn=item.a?.[key]||'';
+        return asgn.split(',').map(x=>x.trim()).includes(rosterProjFilter);
+      });
+    }
+    return true;
   };
 
   // Build header
@@ -1948,7 +2030,7 @@ function renderRoster(){
     h+=`<th class="ic" style="min-width:180px;background:rgba(255,243,205,0.4)">📦 Warehouse</th>`;
   } else {
     h+=`<th class="ic" style="min-width:130px">Name / Unit</th>`;
-    h+=`<th class="ic" style="min-width:70px">Info</th>`;
+    h+=`<th class="ic" style="min-width:46px;max-width:56px;font-size:10px">Info</th>`;
     days.forEach(d=>{const dw=dow(calYear,calMonth,d),wk=dw===0||dw===6;h+=`<th style="min-width:30px;${wk?'color:#c9a200':''}">${d}<br><span style="font-size:8px;font-weight:500">${DLBL[dw]}</span></th>`;});
   }
   h+=`</tr></thead><tbody>`;
@@ -2061,7 +2143,7 @@ function renderRoster(){
       dayViewRows.push({proj:projKey, html:rowHtml});
       return ''; // will be added sorted later
     }
-    return`<tr style="${bgStyle}"><td class="ic">${nameCell(item.id,type)}</td><td class="ic">${info}</td>${dayCells(item,type)}</tr>`;
+    return`<tr style="${bgStyle}"><td class="ic">${nameCell(item.id,type)}</td><td class="ic" style="max-width:56px;font-size:10px;padding:3px 4px" ondblclick="editInfoCell('${item.id}','${type}')" title="Double-click to edit">${info}</td>${dayCells(item,type)}</tr>`;
   };
 
   if(show('staff')){
