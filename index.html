@@ -2795,8 +2795,8 @@ function cloudSaveJSONP(key, value, onDone) {
   const body = JSON.stringify({action:'saveAppData', key, value});
   const encoded = encodeURIComponent(body);
 
-  if (encoded.length > 12000) {
-    // Too large even for JSONP — split: save staff separately from extra/equip
+  if (encoded.length > 14000) {
+    // Too large even for JSONP
     console.warn('Cloud save: payload too large for', key, '—', Math.round(encoded.length/1024)+'KB');
     if(onDone) onDone(false, 'too_large');
     return;
@@ -2835,64 +2835,50 @@ function cloudSaveJSONP(key, value, onDone) {
 function saveToCloud(rosterData) {
   if (!APPS_SCRIPT_URL) return;
   clearTimeout(_cloudTimer);
-  _cloudTimer = setTimeout(() => {
-    const compressed = compressRoster(rosterData);
-    const status = document.getElementById('cloud-status');
+  _cloudTimer = setTimeout(() => _doCloudSave(rosterData), 2500);
+}
 
-    // Save roster (compressed) — split staff/extra and equip/rentals if needed
-    const rosterForCloud = {
-      staff:     compressed.staff,
-      extra:     compressed.extra,
-      equip:     compressed.equip,
-      rentals:   compressed.rentals,
-      extraList: compressed.extraList,
-      staffList: compressed.staffList,
-    };
+function _doCloudSave(rosterData) {
+  const compressed = compressRoster(rosterData);
+  const status = document.getElementById('cloud-status');
+  if(status) status.textContent = '⏳ Saving...';
 
-    if(status) status.textContent = '⏳ Saving...';
-
-    let saved = 0, total = 0;
-    const done = (ok) => {
-      saved++;
-      if(saved >= total) {
-        if(status) {
-          const t = new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'});
-          status.textContent = '☁️ Saved ' + t;
-        }
-      }
-    };
-
-    // Save roster
-    total++;
-    cloudSaveJSONP('roster', rosterForCloud, done);
-
-    // Save orders
-    if((DB.openOrders||[]).length) {
-      total++;
-      setTimeout(() => cloudSaveJSONP('orders', DB.openOrders, done), 600);
+  // Track saves
+  let pending = 0;
+  const onDone = (ok, err) => {
+    pending--;
+    if(pending <= 0) {
+      const t = new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'});
+      if(status) status.textContent = '☁️ Saved ' + t;
     }
+  };
 
-    // Save historical
-    if((DB.historical||[]).length) {
-      total++;
-      setTimeout(() => cloudSaveJSONP('historical', DB.historical, done), 1200);
-    }
+  // Split staff into halves to stay under 12KB JSONP limit
+  const mid = Math.ceil((compressed.staff||[]).length / 2);
+  const staff1 = (compressed.staff||[]).slice(0, mid);
+  const staff2 = (compressed.staff||[]).slice(mid);
 
-  }, 2500); // 2.5s debounce
+  // Queue saves with staggered delays (Apps Script has rate limits)
+  const saves = [
+    {key:'staff1',   value: staff1,               delay: 0},
+    {key:'staff2',   value: {staff:staff2, extra:compressed.extra, equip:compressed.equip, rentals:compressed.rentals, extraList:compressed.extraList, staffList:compressed.staffList}, delay: 700},
+    {key:'orders',   value: DB.openOrders||[],     delay: 1400},
+    {key:'historical', value: DB.historical||[],   delay: 2100},
+  ];
+
+  saves.forEach(({key, value, delay}) => {
+    pending++;
+    setTimeout(() => cloudSaveJSONP(key, value, onDone), delay);
+  });
 }
 
 async function forceSaveToCloud() {
   const rosterData = buildRosterData();
   const status = document.getElementById('cloud-status');
-  if(status) status.textContent = '⏳ Force saving...';
-  const compressed = compressRoster(rosterData);
-  cloudSaveJSONP('roster', compressed, (ok) => {
-    if(status) status.textContent = ok ? '☁️ Saved ✓' : '✗ Save failed';
-    setTimeout(() => { if(status && status.textContent.includes('Saved')) status.textContent = '☁️ Synced'; }, 3000);
-  });
-  setTimeout(() => cloudSaveJSONP('orders', DB.openOrders||[], ()=>{}), 600);
-  setTimeout(() => cloudSaveJSONP('historical', DB.historical||[], ()=>{}), 1200);
+  if(status) status.textContent = '⏳ Saving...';
   toast('Saving to cloud...');
+  _doCloudSave(rosterData);
+  setTimeout(() => loadFromCloud(), 6000); // verify by reloading
 }
 
 function buildRosterData() {
@@ -2947,13 +2933,35 @@ async function loadFromCloud() {
       }
       const d = json.data;
       let changed = false;
-      if (d.roster)    { applyRosterData(d.roster); localStorage.setItem('zlc_roster', JSON.stringify(d.roster)); changed=true; }
+
+      // Build merged roster from split keys (staff1 + staff2 contains extra/equip/rentals)
+      const staff2block = d.staff2 || {};
+      const mergedRoster = {
+        staff:     [...(d.staff1||[]), ...(staff2block.staff||[])],
+        extra:     staff2block.extra    || d.extra    || [],
+        equip:     staff2block.equip    || d.equip    || [],
+        rentals:   staff2block.rentals  || d.rentals  || [],
+        extraList: staff2block.extraList|| d.extraList|| [],
+        staffList: staff2block.staffList|| d.staffList|| [],
+      };
+
+      // Fallback: old format with single 'roster' key
+      if(!d.staff1 && d.roster) {
+        applyRosterData(d.roster);
+        localStorage.setItem('zlc_roster', JSON.stringify(d.roster));
+        changed = true;
+      } else if(d.staff1 || d.staff2) {
+        applyRosterData(mergedRoster);
+        localStorage.setItem('zlc_roster', JSON.stringify(mergedRoster));
+        changed = true;
+      }
+
       if (d.orders)    { DB.openOrders=d.orders; localStorage.setItem('zlc_orders', JSON.stringify(d.orders)); changed=true; }
       if (d.historical){ DB.historical=d.historical; localStorage.setItem('zlc_historical', JSON.stringify(d.historical)); changed=true; }
       if (d.manual && d.manual.length) { d.manual.forEach(p=>{if(!DB.projects.find(x=>x.id===p.id))DB.projects.push(p);}); changed=true; }
       const t = new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'});
       if(status) status.textContent = changed ? '☁️ Synced ' + t : '☁️ Up to date';
-      if(changed) { renderRoster(); renderAnalytics(); renderProjTable(); renderOverview(); }
+      if(changed) { renderRoster(); renderAnalytics(); renderProjTable(); renderOverview(); toast('☁️ Data loaded from cloud'); }
       console.log('✓ Cloud load complete, changed:', changed);
     } catch(e) {
       console.warn('Cloud load parse error:', e.message);
