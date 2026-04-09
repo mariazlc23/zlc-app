@@ -1867,17 +1867,11 @@ function setSect(s,b){rosterSect=s;document.querySelectorAll('.ft').forEach(x=>x
 function setRosterProjFilter(pid){rosterProjFilter=pid;renderRoster();}
 function setRosterDayFilter(d){
   rosterDayFilter=(d||'').trim();
-  // Sync calYear/calMonth to the selected date so cells render correctly
-  if(rosterDayFilter){
-    const parts=rosterDayFilter.split('-').map(Number);
-    if(parts.length===3 && parts[0] && parts[1] && parts[2]){
-      calYear=parts[0]; calMonth=parts[1]-1; // month is 0-indexed
-    }
-  }
+  // Sync calYear/calMonth to match the picked date
   const parts=getRosterFilterDateParts();
   if(parts){
     calYear=parts.year;
-    calMonth=parts.month-1;
+    calMonth=parts.month-1; // month is 0-indexed for JS Date
   }
   const input=document.getElementById('roster-day-filter');
   if(input && input.value!==rosterDayFilter) input.value=rosterDayFilter;
@@ -1923,7 +1917,7 @@ function populateRosterProjFilter(){
   const cur=sel.value;
   // Collect all project IDs that appear in any assignment
   const allItems=[...STAFF,...EXTRA,...EQUIP,...RENTALS];
-  const usedIds=new Set(allItems.flatMap(e=>Object.values(e.a||{})).filter(Boolean));
+  const usedIds=new Set(allItems.flatMap(e=>Object.values(e.a||{}).flatMap(v=>String(v||'').split(',').map(x=>x.trim()))).filter(Boolean));
   // Also include active projects
   DB.projects.filter(p=>p.status==='Active').forEach(p=>usedIds.add(p.id));
   usedIds.add('OFF');usedIds.add('Warehouse');
@@ -2000,25 +1994,14 @@ function renderRoster(){
   const dayMode=!!rosterDayFilter;
 
   const passFilter=item=>{
-    if(!rosterProjFilter && !dayMode) return true;
+    // Month mode with no project filter — show everyone
+    if(!rosterProjFilter) return true;
+    // Check if this item has the selected project in any visible day
+    const checkAsgn=asgn=>String(asgn||'').split(',').map(x=>x.trim()).includes(rosterProjFilter);
     if(dayMode){
-      // Day mode: show only people assigned on that specific day
-      const key=getRosterFilterKey();
-      const asgn=item.a?.[key]||'';
-      if(!asgn) return false;
-      if(!rosterProjFilter) return true; // show all assigned
-      // Support multi-project (comma separated)
-      return asgn.split(',').map(x=>x.trim()).includes(rosterProjFilter);
+      return checkAsgn(item.a?.[getRosterFilterKey()]||'');
     }
-    // Month mode with project filter: show only people with that project in visible range
-    if(rosterProjFilter){
-      return days.some(d=>{
-        const key=`${calYear}-${calMonth+1}-${d}`;
-        const asgn=item.a?.[key]||'';
-        return asgn.split(',').map(x=>x.trim()).includes(rosterProjFilter);
-      });
-    }
-    return true;
+    return days.some(d=>checkAsgn(item.a?.[`${calYear}-${calMonth+1}-${d}`]||''));
   };
 
   // Build header
