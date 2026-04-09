@@ -144,10 +144,10 @@
   .rt td.ic { padding: 5px 8px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 110px; }
   .rt td.ic:nth-child(2) { white-space: normal; word-break: break-word; vertical-align: top; max-width: 70px; }
   .trs td { background: var(--bg2); padding: 5px 10px; font-size: 10px; font-weight: 700; color: var(--text2); text-transform: uppercase; letter-spacing: .07em; border: 0.5px solid var(--border); }
-  .day-cell { width: 30px; min-width: 30px; height: 28px; cursor: pointer; text-align: center; }
+  .day-cell { width: 38px; min-width: 38px; height: 38px; cursor: pointer; text-align: center; }
   .day-cell:hover { outline: 2px solid var(--blue); z-index: 1; position: relative; }
   .day-cell.today-col { outline: 2px solid var(--blue); }
-  .day-block { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; font-size: 9px; font-weight: 600; overflow: hidden; padding: 0 1px; }
+  .day-block { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; font-size: 10px; font-weight: 600; overflow: hidden; padding: 0 1px; }
   .cert-badge { font-size: 10px; padding: 1px 5px; border-radius: 99px; margin-right: 2px; }
   .cert-h { background: var(--blue-light); color: var(--blue); }
   .cert-r { background: var(--green-light); color: var(--green); }
@@ -1914,7 +1914,7 @@ function renderRoster(){
       });
       if(dumps.length){
         trabajoHtml+='<div style="margin-top:4px;padding-top:4px;border-top:0.5px dashed var(--border)">'
-          +'<div style="font-size:9px;font-weight:700;color:#854F0B;margin-bottom:2px">🗑️ DUMP SITES</div>'
+          +'<div style="font-size:13px;font-weight:700;color:#854F0B;margin-bottom:2px">🗑️ Dump Sites</div>'
           +dumps.map(s=>{
             const col=DUMP_TYPE_COLORS[s.siteType||'']||'#888';
             return'<div style="font-size:10px;color:var(--text);margin-bottom:2px">'
@@ -1964,24 +1964,25 @@ function renderRoster(){
     const multiSels=item.multi?parseMultiAssign(asgn):null;
     const titleText=asgn?(note?asgn+' — '+note:asgn):'click to assign';
     const noteDot=note?`<span style="position:absolute;top:1px;right:1px;width:5px;height:5px;border-radius:50%;background:${tc||'#fff'};opacity:0.8;flex-shrink:0"></span>`:'';
-    const pourIcon=pour?`<span style="position:absolute;bottom:1px;left:1px;font-size:8px;line-height:1">🪣</span>`:''; // pour emoji
+    const pourIcon=pour?`<span style="position:absolute;bottom:1px;left:1px;font-size:14px;line-height:1">🪣</span>`:''; // pour emoji
     const conf=item.confirmed?.[key]!==false;
-    const warnOverlay=!conf&&asgn?'<span style="position:absolute;top:0;left:0;font-size:11px;line-height:1">⚠️</span>':'';
+    const warnOverlay=!conf&&asgn?'<span style="position:absolute;top:0;left:0;font-size:14px;line-height:1">⚠️</span>':'';
     // Multi-assign cell: show stacked mini pills for jobs + dump icon
     if(multiSels&&multiSels.length){
       const jobs=multiSels.filter(s=>s.type==='job');
       const dumps=multiSels.filter(s=>s.type==='dump');
       const bg0=jobs.length?pc(jobs[0].id)||'#888':'#888';
       const inner=jobs.slice(0,3).map(s=>{const bg=pc(s.id)||'#888';const tc=ptc(bg);return`<div style="font-size:7px;font-weight:700;color:${tc};background:${bg};border-radius:2px;padding:1px 2px;line-height:1.2">${s.id.split('-')[1]||s.id.slice(0,4)}</div>`;}).join('');
-      const dumpDot=dumps.length?`<span style="position:absolute;bottom:1px;right:1px;font-size:9px">🗑️</span>`:'';
+      const dumpDot=dumps.length?`<span style="position:absolute;bottom:0;right:1px;font-size:14px">🗑️</span>`:'';
       return`<td class="day-cell${isT?' today-col':''}" style="position:relative;background:${bg0}" onclick="clickCell('${item.id}','${key}','${d}','${type}')" title="${asgn}">
         <div style="display:flex;flex-direction:column;gap:1px;align-items:center">${inner}</div>${noteDot}${dumpDot}${warnOverlay}</td>`;
     }
     const isNEW=asgn==='NEW';
     const cellBg=isNEW?'#FFEBEE':bg;const cellTc=isNEW?'#C62828':tc;
     const dispLabel=isNEW?'🆕':asgn==='OFF'?'OFF':asgn.split('-')[1]||asgn.slice(0,4);
+    const newSize=isNEW?'font-size:16px;':'font-size:10px;';
     const cellBorder=!conf&&asgn?'outline:2px solid #E24B4A;':'';
-    return`<td class="day-cell${isT?' today-col':''}" style="position:relative;${cellBg?`background:${cellBg};`:''}${wk&&!cellBg?'background:rgba(0,0,0,0.02);':''}${cellBorder}" onclick="clickCell('${item.id}','${key}','${d}','${type}')" title="${titleText.replace(/"/g,'&quot;')}${!conf?' ⚠️ NOT CONFIRMED':''}">${asgn?`<div class="day-block" style="color:${cellTc}">${dispLabel}</div>`:''}${noteDot}${warnOverlay}${pourIcon}</td>`;
+    return`<td class="day-cell${isT?' today-col':''}" style="position:relative;${cellBg?`background:${cellBg};`:''}${wk&&!cellBg?'background:rgba(0,0,0,0.02);':''}${cellBorder}" onclick="clickCell('${item.id}','${key}','${d}','${type}')" title="${titleText.replace(/"/g,'&quot;')}${!conf?' ⚠️ NOT CONFIRMED':''}">${asgn?`<div class="day-block" style="color:${cellTc};${newSize}">${dispLabel}</div>`:''}${noteDot}${warnOverlay}${pourIcon}</td>`;
   }).join('');
 
   // Render a row — returns '' if day mode and no assignment/note
@@ -2183,7 +2184,7 @@ function clickCell(itemId,dateKey,day,type){
           <div style="max-height:260px;overflow-y:auto">${jobOpts}</div>
         </div>
         <div>
-          <div style="font-size:11px;font-weight:700;color:var(--text);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;padding-bottom:4px;border-bottom:2px solid #854F0B">🗑️ Dump sites</div>
+          <div style="font-size:13px;font-weight:700;color:var(--text);text-transform:uppercase;letter-spacing:.05em;margin-bottom:6px;padding-bottom:4px;border-bottom:2px solid #854F0B">🗑️ Dump sites</div>
           <div style="max-height:260px;overflow-y:auto">${dumpOpts}</div>
         </div>
       </div>
@@ -2214,7 +2215,7 @@ function clickCell(itemId,dateKey,day,type){
     <div id="cp-extra-fields" style="margin-bottom:0">${extraFields}</div>
     <div class="fg" style="background:rgba(200,230,255,0.3);border:0.5px solid #6AAED6;border-radius:var(--radius);padding:10px 12px;margin-bottom:8px">
       <label style="color:#185FA5;font-weight:600;display:flex;align-items:center;gap:6px;margin-bottom:8px">
-        <span>🪣</span> Pour — concrete pour details
+        <span style="font-size:18px">🪣</span> Pour — concrete pour details
         <label style="display:flex;align-items:center;gap:4px;cursor:pointer;font-size:11px;font-weight:400;color:var(--text2);margin:0;margin-left:auto">
           <input type="checkbox" id="cp-pour-enabled" ${curPour?'checked':''} style="width:auto;accent-color:#185FA5" onchange="togglePourFields(this.checked)"> Enable pour
         </label>
