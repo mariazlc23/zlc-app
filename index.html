@@ -998,8 +998,9 @@ function ptc(bg){if(!bg||bg==='')return '#666';const h=bg.replace('#','');const 
 
 function getRosterFilterDateParts(){
   if(!rosterDayFilter) return null;
+  // rosterDayFilter is now stored as YYYY-M-D (normalized by setRosterDayFilter)
   const parts = String(rosterDayFilter).split('-').map(Number);
-  if(parts.length!==3 || parts.some(n=>!n)) return null;
+  if(parts.length!==3 || parts.some(n=>isNaN(n)||!n)) return null;
   return { year: parts[0], month: parts[1], day: parts[2] };
 }
 function getRosterFilterKey(){
@@ -1866,7 +1867,20 @@ function setCV(v,b){calView=v;document.querySelectorAll('.vt-btn').forEach(x=>x.
 function setSect(s,b){rosterSect=s;document.querySelectorAll('.ft').forEach(x=>x.classList.remove('active'));b.classList.add('active');renderRoster();}
 function setRosterProjFilter(pid){rosterProjFilter=pid;renderRoster();}
 function setRosterDayFilter(d){
-  rosterDayFilter=(d||'').trim();
+  // Normalize to YYYY-M-D format regardless of what browser sends
+  const raw=(d||'').trim();
+  if(raw){
+    // Try to parse and normalize
+    const dt=new Date(raw);
+    if(!isNaN(dt)){
+      // Store as YYYY-M-D (no zero-padding, matches assignment key format)
+      rosterDayFilter=`${dt.getFullYear()}-${dt.getMonth()+1}-${dt.getDate()}`;
+    } else {
+      rosterDayFilter=raw;
+    }
+  } else {
+    rosterDayFilter='';
+  }
   // Sync calYear/calMonth to match the picked date
   const parts=getRosterFilterDateParts();
   if(parts){
@@ -1994,13 +2008,21 @@ function renderRoster(){
   const dayMode=!!rosterDayFilter;
 
   const passFilter=item=>{
+    if(dayMode){
+      // Day mode: show only people who have something assigned on this day
+      const key=getRosterFilterKey();
+      const asgn=String(item.a?.[key]||'').trim();
+      if(!asgn) return false; // hide unassigned (dayViewCells also returns null, double safety)
+      // If project filter is active, check if this person is on that project
+      if(rosterProjFilter){
+        return asgn.split(',').map(x=>x.trim()).includes(rosterProjFilter);
+      }
+      return true;
+    }
     // Month mode with no project filter — show everyone
     if(!rosterProjFilter) return true;
-    // Check if this item has the selected project in any visible day
+    // Month mode with project filter — show only people assigned to that project
     const checkAsgn=asgn=>String(asgn||'').split(',').map(x=>x.trim()).includes(rosterProjFilter);
-    if(dayMode){
-      return checkAsgn(item.a?.[getRosterFilterKey()]||'');
-    }
     return days.some(d=>checkAsgn(item.a?.[`${calYear}-${calMonth+1}-${d}`]||''));
   };
 
