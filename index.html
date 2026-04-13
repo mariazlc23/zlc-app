@@ -578,8 +578,13 @@ function sheetWrite(action, payload) {
 
   // Define the callback — Apps Script calls it with the result
   window[cbName] = function(result) {
-    if (log) log.textContent = '✓ ' + action + ' ' + new Date().toLocaleTimeString();
-    console.log('sheetWrite result:', action, result);
+    if(result && result.error) {
+      if (log) log.textContent = '✗ ' + action + ': ' + result.error;
+      console.error('sheetWrite error:', action, result.error);
+    } else {
+      if (log) log.textContent = '✓ ' + action + ' ' + new Date().toLocaleTimeString();
+      console.log('sheetWrite result:', action, result);
+    }
     // Cleanup
     delete window[cbName];
     const el = document.getElementById('_zlc_script_' + cbName);
@@ -1673,9 +1678,9 @@ function setStatusFilter(status, btn) {
 
 function renderProjTable(searchQ){
   const q = (searchQ ?? (document.getElementById('proj-search')?.value||'')).toLowerCase().trim();
-  let filtered = projStatusFilter
+  let filtered = (projStatusFilter
     ? DB.projects.filter(p => p.status === projStatusFilter)
-    : DB.projects;
+    : DB.projects).slice().sort((a,b)=>String(a.id).localeCompare(String(b.id)));
   if(q) filtered = filtered.filter(p =>
     p.id.toLowerCase().includes(q) ||
     p.name.toLowerCase().includes(q) ||
@@ -1771,7 +1776,7 @@ function renderSub(p,tab){
     p.codes.forEach(c=>{
       const extra=byCode[c.code]||0,tot=c.value+extra,pct=base>0?Math.round((c.value/base)*100):0,col=CODE_COLORS[c.code]||'#888';
       // Include CO man-days for this cost code
-      const coCOs=(proj.cos||[]).filter(co=>co.code===c.code&&((co.foremanDays||0)+(co.laborerDays||0)>0));
+      const coCOs=(p.cos||[]).filter(co=>co.code===c.code&&((co.foremanDays||0)+(co.laborerDays||0)>0));
       const coFD=coCOs.reduce((a,co)=>a+(co.foremanDays||0),0);
       const coLD=coCOs.reduce((a,co)=>a+(co.laborerDays||0),0);
       const fD=(c.foremanDays||0)+coFD, lD=(c.laborerDays||0)+coLD, totD=fD+lD;
@@ -2502,7 +2507,7 @@ function clickCell(itemId,dateKey,day,type){
       const ccOpts=`<option value="">— Select cost code —</option>`
         +proj.codes.map(c=>{
           // Include CO days for this cost code
-          const coCOs2=(proj.cos||[]).filter(co=>co.code===c.code&&((co.foremanDays||0)+(co.laborerDays||0)>0));
+          const coCOs2=((DB.projects.find(x=>x.id===pid)||{}).cos||[]).filter(co=>co.code===c.code&&((co.foremanDays||0)+(co.laborerDays||0)>0));
           const coFD2=coCOs2.reduce((a,co)=>a+(co.foremanDays||0),0);
           const coLD2=coCOs2.reduce((a,co)=>a+(co.laborerDays||0),0);
           const fD=(c.foremanDays||0)+coFD2,lD=(c.laborerDays||0)+coLD2,totD=fD+lD;
