@@ -3369,14 +3369,7 @@ function buildRosterData() {
 
 function saveLocal() {
   try {
-    const rosterData = {
-      staff:   STAFF.map(e => ({ id:e.id, a:e.a||{}, notes:e.notes||{}, wh:e.wh||{}, cc:e.cc||{}, co:e.co||{}, name:e.name })),
-      extra:   EXTRA.map(e => ({ id:e.id, a:e.a||{}, notes:e.notes||{}, wh:e.wh||{}, cc:e.cc||{}, co:e.co||{}, name:e.name, project:e.project })),
-      equip:   EQUIP.map(e => ({ id:e.id, a:e.a||{}, notes:e.notes||{}, wh:e.wh||{}, cc:e.cc||{}, co:e.co||{}, name:e.name })),
-      rentals: RENTALS.map(e => ({ id:e.id, a:e.a||{}, notes:e.notes||{}, wh:e.wh||{}, cc:e.cc||{}, co:e.co||{}, name:e.name })),
-      extraList: EXTRA.filter(e => e.id.startsWith('ew') && !['ew1','ew2','ew3','ew4','ew5','ew6','ew7','ew8'].includes(e.id)),
-      staffList: STAFF.filter(e => !['e1','e2','e3','e4','e5','e6','e7','e8','e9','e10','e11','e12','e13','e14','e15','e16','e17','e18'].includes(e.id)),
-    };
+    const rosterData = buildRosterData();
     // 1. Save to localStorage immediately (fast, works offline)
     localStorage.setItem('zlc_roster', JSON.stringify(rosterData));
     localStorage.setItem('zlc_orders', JSON.stringify(DB.openOrders||[]));
