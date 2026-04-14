@@ -711,8 +711,8 @@ function parseProjects(rows) {
     }
     // accumulate cost codes
     if (codeNum && value !== 0) {
-      const fDays = parseInt(r[13]||0)||0;  // col N = foreman days
-      const lDays = parseInt(r[14]||0)||0;  // col O = laborer days
+      const fDays = parseInt(r[15]||0)||0;  // col P = foreman days
+      const lDays = parseInt(r[16]||0)||0;  // col Q = laborer days
       const ex = map[pid].codes.find(c => c.code === codeNum);
       if (ex) {
         ex.value += value;
@@ -782,6 +782,7 @@ function parseCORows(rows) {
   // Hardcoded columns based on actual sheet structure:
   // A(0)=EMAIL  B(1)=NAME  C(2)=JOB#  D(3)=CO#/WO#  E(4)=Project name
   // F(5)=Description  G(6)=AMOUNT  H(7)=STATUS  I(8)=WORK  J(9)=FOLLOW UP DATE
+  // K(10)=COST CODE  L(11)=FOREMAN DAYS  M(12)=LABORER DAYS
   const byProject = {};
   // Also store ALL COs flat for dashboard
   DB.allSheetCOs = [];
@@ -803,7 +804,10 @@ function parseCORows(rows) {
     const pmName   = String(r[1]||'').trim();
     const pmEmail  = String(r[0]||'').trim();
     const date     = String(r[9]||'').trim();
-    const co = { id:'co'+i, num, desc, value, status, work, code:'', date, projName, pmName, pmEmail, pid };
+    const code     = String(r[10]||'').trim();
+    const foremanDays = parseInt(r[11]||0)||0;
+    const laborerDays = parseInt(r[12]||0)||0;
+    const co = { id:'co'+i, num, desc, value, status, work, code, date, projName, pmName, pmEmail, pid, foremanDays, laborerDays };
     byProject[pid].push(co);
     DB.allSheetCOs.push({...co, pid, pname: projName});
   }
@@ -3169,7 +3173,7 @@ function saveCO(){
     sheetWrite('addApprovedCO',{projectId:pid,projectName:p.name,coNum:num,desc,code,value:val,approvalDate:ds});
   }
   // Send pm + pmEmail so CO sheet cols A=Email B=Name are filled correctly
-  sheetWrite('addCO',{projectId:pid,projectName:p.name,pm:p.pm||'',pmEmail:p.pmEmail||'',num,desc,code,value:val,status,date:ds});
+  sheetWrite('addCO',{projectId:pid,projectName:p.name,pm:p.pm||'',pmEmail:p.pmEmail||'',num,desc,code,value:val,status,date:ds,foremanDays:coForemanDays,laborerDays:coLaborerDays});
   closeModal();toast(`${num} saved → Sheets`);if(selProj===pid){subTab='cos';renderDetail();}renderOverview();
 }
 function saveRFI(){
