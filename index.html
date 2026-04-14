@@ -3,6 +3,8 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="color-scheme" content="light">
+<meta name="description" content="ZLC Project Manager for projects, roster, warehouse, and analytics.">
 <title>ZLC — Project Manager</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <style>
@@ -477,6 +479,13 @@
 <div class="toast" id="toast"></div>
 
 <script>
+document.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape') {
+    const modal = document.querySelector('#modal-area .modal-backdrop');
+    if (modal) closeModal();
+  }
+});
+
 // ─── DATA ───────────────────────────────────────────────────────────────────
 const CODES_MAP={'001':'Hard demo','002':'Soft demo','003':'Excavation','004':'Concrete','005':'Utilities','006':'Paving','000':'Corporate'};
 const CODE_COLORS={'001':'#D85A30','002':'#BA7517','003':'#1D9E75','004':'#378ADD','005':'#7F77DD','006':'#D4537E','000':'#888780'};
@@ -522,10 +531,26 @@ const YEAR_COLORS={2023:'#185FA5',2024:'#1D9E75',2025:'#BA7517',2026:'#D85A30'};
 const CAT_COLORS={staff:'#185FA5',extra:'#BA7517',equip:'#3B6D11',rental:'#888780'};
 
 // ─── GOOGLE SHEETS CONFIG ─────────────────────────────────────────────────────
-const SHEET_ID  = '1Y35oa2ebgCisj3PzVs2dTMUN5dY2Hhci4RIt55Kn44Y';
-const API_KEY   = 'AIzaSyCCuKyfurmT2w-L2dn6-XbvupaOmlHufUE';
-// Paste your Apps Script URL below after following setup instructions:
-let APPS_SCRIPT_URL = 'https://script.google.com/macros/s/AKfycbzpuCL9IgU50ryvVqJp1Bx5SCzXyUWyWLKZtWgAZdQDbVfexVO-PSGsEVxsXmVqF6UFDQ/exec';
+const DEFAULT_CONFIG = {
+  SHEET_ID: '1Y35oa2ebgCisj3PzVs2dTMUN5dY2Hhci4RIt55Kn44Y',
+  API_KEY: 'AIzaSyCCuKyfurmT2w-L2dn6-XbvupaOmlHufUE',
+  APPS_SCRIPT_URL: 'https://script.google.com/macros/s/AKfycbzpuCL9IgU50ryvVqJp1Bx5SCzXyUWyWLKZtWgAZdQDbVfexVO-PSGsEVxsXmVqF6UFDQ/exec'
+};
+
+function getRuntimeConfig() {
+  try {
+    const localCfg = JSON.parse(localStorage.getItem('zlc_app_config') || '{}');
+    return { ...DEFAULT_CONFIG, ...(window.ZLC_CONFIG || {}), ...localCfg };
+  } catch (err) {
+    console.warn('Could not parse zlc_app_config from localStorage:', err);
+    return { ...DEFAULT_CONFIG, ...(window.ZLC_CONFIG || {}) };
+  }
+}
+
+const RUNTIME_CONFIG = getRuntimeConfig();
+const SHEET_ID  = RUNTIME_CONFIG.SHEET_ID;
+const API_KEY   = RUNTIME_CONFIG.API_KEY;
+let APPS_SCRIPT_URL = RUNTIME_CONFIG.APPS_SCRIPT_URL;
 
 const GIDS = {
   projects: '1735667570',
@@ -1128,22 +1153,6 @@ function goDash(t,b){
 let coDashFilter = 'pending'; // all | pending | done
 
 let coDashWorkFilter='all';
-function setCOWorkFilter(f,btn){
-  coDashWorkFilter=f;
-  ['co-filter-all-work','co-filter-done','co-filter-notdone'].forEach(id=>{
-    const el=document.getElementById(id);if(el){el.style.background='var(--bg3)';el.style.color='';}
-  });
-  if(btn){btn.style.background='var(--blue)';btn.style.color='#fff';}
-  renderCOList();
-}
-function setCOFilter(f, btn) {
-  coDashFilter = f;
-  document.querySelectorAll('#co-filter-all,#co-filter-pending,#co-filter-done').forEach(b=>{
-    b.style.background=''; b.style.color=''; b.classList.add('btn-ghost'); b.classList.remove('btn-primary');
-  });
-  if(btn){ btn.classList.remove('btn-ghost'); btn.style.background='var(--blue)'; btn.style.color='#fff'; }
-  renderCOList();
-}
 
 function renderCOList(){
   const el=document.getElementById('dash-cos');if(!el)return;
@@ -3514,6 +3523,8 @@ renderAnalytics();
 renderProjTable();
 syncFromSheets();
 loadFromCloud();
+
+// Corrected build: removed duplicate CO filter functions and added config fallback support.
 </script>
 </body>
 </html>

@@ -2,6 +2,9 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
+<meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+<meta http-equiv="Pragma" content="no-cache">
+<meta http-equiv="Expires" content="0">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>ZLC — Project Manager</title>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
@@ -257,6 +260,15 @@
 <!-- SIDEBAR -->
 <div class="sidebar">
   <div class="logo">ZLC <span>Corp</span></div>
+  <div style="padding:6px 12px 6px;border-bottom:0.5px solid var(--border);background:var(--bg3)">
+    <div style="display:flex;align-items:center;gap:4px;margin-bottom:4px">
+      <span id="cloud-status" style="font-size:10px;color:var(--text3);flex:1">☁️ Not synced yet</span>
+    </div>
+    <div style="display:flex;gap:4px">
+      <button onclick="forceSaveToCloud()" style="flex:1;font-size:11px;padding:3px 6px;border-radius:4px;border:none;background:#185FA5;color:#fff;cursor:pointer;font-weight:600">💾 Save</button>
+      <button onclick="loadFromCloud()" style="flex:1;font-size:11px;padding:3px 6px;border-radius:4px;border:0.5px solid var(--border2);background:var(--bg);color:var(--text2);cursor:pointer">      ↻ Load</button>
+    </div>
+  </div>
   <div class="nav-section">
     <div class="nav-label">Main</div>
     <button class="nav-item active" onclick="goTab('dashboard',this)">
@@ -277,7 +289,7 @@
     <button id="sync-badge" onclick="syncFromSheets()" style="width:100%;font-size:11px;font-weight:600;padding:7px 12px;border-radius:var(--radius);border:0.5px solid var(--border2);cursor:pointer;transition:all .15s;background:#f0eeea;color:#9e9c97">Sync from Sheets</button>
     <button onclick="testWrite()" style="width:100%;margin-top:6px;font-size:11px;font-weight:600;padding:6px 12px;border-radius:var(--radius);border:0.5px solid var(--border2);cursor:pointer;background:#EAF3DE;color:#27500A">Test Sheet write</button>
     <div id="write-log" style="font-size:10px;color:var(--text3);margin-top:6px;word-break:break-all;line-height:1.4"></div>
-    <div style="font-size:10px;color:var(--text3);text-align:center;margin-top:6px">ZLC Project Manager v1.1</div>
+    <div style="font-size:10px;color:var(--text3);text-align:center;margin-top:6px">ZLC Project Manager v1.2</div>
   </div>
 </div>
 
@@ -323,11 +335,11 @@
         <div class="card-header" style="flex-wrap:wrap;gap:6px">
           <span class="card-title">Change orders</span>
           <div style="display:flex;gap:4px;flex-wrap:wrap">
-            <button class="btn btn-sm btn-ghost" id="co-filter-all" onclick="setCOFilter('all',this)" style="font-size:10px;padding:2px 7px">All</button>
-            <button class="btn btn-sm" id="co-filter-pending" onclick="setCOFilter('pending',this)" style="font-size:10px;padding:2px 7px;background:var(--blue);color:#fff">Pending</button>
+            <button class="btn btn-sm btn-ghost" id="co-filter-all"     onclick="setCOFilter('all',this)"     style="font-size:10px;padding:2px 7px">All</button>
+            <button class="btn btn-sm" id="co-filter-pending"           onclick="setCOFilter('pending',this)" style="font-size:10px;padding:2px 7px;background:var(--blue);color:#fff">Pending</button>
             <button class="btn btn-sm btn-ghost" id="co-filter-approved" onclick="setCOFilter('approved',this)" style="font-size:10px;padding:2px 7px">Approved</button>
-            <button class="btn btn-sm btn-ghost" id="co-filter-done" onclick="setCOFilter('done',this)" style="font-size:10px;padding:2px 7px">Work done</button>
-            <button class="btn btn-sm btn-ghost" id="co-filter-notdone" onclick="setCOFilter('notdone',this)" style="font-size:10px;padding:2px 7px">Work not done</button>
+            <button class="btn btn-sm btn-ghost" id="co-filter-done"    onclick="setCOFilter('done',this)"    style="font-size:10px;padding:2px 7px">✅ Work done</button>
+            <button class="btn btn-sm btn-ghost" id="co-filter-notdone" onclick="setCOFilter('notdone',this)" style="font-size:10px;padding:2px 7px">⏳ Not done</button>
           </div>
         </div>
         <div id="dash-cos"></div>
@@ -428,6 +440,9 @@
           <option value="">— All days —</option>
         </select>
         <button class="btn btn-sm btn-ghost" onclick="setRosterDayFilter('');document.getElementById('roster-day-filter').value=''" style="font-size:11px;padding:3px 8px">✕ Clear</button>
+        <span id="cloud-status-2" style="font-size:11px;color:var(--text3);padding:3px 8px;background:var(--bg3);border-radius:var(--radius);white-space:nowrap">☁️ —</span>
+        <button class="btn btn-sm btn-ghost" onclick="forceSaveToCloud()" title="Force save all data to cloud" style="font-size:11px;padding:3px 8px">💾 Save</button>
+        <button class="btn btn-sm btn-ghost" onclick="loadFromCloud()" title="Reload from cloud" style="font-size:11px;padding:3px 8px">↻ Sync</button>
         <button class="btn btn-sm" onclick="downloadDayPDF()" id="pdf-btn" style="font-size:11px;padding:4px 10px;background:#E24B4A;color:#fff;border:none;border-radius:var(--radius);cursor:pointer;display:none">⬇ Download PDF</button>
       </div>
     </div>
@@ -1203,10 +1218,10 @@ function renderCOList(){
   const src=(DB.allSheetCOs&&DB.allSheetCOs.length)?DB.allSheetCOs
     :DB.projects.flatMap(p=>p.cos.map(c=>({...c,pid:p.id,pname:p.name||p.id})));
   let filtered;
-  if(coDashFilter==='pending')     filtered=src.filter(c=>/pend/i.test(c.status||''));
+  if(coDashFilter==='pending')      filtered=src.filter(c=>/pend/i.test(c.status||''));
   else if(coDashFilter==='approved') filtered=src.filter(c=>/approv/i.test(c.status||''));
-  else if(coDashFilter==='done')   filtered=src.filter(c=>/^done$/i.test(String(c.work||'').trim()));
-  else if(coDashFilter==='notdone')filtered=src.filter(c=>/not/i.test(c.work||''));
+  else if(coDashFilter==='done')     filtered=src.filter(c=>/^done$/i.test(String(c.work||'').trim()));
+  else if(coDashFilter==='notdone')  filtered=src.filter(c=>/not/i.test(c.work||''));
   else filtered=[...src];
   filtered.sort((a,b)=>String(a.pid||'').localeCompare(String(b.pid||'')));
   const filterTotal=filtered.reduce((a,c)=>a+(c.value||0),0);
@@ -1217,21 +1232,69 @@ function renderCOList(){
     const cls=/approv/i.test(st)?'b-green':/canc/i.test(st)?'b-red':'b-amber';
     const pname=c.pname||c.projName||c.pid||'';
     const workDone=/^done$/i.test(String(c.work||'').trim());
-    const workBadge=c.work?`<span class="badge ${workDone?'b-green':'b-red'}" style="font-size:9px;margin-left:4px">${c.work}</span>`:'';
-    return`<div style="display:flex;justify-content:space-between;align-items:flex-start;padding:8px 0;border-bottom:0.5px solid var(--border);font-size:12px;gap:8px">
-      <div style="flex:1;min-width:0">
-        <div style="display:flex;align-items:center;gap:6px;margin-bottom:2px;flex-wrap:wrap">
-          <strong>${c.num||'—'}</strong>
-          <span style="color:var(--text3);font-size:10px">${c.pid} — ${pname}</span>${workBadge}
+    const workBadge=c.work?`<span class="badge ${workDone?'b-green':'b-amber'}" style="font-size:9px;margin-left:4px">${c.work}</span>`:'';
+    const isPending=/pend/i.test(st);
+    const cid=c.id||''; const cpid=c.pid||''; const cnum=(c.num||'').replace(/'/g,"\\'");
+    const actionBtns=isPending?`<div style="display:flex;gap:4px;margin-top:5px">
+        <button class="btn btn-sm btn-approve" style="font-size:10px;padding:2px 8px" onclick="dashApproveCO('${cpid}','${cid}','${cnum}')">✓ Approve</button>
+        <button class="btn btn-sm btn-deny" style="font-size:10px;padding:2px 8px" onclick="dashCancelCO('${cpid}','${cid}','${cnum}')">✕ Cancel</button>
+      </div>`:'';
+    const workToggle=`<select onchange="dashSetCOWork('${cpid}','${cid}',this.value)" style="font-size:10px;padding:1px 4px;border-radius:4px;border:0.5px solid var(--border2);background:var(--bg);color:var(--text);margin-top:3px;cursor:pointer">
+      <option value="" ${!c.work?'selected':''}>— Work status —</option>
+      <option value="Done" ${workDone?'selected':''}>✅ Done</option>
+      <option value="Not done yet" ${/not/i.test(c.work||'')?'selected':''}>⏳ Not done yet</option>
+    </select>`;
+    return`<div style="padding:8px 0;border-bottom:0.5px solid var(--border);font-size:12px">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px">
+        <div style="flex:1;min-width:0">
+          <div style="display:flex;align-items:center;gap:5px;margin-bottom:2px;flex-wrap:wrap">
+            <strong>${c.num||'—'}</strong>
+            <span class="badge ${cls}" style="font-size:9px">${st}</span>
+            ${workBadge}
+            <span style="color:var(--text3);font-size:10px">${cpid} — ${pname}</span>
+          </div>
+          <div style="color:var(--text2);font-size:11px;margin-bottom:3px">${c.desc||''}</div>
+          ${workToggle}
+          ${actionBtns}
         </div>
-        <div style="color:var(--text2);font-size:11px">${c.desc||''}</div>
-      </div>
-      <div style="text-align:right;flex-shrink:0">
-        ${c.value?`<strong>${fmt(c.value)}</strong>`:''}
-        <div style="margin-top:2px"><span class="badge ${cls}">${st}</span></div>
+        <div style="text-align:right;flex-shrink:0;padding-top:2px">
+          ${c.value?`<strong style="font-size:13px">${fmt(c.value)}</strong>`:''}
+        </div>
       </div>
     </div>`;
   }).join('');
+}
+
+// Dashboard CO actions
+function dashApproveCO(pid, cid, num){
+  // Update in allSheetCOs
+  const sc=(DB.allSheetCOs||[]).find(c=>c.id===cid&&c.pid===pid)||
+            (DB.allSheetCOs||[]).find(c=>c.num===num&&c.pid===pid);
+  if(sc){sc.status='Approved';}
+  // Update in project.cos
+  const p=DB.projects.find(x=>x.id===pid);
+  if(p){const co=p.cos.find(c=>c.id===cid||c.num===num);if(co){co.status='Approved';p.history.push({date:todate(),text:num+' APPROVED via dashboard',type:'approved'});}}
+  sheetWrite('updateCO',{projectId:pid,num,newStatus:'Approved'});
+  renderCOList();renderOverview();
+  toast('✓ '+num+' approved');
+}
+function dashCancelCO(pid, cid, num){
+  const sc=(DB.allSheetCOs||[]).find(c=>c.id===cid&&c.pid===pid)||
+            (DB.allSheetCOs||[]).find(c=>c.num===num&&c.pid===pid);
+  if(sc){sc.status='Canceled';}
+  const p=DB.projects.find(x=>x.id===pid);
+  if(p){const co=p.cos.find(c=>c.id===cid||c.num===num);if(co){co.status='Canceled';p.history.push({date:todate(),text:num+' canceled via dashboard',type:'canceled'});}}
+  sheetWrite('updateCO',{projectId:pid,num,newStatus:'Canceled'});
+  renderCOList();renderOverview();
+  toast('✕ '+num+' canceled');
+}
+function dashSetCOWork(pid, cid, workVal){
+  const sc=(DB.allSheetCOs||[]).find(c=>c.id===cid&&c.pid===pid);
+  if(sc){sc.work=workVal;}
+  const p=DB.projects.find(x=>x.id===pid);
+  if(p){const co=p.cos.find(c=>c.id===cid);if(co)co.work=workVal;}
+  sheetWrite('updateCO',{projectId:pid,num:(sc&&sc.num)||'',newStatus:(sc&&sc.status)||'',work:workVal});
+  renderCOList();
 }
 
 // ─── OPEN ORDERS ──────────────────────────────────────────────────────────────
@@ -2007,8 +2070,21 @@ function renderRoster(){
         const extra=dayViewCells(item);
         if(!extra)return;
         const asgn=String(item.a?.[dayKey]||'').trim();
-        const firstJob=asgn.split(',')[0].trim()||'_unassigned';
-        allDayRows.push({job:firstJob, html:`<tr style="${bgStyle}"><td class="ic" style="max-width:150px">${nameCell(item.id,type)}</td>${extra}</tr>`});
+        // For multi-assign (JSON), get ALL job IDs so person appears under each job
+        let jobIds=['_unassigned'];
+        if(asgn){
+          try{
+            const p=JSON.parse(asgn);
+            if(Array.isArray(p)){
+              const jobs=p.filter(s=>s.type==='job');
+              jobIds=jobs.length?jobs.map(s=>s.id):['_unassigned'];
+            } else { jobIds=[asgn.split(',')[0].trim()||'_unassigned']; }
+          }catch(e){ jobIds=[asgn.split(',')[0].trim()||'_unassigned']; }
+        }
+        const firstJob=jobIds[0];
+        const rowHtml=`<tr style="${bgStyle}"><td class="ic" style="max-width:150px">${nameCell(item.id,type)}</td>${extra}</tr>`;
+        // Multi-assign drivers appear under each job they're assigned to
+        jobIds.forEach(jid=>allDayRows.push({job:jid, html:rowHtml}));
       });
     };
 
@@ -2081,13 +2157,31 @@ function renderRoster(){
   h+='</tbody>';
   document.getElementById('roster-tbl').innerHTML=h;
   // Split multi-assign comma values to get individual project IDs
-  const usedAll=[...STAFF,...EXTRA,...EQUIP,...RENTALS]
-    .flatMap(e=>Object.values(e.a||{}).flatMap(v=>String(v||'').split(',').map(x=>x.trim())))
-    .filter(Boolean);
+  // Collect all used project IDs — handle both JSON multi-assign and plain strings
+  const usedAll=[...STAFF,...EXTRA,...EQUIP,...RENTALS].flatMap(e=>{
+    return Object.values(e.a||{}).flatMap(v=>{
+      if(!v)return[];
+      // Try JSON multi-assign format
+      try{
+        const parsed=JSON.parse(v);
+        if(Array.isArray(parsed)){
+          return parsed.filter(s=>s.type==='job').map(s=>s.id).filter(Boolean);
+        }
+      }catch(e){}
+      // Legacy: plain project ID or comma-separated
+      return String(v).split(',').map(x=>x.trim()).filter(Boolean);
+    });
+  });
   const uniq=[...new Set(usedAll)];
-  document.getElementById('roster-legend').innerHTML=uniq.filter(p=>p!=='OFF').map(p=>{
-    if(p==='Warehouse') return `<span class="li"><span class="lsq" style="background:${pc('Warehouse')}"></span>Warehouse</span>`;
-    if(p==='NEW') return `<span class="li"><span class="lsq" style="background:#FFEBEE;border:1px dashed #E24B4A"></span>🆕 New</span>`;
+  // Only show known project IDs (2-digit year + 3-digit number), OFF, Warehouse, NEW
+  const knownProjs=new Set(DB.projects.map(p=>p.id));
+  const validLegendIds=uniq.filter(p=>{
+    if(!p)return false;
+    if(p==='OFF'||p==='Warehouse'||p==='NEW')return false; // handled separately
+    // Must be a known project ID — skip dump site names, JSON fragments, etc.
+    return knownProjs.has(p)||/^\d{2}-\d{3,4}$/.test(p);
+  });
+  document.getElementById('roster-legend').innerHTML=validLegendIds.map(p=>{
     const proj=DB.projects.find(x=>x.id===p);
     const lbl=proj?proj.name:p; // name only, no number
     return `<span class="li"><span class="lsq" style="background:${pc(p)}"></span>${lbl}</span>`;
@@ -2490,7 +2584,6 @@ function openModal(type,pid,extra){
   const activeProjects=DB.projects.filter(p=>p.status==='Active');
   const pOpts=[
     {id:'OFF',name:'OFF / Holiday'},
-    {id:'Warehouse',name:'Warehouse'},
     ...activeProjects.map(p=>({id:p.id,name:p.name}))
   ].map(p=>`<option value="${p.id}"${p.id===pid?' selected':''}>${p.id} — ${p.name}</option>`).join('');
   const total=dim(calYear,calMonth);
@@ -2715,122 +2808,193 @@ function saveExtraW(){
   saveLocal();closeModal();renderRoster();toast(`${name} added`);
 }
 
-// ─── CLOUD-ONLY PERSISTENCE ───────────────────────────────────────────────────
-// Staff roster, orders, manual projects, and historical data are stored in cloud.
-// localStorage is intentionally not used so the same data appears in incognito
-// and across browsers/devices.
-let _cloudQueue = {};
+// ─── LOCAL STORAGE PERSISTENCE ────────────────────────────────────────────────
+// Saves roster assignments, notes, extra staff, and manually added projects
+// so data survives page refresh
+// ─── CLOUD PERSISTENCE ───────────────────────────────────────────────────────
 let _cloudTimer = null;
-let _cloudCbIdx = 0;
-let _cloudIsLoading = false;
-let _cloudHasLoaded = false;
+let _cloudSaveInProgress = false;
 
-function cloudPayload() {
+function setCloudStatus(msg) {
+  ['cloud-status','cloud-status-2'].forEach(id=>{
+    const el = document.getElementById(id);
+    if(!el) return;
+    el.textContent = msg;
+    if(msg.includes('✓')||msg.includes('Saved')||msg.includes('Synced')){
+      el.style.color='#3B6D11'; el.style.fontWeight='700';
+    } else if(msg.includes('✗')||msg.includes('Error')){
+      el.style.color='#E24B4A'; el.style.fontWeight='';
+    } else {
+      el.style.color=''; el.style.fontWeight='';
+    }
+  });
+}
+
+// Compress roster — skip items with no data
+function compressRoster(rd) {
+  const compress = arr => (arr||[]).map(e => {
+    const out = {id:e.id};
+    if(e.name)    out.name    = e.name;
+    if(e.project) out.project = e.project;
+    if(e.a         && Object.keys(e.a).length)         out.a         = e.a;
+    if(e.notes     && Object.keys(e.notes).length)     out.notes     = e.notes;
+    if(e.wh        && Object.keys(e.wh).length)        out.wh        = e.wh;
+    if(e.cc        && Object.keys(e.cc).length)        out.cc        = e.cc;
+    if(e.co        && Object.keys(e.co).length)        out.co        = e.co;
+    if(e.confirmed && Object.keys(e.confirmed).length) out.confirmed = e.confirmed;
+    if(e.pour      && Object.keys(e.pour).length)      out.pour      = e.pour;
+    return out;
+  }).filter(e => Object.keys(e).length > 1);
   return {
-    roster:     buildRosterData(),
-    orders:     DB.openOrders||[],
-    manual:     DB.projects.filter(p=>p._manual),
-    historical: DB.historical,
+    staff:     compress(rd.staff),
+    extra:     compress(rd.extra),
+    equip:     compress(rd.equip),
+    rentals:   compress(rd.rentals),
+    extraList: rd.extraList||[],
+    staffList: rd.staffList||[],
   };
 }
 
-function callAppsScriptJSONP(data) {
+// Single save — tries JSONP first, falls back to fetch POST
+function jsonpSave(key, value) {
   return new Promise((resolve, reject) => {
-    if (!APPS_SCRIPT_URL) { reject(new Error('Missing Apps Script URL')); return; }
-    const cbName = '_zlcCloudCb' + (++_cloudCbIdx);
-    const encoded = encodeURIComponent(JSON.stringify(data));
+    if (!APPS_SCRIPT_URL) { reject('No URL'); return; }
+    const body = JSON.stringify({action:'saveAppData', key, value});
+    const encoded = encodeURIComponent(body);
+
+    // Try JSONP (GET) first — works cross-origin, gives response confirmation
+    const cbName = '_zlcSave_' + Date.now() + '_' + Math.random().toString(36).slice(2,5);
+    const scriptId = '_zlcScript_' + key.replace(/[^a-zA-Z0-9]/g,'_');
+    const old = document.getElementById(scriptId); if(old) old.remove();
+    let done = false;
+
+    const cleanup = () => {
+      done = true;
+      delete window[cbName];
+      const el = document.getElementById(scriptId); if(el) el.remove();
+    };
+
+    window[cbName] = (r) => {
+      cleanup();
+      if(r && r.ok) { resolve(r); }
+      else { reject('Apps Script returned: ' + JSON.stringify(r)); }
+    };
+
     const script = document.createElement('script');
-    let finished = false;
-
-    function cleanup() {
-      finished = true;
-      try { delete window[cbName]; } catch(e) {}
-      if (script.parentNode) script.parentNode.removeChild(script);
-    }
-
-    window[cbName] = function(result) {
-      cleanup();
-      resolve(result);
-    };
-
+    script.id = scriptId;
     script.src = APPS_SCRIPT_URL + '?data=' + encoded + '&callback=' + cbName;
-    script.async = true;
-    script.onerror = function() {
+    script.onerror = () => {
       cleanup();
-      reject(new Error('JSONP request failed'));
+      // JSONP failed — fall back to fetch POST (fire and forget, no CORS)
+      console.warn('JSONP failed for key=' + key + ', trying POST fallback');
+      fetch(APPS_SCRIPT_URL, {
+        method: 'POST',
+        mode: 'no-cors',
+        headers: {'Content-Type': 'text/plain;charset=utf-8'},
+        body: body,
+      }).then(() => {
+        console.log('POST fallback sent for key=' + key + ' (no confirmation possible)');
+        resolve({ok:true, fallback:true});
+      }).catch(e2 => reject('Both JSONP and POST failed: ' + e2));
     };
-
     document.head.appendChild(script);
-
     setTimeout(() => {
-      if (!finished) {
+      if (!done) {
         cleanup();
-        reject(new Error('JSONP timeout'));
+        reject('Timeout 15s for key=' + key);
       }
     }, 15000);
   });
 }
 
-function saveToCloud(rosterData) {
-  if (!APPS_SCRIPT_URL) return;
-  _cloudQueue = {
-    'roster':     rosterData,
-    'orders':     DB.openOrders||[],
-    'manual':     DB.projects.filter(p=>p._manual),
-    'historical': DB.historical,
-  };
-  clearTimeout(_cloudTimer);
-  _cloudTimer = setTimeout(flushCloudQueue, 1200);
-}
-
-function flushCloudQueue() {
-  if (!APPS_SCRIPT_URL || !Object.keys(_cloudQueue).length) return;
-  const entries = Object.entries(_cloudQueue);
-  _cloudQueue = {};
-  entries.forEach(([key, value], i) => {
-    setTimeout(() => cloudSaveOne(key, value), i * 250);
+// Single JSONP load — returns a Promise
+function jsonpLoad() {
+  return new Promise((resolve, reject) => {
+    if (!APPS_SCRIPT_URL) { reject('No URL'); return; }
+    const cbName = '_zlcLoad_' + Date.now();
+    const scriptId = '_zlcLoadScript';
+    const old = document.getElementById(scriptId); if(old) old.remove();
+    let done = false;
+    const cleanup = () => { done=true; delete window[cbName]; const el=document.getElementById(scriptId); if(el)el.remove(); };
+    window[cbName] = (json) => { cleanup(); resolve(json); };
+    const payload = JSON.stringify({action:'loadAppData'});
+    const script = document.createElement('script');
+    script.id = scriptId;
+    script.src = APPS_SCRIPT_URL + '?callback=' + cbName + '&data=' + encodeURIComponent(payload);
+    script.onerror = () => { cleanup(); reject('Script load error'); };
+    document.head.appendChild(script);
+    setTimeout(() => { if(!done) { cleanup(); reject('Load timeout'); } }, 15000);
   });
 }
 
-function cloudSaveOne(key, value) {
-  const bodyObj = {action:'saveAppData', key, value};
-  const body = JSON.stringify(bodyObj);
+function saveToCloud(rosterData) {
+  if (!APPS_SCRIPT_URL) return;
+  clearTimeout(_cloudTimer);
+  _cloudTimer = setTimeout(() => _doCloudSave(rosterData), 2500);
+}
 
+async function _doCloudSave(rosterData) {
+  if (_cloudSaveInProgress) return;
+  _cloudSaveInProgress = true;
+  setCloudStatus('⏳ Saving...');
   try {
-    if (navigator.sendBeacon) {
-      const blob = new Blob([body], {type:'text/plain;charset=utf-8'});
-      navigator.sendBeacon(APPS_SCRIPT_URL, blob);
+    const c = compressRoster(rosterData);
+    // Split staff into chunks of 3 people each (keeps payload under 14KB)
+    const CHUNK = 3;
+    const allPeople = c.staff;
+    const chunks = [];
+    for(let i=0; i<allPeople.length; i+=CHUNK) chunks.push(allPeople.slice(i,i+CHUNK));
+    console.log('Saving ' + allPeople.length + ' staff in ' + chunks.length + ' chunks of ' + CHUNK);
+
+    for(let i=0; i<chunks.length; i++){
+      await jsonpSave('sc'+i, chunks[i]);
+      console.log('✓ chunk sc'+i+' saved ('+chunks[i].length+' people)');
+      if(i < chunks.length-1) await new Promise(r=>setTimeout(r,400));
+    }
+
+    // Save extra/equip/rentals + metadata as one block
+    const meta = {
+      extra:     c.extra,
+      equip:     c.equip,
+      rentals:   c.rentals,
+      extraList: c.extraList,
+      staffList: c.staffList,
+      chunkCount: chunks.length,
+    };
+    await jsonpSave('scMeta', meta);
+    console.log('✓ meta saved (extra/equip/rentals, chunks='+chunks.length+')');
+
+    await new Promise(r=>setTimeout(r,400));
+    await jsonpSave('orders', DB.openOrders||[]);
+    console.log('✓ orders saved');
+
+    const t = new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'});
+    setCloudStatus('✓ Saved ' + t);
+    toast('✓ Saved to cloud');
+  } catch(e) {
+    console.error('Cloud save failed:', e);
+    const emsg = String(e);
+    if(emsg.includes('Unknown') && emsg.includes('save')) {
+      setCloudStatus('✗ Apps Script needs redeploy');
+      toast('⚠️ Apps Script needs a new deployment — see instructions');
     } else {
-      fetch(APPS_SCRIPT_URL, {
-        method: 'POST',
-        mode: 'no-cors',
-        keepalive: true,
-        headers: {'Content-Type':'text/plain;charset=utf-8'},
-        body: body,
-      }).catch(()=>{});
+      setCloudStatus('✗ ' + emsg.slice(0,50));
     }
-  } catch(e) {}
-
-  try {
-    const encoded = encodeURIComponent(body);
-    if (encoded.length < 7000) {
-      callAppsScriptJSONP(bodyObj)
-        .then(r => { if (r && r.ok) console.log('Cloud saved:', key); })
-        .catch(() => {});
-    }
-  } catch(e) {}
+    toast('✗ Save failed — check console');
+  } finally {
+    _cloudSaveInProgress = false;
+  }
 }
 
 async function forceSaveToCloud() {
-  const payload = cloudPayload();
-  _cloudQueue = {
-    'roster':     payload.roster,
-    'orders':     payload.orders,
-    'manual':     payload.manual,
-    'historical': payload.historical,
-  };
-  flushCloudQueue();
-  setTimeout(()=>toast('✓ Saved to cloud'), 1500);
+  if (_cloudSaveInProgress) { toast('Save already in progress...'); return; }
+  const rosterData = buildRosterData();
+  const staffWithData = rosterData.staff.filter(e=>Object.keys(e.a||{}).length>0).length;
+  console.log('Force save: ' + staffWithData + '/' + rosterData.staff.length + ' staff have assignments');
+  toast('💾 Saving ' + staffWithData + ' people to cloud...');
+  await _doCloudSave(rosterData);
+  // Verify by loading back
+  setTimeout(() => loadFromCloud(), 2000);
 }
 
 function buildRosterData() {
@@ -2845,109 +3009,158 @@ function buildRosterData() {
 }
 
 function applyRosterData(rd) {
-  (rd.staff||[]).forEach(saved => {
-    const item = STAFF.find(e => e.id === saved.id);
-    if (item) { item.a=saved.a||{}; item.notes=saved.notes||{}; item.wh=saved.wh||{}; item.cc=saved.cc||{}; item.co=saved.co||{}; item.confirmed=saved.confirmed||{}; item.pour=saved.pour||{}; if(saved.name)item.name=saved.name; }
+  const apply = (arr, source) => (arr||[]).forEach(saved => {
+    const item = source.find(e => e.id === saved.id);
+    if (item) {
+      item.a=saved.a||{}; item.notes=saved.notes||{}; item.wh=saved.wh||{};
+      item.cc=saved.cc||{}; item.co=saved.co||{}; item.confirmed=saved.confirmed||{};
+      item.pour=saved.pour||{};
+      if(saved.name)item.name=saved.name;
+      if(saved.project!==undefined)item.project=saved.project;
+    }
   });
-  (rd.extra||[]).forEach(saved => {
-    const item = EXTRA.find(e => e.id === saved.id);
-    if (item) { item.a=saved.a||{}; item.notes=saved.notes||{}; item.wh=saved.wh||{}; item.cc=saved.cc||{}; item.co=saved.co||{}; item.confirmed=saved.confirmed||{}; item.pour=saved.pour||{}; item.project=saved.project||item.project; if(saved.name)item.name=saved.name; }
-  });
-  (rd.equip||[]).forEach(saved => {
-    const item = EQUIP.find(e => e.id === saved.id);
-    if (item) { item.a=saved.a||{}; item.notes=saved.notes||{}; item.wh=saved.wh||{}; item.cc=saved.cc||{}; item.co=saved.co||{}; item.confirmed=saved.confirmed||{}; item.pour=saved.pour||{}; if(saved.name)item.name=saved.name; }
-  });
-  (rd.rentals||[]).forEach(saved => {
-    const item = RENTALS.find(e => e.id === saved.id);
-    if (item) { item.a=saved.a||{}; item.notes=saved.notes||{}; item.wh=saved.wh||{}; item.cc=saved.cc||{}; item.co=saved.co||{}; item.confirmed=saved.confirmed||{}; item.pour=saved.pour||{}; if(saved.name)item.name=saved.name; }
-  });
-  (rd.extraList||[]).forEach(saved => { if(!EXTRA.find(e=>e.id===saved.id)) EXTRA.push(saved); });
-  (rd.staffList||[]).forEach(saved => { if(!STAFF.find(e=>e.id===saved.id)) STAFF.push(saved); });
-}
-
-function applyCloudData(d) {
-  let changed = false;
-  if (d.roster) { applyRosterData(d.roster); changed = true; }
-  if (d.orders) { DB.openOrders = d.orders; changed = true; }
-  if (d.historical) { DB.historical = d.historical; changed = true; }
-  if (d.manual && d.manual.length) {
-    d.manual.forEach(p => { if (!DB.projects.find(x=>x.id===p.id)) DB.projects.push(p); });
-    changed = true;
-  }
-  return changed;
+  apply(rd.staff,   STAFF);
+  apply(rd.extra,   EXTRA);
+  apply(rd.equip,   EQUIP);
+  apply(rd.rentals, RENTALS);
+  (rd.extraList||[]).forEach(s=>{ if(!EXTRA.find(e=>e.id===s.id)) EXTRA.push(s); });
+  (rd.staffList||[]).forEach(s=>{ if(!STAFF.find(e=>e.id===s.id)) STAFF.push(s); });
 }
 
 async function loadFromCloud() {
-  if (!APPS_SCRIPT_URL || _cloudIsLoading) return;
-  _cloudIsLoading = true;
+  if (!APPS_SCRIPT_URL) return;
+  setCloudStatus('⏳ Loading...');
   try {
-    let json = null;
-    const bodyObj = {action:'loadAppData'};
+    const json = await jsonpLoad();
+    if (!json || !json.ok || !json.data) {
+      setCloudStatus('☁️ No data — press 💾 Save first');
+      console.log('Cloud load: no data found in sheet');
+      return;
+    }
+    const d = json.data;
+    console.log('Cloud data keys:', Object.keys(d));
+    let changed = false;
 
-    try {
-      const url = APPS_SCRIPT_URL + '?data=' + encodeURIComponent(JSON.stringify(bodyObj));
-      const res = await fetch(url, {cache:'no-store'});
-      json = await res.json();
-    } catch(fetchErr) {
-      json = await callAppsScriptJSONP(bodyObj);
+    // Reconstruct staff from chunks (sc0, sc1, sc2...)
+    const meta = d.scMeta || {};
+    const chunkCount = meta.chunkCount || 0;
+    let allStaff = [];
+    if(chunkCount > 0) {
+      for(let i=0; i<chunkCount; i++) {
+        allStaff = allStaff.concat(d['sc'+i] || []);
+      }
+      console.log('✓ Reconstructed ' + allStaff.length + ' staff from ' + chunkCount + ' chunks');
     }
 
-    if (!json || !json.ok || !json.data) return;
-    const changed = applyCloudData(json.data);
-    _cloudHasLoaded = true;
-
-    if (changed) {
-      renderRoster();
-      renderAnalytics();
-      renderProjTable();
-      renderOverview();
-      toast('✓ Data loaded from cloud');
+    // Fallback: try old format keys
+    if(!allStaff.length && d.staff1) {
+      const s2 = d.staff2 || {};
+      allStaff = [...(d.staff1||[]), ...(s2.staff||[])];
+      if(!meta.extra) { meta.extra=s2.extra||[]; meta.equip=s2.equip||[]; meta.rentals=s2.rentals||[]; }
     }
-    console.log('Cloud load complete');
+    if(!allStaff.length && d.roster) {
+      applyRosterData(d.roster);
+      localStorage.setItem('zlc_roster', JSON.stringify(d.roster));
+      changed = true;
+      console.log('✓ Loaded from legacy roster key');
+    } else if(allStaff.length) {
+      const mergedRoster = {
+        staff:     allStaff,
+        extra:     meta.extra     || [],
+        equip:     meta.equip     || [],
+        rentals:   meta.rentals   || [],
+        extraList: meta.extraList || [],
+        staffList: meta.staffList || [],
+      };
+      applyRosterData(mergedRoster);
+      localStorage.setItem('zlc_roster', JSON.stringify(mergedRoster));
+      changed = true;
+      console.log('✓ Roster applied: ' + allStaff.length + ' staff');
+    } else {
+      console.log('No roster data found in cloud. Keys:', Object.keys(d).join(', '));
+    }
+    if(d.orders)    { DB.openOrders=d.orders; localStorage.setItem('zlc_orders',JSON.stringify(d.orders)); changed=true; }
+    if(d.historical){ DB.historical=d.historical; localStorage.setItem('zlc_historical',JSON.stringify(d.historical)); changed=true; }
+    const t = new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'});
+    setCloudStatus(changed ? '✓ Synced ' + t : '☁️ Up to date');
+    if(changed) { renderRoster(); renderAnalytics(); renderProjTable(); renderOverview(); toast('☁️ Data loaded from cloud'); }
   } catch(e) {
-    console.warn('Cloud load failed:', e.message);
-  } finally {
-    _cloudIsLoading = false;
+    console.error('Cloud load error:', e);
+    setCloudStatus('✗ Load error — check console');
   }
 }
+
 
 function saveLocal() {
   try {
+    // Use buildRosterData() to ensure ALL fields are saved (a, notes, wh, cc, co, confirmed, pour, name)
     const rosterData = buildRosterData();
+    localStorage.setItem('zlc_roster', JSON.stringify(rosterData));
+    // Save open orders
+    localStorage.setItem('zlc_orders', JSON.stringify(DB.openOrders||[]));
+    // Save manually added projects (those not from the sheet)
+    const manualProjects = DB.projects.filter(p => p._manual);
+    localStorage.setItem('zlc_manual_projects', JSON.stringify(manualProjects));
+    // Save historical overrides
+    localStorage.setItem('zlc_historical', JSON.stringify(DB.historical));
+    // Auto cloud save after 2s
     saveToCloud(rosterData);
-  } catch(e) { console.warn('cloud save error:', e); }
+  } catch(e) { console.warn('saveLocal error:', e); }
 }
 
 function loadLocal() {
-  // Intentionally disabled: app now loads from cloud only.
-  return;
+  try {
+    // Restore roster assignments + notes
+    const rosterRaw = localStorage.getItem('zlc_roster');
+    if (rosterRaw) {
+      const rd = JSON.parse(rosterRaw);
+      // Restore assignments and notes into existing items
+      (rd.staff||[]).forEach(saved => {
+        const item = STAFF.find(e => e.id === saved.id);
+        if (item) { item.a=saved.a||{}; item.notes=saved.notes||{}; item.wh=saved.wh||{}; item.cc=saved.cc||{}; item.co=saved.co||{}; item.confirmed=saved.confirmed||{}; item.pour=saved.pour||{}; if(saved.name)item.name=saved.name; }
+      });
+      (rd.extra||[]).forEach(saved => {
+        const item = EXTRA.find(e => e.id === saved.id);
+        if (item) { item.a=saved.a||{}; item.notes=saved.notes||{}; item.wh=saved.wh||{}; item.cc=saved.cc||{}; item.co=saved.co||{}; item.confirmed=saved.confirmed||{}; item.pour=saved.pour||{}; item.project=saved.project||item.project; if(saved.name)item.name=saved.name; }
+      });
+      (rd.equip||[]).forEach(saved => {
+        const item = EQUIP.find(e => e.id === saved.id);
+        if (item) { item.a=saved.a||{}; item.notes=saved.notes||{}; item.wh=saved.wh||{}; item.cc=saved.cc||{}; item.co=saved.co||{}; item.confirmed=saved.confirmed||{}; item.pour=saved.pour||{}; if(saved.name)item.name=saved.name; }
+      });
+      (rd.rentals||[]).forEach(saved => {
+        const item = RENTALS.find(e => e.id === saved.id);
+        if (item) { item.a=saved.a||{}; item.notes=saved.notes||{}; item.wh=saved.wh||{}; item.cc=saved.cc||{}; item.co=saved.co||{}; item.confirmed=saved.confirmed||{}; item.pour=saved.pour||{}; if(saved.name)item.name=saved.name; }
+      });
+      // Restore extra workers added by user
+      (rd.extraList||[]).forEach(saved => {
+        if (!EXTRA.find(e => e.id === saved.id)) EXTRA.push(saved);
+      });
+      // Restore staff added by user
+      (rd.staffList||[]).forEach(saved => {
+        if (!STAFF.find(e => e.id === saved.id)) STAFF.push(saved);
+      });
+    }
+    // Restore historical overrides
+    const histRaw = localStorage.getItem('zlc_historical');
+    if (histRaw) DB.historical = JSON.parse(histRaw);
+    // Restore open orders
+    const ordRaw = localStorage.getItem('zlc_orders');
+    if (ordRaw) DB.openOrders = JSON.parse(ordRaw);
+    // Restore manually added projects (will be merged after sheet sync)
+    const manualRaw = localStorage.getItem('zlc_manual_projects');
+    if (manualRaw) {
+      const manual = JSON.parse(manualRaw);
+      manual.forEach(p => { if (!DB.projects.find(x => x.id === p.id)) DB.projects.push(p); });
+    }
+  } catch(e) { console.warn('loadLocal error:', e); }
 }
 
-window.addEventListener('beforeunload', () => {
-  try {
-    const payload = cloudPayload();
-    ['roster','orders','manual','historical'].forEach(key => {
-      const value = payload[key];
-      const body = JSON.stringify({action:'saveAppData', key, value});
-      if (navigator.sendBeacon) {
-        navigator.sendBeacon(APPS_SCRIPT_URL, new Blob([body], {type:'text/plain;charset=utf-8'}));
-      }
-    });
-  } catch(e) {}
-});
-
-document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'hidden') {
-    try { forceSaveToCloud(); } catch(e) {}
-  }
-});
-
 // ─── INIT ─────────────────────────────────────────────────────────────────────
+loadLocal();        // 1. Load from localStorage instantly
 renderAnalytics();
 renderProjTable();
-syncFromSheets();   // Projects from Sheets
-loadFromCloud();    // Shared app state from cloud only
-
+syncFromSheets();   // 2. Sync projects from Sheets
+loadFromCloud();    // 3. Load saved app state from cloud
 </script>
 </body>
 </html>
