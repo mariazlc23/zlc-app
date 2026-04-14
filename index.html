@@ -2050,25 +2050,30 @@ function setCV(v,b){calView=v;document.querySelectorAll('.vt-btn').forEach(x=>x.
 function setSect(s,b){rosterSect=s;document.querySelectorAll('.ft').forEach(x=>x.classList.remove('active'));b.classList.add('active');renderRoster();}
 function setRosterProjFilter(pid){rosterProjFilter=pid;renderRoster();}
 function setRosterDayFilter(d){
-  // Normalize to YYYY-M-D format regardless of what browser sends
   const raw=(d||'').trim();
   if(raw){
-    // Try to parse and normalize
-    const dt=new Date(raw);
-    if(!isNaN(dt)){
-      // Store as YYYY-M-D (no zero-padding, matches assignment key format)
-      rosterDayFilter=`${dt.getFullYear()}-${dt.getMonth()+1}-${dt.getDate()}`;
+    // Value from dropdown is already YYYY-M-D — use directly
+    // (avoids Date() UTC timezone issues)
+    const parts=raw.split('-').map(Number);
+    if(parts.length===3 && parts.every(n=>!isNaN(n)&&n)){
+      rosterDayFilter=`${parts[0]}-${parts[1]}-${parts[2]}`;
     } else {
-      rosterDayFilter=raw;
+      // Fallback: try Date parse for other formats
+      const dt=new Date(raw);
+      if(!isNaN(dt)){
+        rosterDayFilter=`${dt.getFullYear()}-${dt.getMonth()+1}-${dt.getDate()}`;
+      } else {
+        rosterDayFilter=raw;
+      }
     }
   } else {
     rosterDayFilter='';
   }
   // Sync calYear/calMonth to match the picked date
-  const parts=getRosterFilterDateParts();
-  if(parts){
-    calYear=parts.year;
-    calMonth=parts.month-1; // month is 0-indexed for JS Date
+  const parts2=getRosterFilterDateParts();
+  if(parts2){
+    calYear=parts2.year;
+    calMonth=parts2.month-1;
   }
   renderDayButtons();
   const sel=document.getElementById('day-btn-row');
@@ -2293,7 +2298,7 @@ function renderRoster(){
 
   // Single-day cells: trabajo+costcode | detalles | warehouse
   // Returns 3 <td> elements — or null if no assignment and no note
-  const dayViewCells=item=>{
+  const dayViewCells=(item,type)=>{
     const key   = getRosterFilterKey();
     const asgn  = item.a?.[key]||'';
     const note  = item.notes?.[key]||'';
@@ -2404,7 +2409,7 @@ function renderRoster(){
   const row=(item,type,bgStyle='')=>{
     const info=certBadges(item);
     if(dayMode){
-      const extra=dayViewCells(item);
+      const extra=dayViewCells(item,type);
       if(!extra)return '';
       const key=getRosterFilterKey();
       const asgn=item.a?.[key]||'';
@@ -2431,7 +2436,7 @@ function renderRoster(){
     const filtered=EXTRA.filter(e=>passFilter(e));
     if(filtered.length){
       const rows=filtered.map(ew=>{
-        if(dayMode){const extra=dayViewCells(ew);if(!extra)return '';return`<tr style="background:rgba(250,238,218,0.2)"><td class="ic day-note" style="vertical-align:top;padding:8px 10px;max-width:150px">${nameCell(ew.id,'extra')}</td>${extra}</tr>`;}
+        if(dayMode){const extra=dayViewCells(ew,'extra');if(!extra)return '';return`<tr style="background:rgba(250,238,218,0.2)"><td class="ic day-note" style="vertical-align:top;padding:8px 10px;max-width:150px">${nameCell(ew.id,'extra')}</td>${extra}</tr>`;}
         return`<tr style="background:rgba(250,238,218,0.2)"><td class="ic">${nameCell(ew.id,'extra')}</td><td class="ic">${ewWeekSummary(ew)}</td>${dayCells(ew,'extra')}</tr>`;
       }).filter(Boolean);
       if(rows.length){h+=mkSec(`Extra workers · ${filtered.length} people`,'#BA7517');h+=rows.join('');}
@@ -2452,7 +2457,7 @@ function renderRoster(){
     const filtered=RENTALS.filter(e=>passFilter(e));
     if(filtered.length){
       const rows=filtered.map(r=>{
-        if(dayMode){const extra=dayViewCells(r);if(!extra)return '';return`<tr style="background:rgba(234,243,222,0.2)"><td class="ic day-note" style="vertical-align:top;padding:8px 10px;max-width:150px">${nameCell(r.id,'rental')}</td>${extra}</tr>`;}
+        if(dayMode){const extra=dayViewCells(r,'rental');if(!extra)return '';return`<tr style="background:rgba(234,243,222,0.2)"><td class="ic day-note" style="vertical-align:top;padding:8px 10px;max-width:150px">${nameCell(r.id,'rental')}</td>${extra}</tr>`;}
         return`<tr style="background:rgba(234,243,222,0.2)"><td class="ic">${nameCell(r.id,'rental')}</td><td class="ic"></td>${dayCells(r,'rental')}</tr>`;
       }).filter(Boolean);
       if(rows.length){h+=mkSec(`Rentals · ${filtered.length} items`,'#3B6D11');h+=rows.join('');}
