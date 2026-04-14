@@ -451,9 +451,11 @@
       </div>
       <div style="display:flex;align-items:center;gap:8px">
         <label style="font-size:12px;color:var(--text2);white-space:nowrap;margin:0">Filter by date:</label>
-        <input id="roster-day-filter" type="date" onchange="setRosterDayFilter(this.value)" style="font-size:12px;padding:4px 8px;border-radius:var(--radius);border:0.5px solid var(--border2);background:var(--bg);color:var(--text);min-width:150px">
-        <button class="btn btn-sm btn-ghost" onclick="setRosterDayFilter('');document.getElementById('roster-day-filter').value=''" style="font-size:11px;padding:3px 8px">✕ Clear</button>
-        <button class="btn btn-sm" onclick="downloadDayPDF()" id="pdf-btn" style="font-size:11px;padding:4px 10px;background:#E24B4A;color:#fff;border:none;border-radius:var(--radius);cursor:pointer;display:none">⬇ Download PDF</button>
+        <select id="day-btn-row" onchange="setRosterDayFilter(this.value)" style="font-size:12px;padding:4px 8px;border-radius:var(--radius);border:0.5px solid var(--border2);background:var(--bg);color:var(--text);cursor:pointer;min-width:120px">
+          <option value="">— Select day —</option>
+        </select>
+        <button class="btn btn-sm btn-ghost" onclick="setRosterDayFilter('');renderDayButtons()" style="font-size:11px;padding:3px 8px">✕ Clear</button>
+        <button id="day-pdf-btn" onclick="downloadDayPDF()" style="display:none;font-size:11px;padding:4px 10px;background:#E24B4A;color:#fff;border:none;border-radius:var(--radius);cursor:pointer;font-weight:600">⬇ PDF</button>
       </div>
     </div>
   </div>
@@ -2068,10 +2070,9 @@ function setRosterDayFilter(d){
     calYear=parts.year;
     calMonth=parts.month-1; // month is 0-indexed for JS Date
   }
-  const input=document.getElementById('roster-day-filter');
-  if(input && input.value!==rosterDayFilter) input.value=rosterDayFilter;
-  const btn=document.getElementById('pdf-btn');
-  if(btn) btn.style.display=rosterDayFilter?'block':'none';
+  renderDayButtons();
+  const sel=document.getElementById('day-btn-row');
+  if(sel && sel.tagName==='SELECT') sel.value=rosterDayFilter||'';
   renderRoster();
 }
 
@@ -2101,27 +2102,16 @@ function downloadDayPDF(){
 }
 
 function populateRosterDayFilter(){
-  const input=document.getElementById('roster-day-filter');
-  if(!input)return;
-  input.value=rosterDayFilter||'';
+  renderDayButtons();
 }
 
 function populateRosterProjFilter(){
   const sel=document.getElementById('roster-proj-filter');
   if(!sel)return;
   const cur=sel.value;
-  // Collect all project IDs that appear in any assignment
-  const allItems=[...STAFF,...EXTRA,...EQUIP,...RENTALS];
-  const usedIds=new Set(allItems.flatMap(e=>Object.values(e.a||{}).flatMap(v=>String(v||'').split(',').map(x=>x.trim()))).filter(Boolean));
-  // Also include active projects
-  DB.projects.filter(p=>p.status==='Active').forEach(p=>usedIds.add(p.id));
-  usedIds.add('OFF');usedIds.add('Warehouse');
-  // Build options sorted by project ID
-  const opts=[...usedIds].sort().map(id=>{
-    const proj=DB.projects.find(p=>p.id===id);
-    const name=proj?proj.name:(id==='OFF'?'OFF / Holiday':id==='Warehouse'?'Warehouse':id);
-    return`<option value="${id}"${cur===id?' selected':''}>${id} — ${name}</option>`;
-  }).join('');
+  // Only show active projects + special values
+  const activeProjs=DB.projects.filter(p=>p.status==='Active').sort((a,b)=>a.id.localeCompare(b.id));
+  const opts=activeProjs.map(p=>`<option value="${p.id}"${cur===p.id?' selected':''}>${p.id} — ${p.name}</option>`).join('');
   sel.innerHTML=`<option value="">— All projects —</option>`+opts;
   sel.value=cur||'';
 }
@@ -2219,6 +2209,31 @@ function getAsgnDisplayPills(asgn, conf, wk, noteDot, warnIcon, item, key, d, ty
   return null;
 }
 
+
+// ─── DAY BUTTONS ─────────────────────────────────────────────────────────────
+function renderDayButtons(){
+  const el=document.getElementById('day-btn-row');
+  if(!el)return;
+  const total=new Date(calYear,calMonth+1,0).getDate();
+  const today=new Date();
+  const DOW=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  const MONTHS=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+  let h='<option value="">— Select day —</option>';
+  for(let d=1;d<=total;d++){
+    const dw=new Date(calYear,calMonth,d).getDay();
+    const isWk=dw===0||dw===6;
+    const key=`${calYear}-${calMonth+1}-${d}`;
+    const isSelected=rosterDayFilter===key;
+    const isToday=today.getFullYear()===calYear&&today.getMonth()===calMonth&&today.getDate()===d;
+    const label=`${DOW[dw]} ${d} ${MONTHS[calMonth]}${isToday?' ★':''}${isWk?' (wknd)':''}`;
+    h+=`<option value="${key}"${isSelected?' selected':''}>${label}</option>`;
+  }
+  el.innerHTML=h;
+  // Show/hide pdf button
+  const pdfBtn=document.getElementById('day-pdf-btn');
+  if(pdfBtn) pdfBtn.style.display=rosterDayFilter?'inline-block':'none';
+}
+
 function renderRoster(){
   document.getElementById('month-lbl').textContent=`${MONTHS[calMonth]} ${calYear}`;
   populateRosterProjFilter();
@@ -2290,13 +2305,18 @@ function renderRoster(){
     // ── Col 1: Trabajo + cost code ────────────────────────────────────────────
     let trabajoHtml = '';
     if(asgn) {
-      asgn.split(',').forEach(a=>{
-        const a2  = a.trim();
+      const pids = getAsgnPids(asgn);
+      // Also check for dump sites in JSON
+      let dumps = [];
+      try { const arr=JSON.parse(asgn); if(Array.isArray(arr)) dumps=arr.filter(s=>s.type==='dump'); } catch(e){}
+      const showPids = pids.length ? pids : (asgn==='OFF'||asgn==='NEW'||asgn==='Warehouse' ? [asgn] : [asgn]);
+      showPids.forEach(a2=>{
         const isNEW = a2==='NEW';
+        const isOFF = a2==='OFF';
         const bg2 = isNEW?'#FFEBEE':pc(a2);
         const tc2 = isNEW?'#C62828':bg2 ? ptc(bg2) : 'var(--text2)';
         const proj= DB.projects.find(p=>p.id===a2);
-        const ccVal = (cc && asgn.split(',').length===1) ? cc : '';
+        const ccVal = (cc && pids.length<=1) ? cc : '';
         const ccName= ccVal ? (CODES_MAP[ccVal]||ccVal) : '';
         trabajoHtml += `<div style="margin-bottom:4px">
           <span style="display:inline-block;padding:2px 9px;border-radius:99px;background:${bg2||'var(--bg3)'};color:${tc2};font-size:11px;font-weight:700;border:${!conf?'2px solid #E24B4A':'none'}">${isNEW?'🆕 New project':a2}${!conf?' ⚠️':''}</span>
@@ -2305,6 +2325,7 @@ function renderRoster(){
           ${ccVal?`<div style="font-size:10px;color:var(--blue);font-weight:600;padding-left:2px">${ccVal} — ${ccName}</div>`:''}
         </div>`;
       });
+      if(dumps.length) trabajoHtml += `<div style="font-size:10px;color:#854F0B;margin-top:2px">🗑️ ${dumps.map(d=>d.name).join(', ')}</div>`;
     } else {
       trabajoHtml = `<span style="color:var(--text3);font-size:11px">—</span>`;
     }
@@ -2387,7 +2408,7 @@ function renderRoster(){
       if(!extra)return '';
       const key=getRosterFilterKey();
       const asgn=item.a?.[key]||'';
-      const projKey=asgn.split(',')[0].trim()||'ZZZ'; // sort by first project
+      const projKey=getAsgnFirstPid(asgn)||'ZZZ'; // sort by first project
       const rowHtml=`<tr style="${bgStyle}"><td class="ic day-note" style="vertical-align:top;padding:8px 10px;max-width:150px">${nameCell(item.id,type)}</td>${extra}</tr>`;
       dayViewRows.push({proj:projKey, html:rowHtml});
       return ''; // will be added sorted later
