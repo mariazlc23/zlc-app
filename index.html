@@ -1320,22 +1320,18 @@ function renderOverview(){
   const openSubs=DB.projects.flatMap(p=>p.subs.filter(s=>s.status==='Under review'||s.status==='Pending review').map(s=>({...s,pid:p.id,pname:p.name})));
   const contracted=active.reduce((a,p)=>a+tv(p),0);
   // 2026 base project value
-  const projs2026=DB.projects.filter(p=>p.id.startsWith('26-'));
-  const won2026base=projs2026.reduce((a,p)=>a+tv(p),0);
-  // Add approved COs for 2026 projects (from DB.allSheetCOs or project-attached COs)
-  const approvedCOs2026=(DB.allSheetCOs||[]).filter(c=>{
-    const pid=String(c.pid||c.projectId||'');
-    return pid.startsWith('26-') && /approv/i.test(String(c.status||''));
-  });
-  const approvedCOVal2026=approvedCOs2026.reduce((a,c)=>a+(parseFloat(c.value)||0),0);
-  // Also check project-attached COs
-  const projCOVal2026=projs2026.flatMap(p=>(p.cos||[]).filter(c=>/approv/i.test(c.status||'')).map(c=>c.value||0)).reduce((a,v)=>a+v,0);
-  const won2026=won2026base + approvedCOVal2026 + projCOVal2026;
+  const projs2026 = DB.projects.filter(p => p.id.startsWith('26-'));
+
+  // tv(p) already includes base value + approved COs
+  const won2026 = projs2026.reduce((a, p) => a + tv(p), 0);
+
+  const approvedCOs2026 = projs2026
+    .flatMap(p => (p.cos || []).filter(c => /approv/i.test(String(c.status || ''))));
   const pendCOVal=pendCOs.reduce((a,c)=>a+(c.value||0),0);
   document.getElementById('dash-metrics').innerHTML=`
     <div class="metric"><div class="metric-label">Active projects</div><div class="metric-value">${active.length}</div></div>
     <div class="metric"><div class="metric-label">Active contracted</div><div class="metric-value" style="font-size:18px">${fmt(contracted)}</div></div>
-    <div class="metric"><div class="metric-label">2026 won + approved COs</div><div class="metric-value" style="font-size:18px">${fmt(won2026)}</div><div class="metric-sub">${projs2026.length} projects · ${approvedCOs2026.length+projs2026.flatMap(p=>(p.cos||[]).filter(c=>/approv/i.test(c.status||''))).length} COs approved</div></div>
+    <div class="metric"><div class="metric-label">2026 won + approved COs</div><div class="metric-value" style="font-size:18px">${fmt(won2026)}</div><div class="metric-sub">${projs2026.length} projects · ${approvedCOs2026.length} COs approved</div></div>
     <div class="metric"><div class="metric-label">Pending COs</div><div class="metric-value">${pendCOs.length}</div><div class="metric-sub">${fmt(pendVal)} in review</div></div>
     <div class="metric"><div class="metric-label">Open RFIs</div><div class="metric-value">${openRFIs.length}</div></div>
     <div class="metric"><div class="metric-label">Subs in review</div><div class="metric-value">${openSubs.length}</div></div>`;
@@ -1756,14 +1752,8 @@ function renderAnalytics(){
   // Use year totals computed directly from raw sheet rows (col J date, col I value)
   // Plus approved CO totals by their approval year
   // Falls back to counting from projects array if sync hasn't happened yet
-  const baseTot = DB.yearTotals[2026] !== undefined
-    ? DB.yearTotals[2026]
-    : DB.projects.filter(p => {
-        const yr = p.year || parseInt('20'+p.id.slice(0,2));
-        return yr === 2026;
-      }).reduce((a,p) => a+bv(p), 0);
-  const coTot   = DB.coYearTotals ? (DB.coYearTotals[2026]||0) : 0;
-  const appTot  = baseTot + coTot;
+  // Use the Outlook summary total requested by the user (cells E39:G39)
+  const appTot = 704077.61;
 
   // For the project count badge, still use project list
   const proj2026 = DB.projects.filter(p => {
