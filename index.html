@@ -686,8 +686,16 @@ function parseProjects(rows) {
     }
     // accumulate cost codes
     if (codeNum && value !== 0) {
+      const fDays = parseInt(r[13]||0)||0;  // col N = foreman days
+      const lDays = parseInt(r[14]||0)||0;  // col O = laborer days
       const ex = map[pid].codes.find(c => c.code === codeNum);
-      if (ex) ex.value += value; else map[pid].codes.push({ code: codeNum, value });
+      if (ex) {
+        ex.value += value;
+        if(fDays) ex.foremanDays = (ex.foremanDays||0) + fDays;
+        if(lDays) ex.laborerDays = (ex.laborerDays||0) + lDays;
+      } else {
+        map[pid].codes.push({ code: codeNum, value, foremanDays: fDays, laborerDays: lDays });
+      }
     }
     // escalate status: Canceled > Pending > Active/Finish
     if (appStatus === 'Canceled') map[pid].status = 'Canceled';
@@ -904,6 +912,32 @@ async function syncFromSheets() {
     manualProjects.forEach(mp => {
       if (!DB.projects.find(p => p.id === mp.id)) DB.projects.push(mp);
     });
+
+    // Restore foremanDays/laborerDays from localStorage for all projects
+    try {
+      const savedManual = JSON.parse(localStorage.getItem('zlc_manual_projects')||'[]');
+      savedManual.forEach(saved => {
+        const proj = DB.projects.find(p => p.id === saved.id);
+        if (!proj) return;
+        (saved.codes||[]).forEach(savedCode => {
+          const code = proj.codes.find(c => c.code === savedCode.code);
+          if (code) {
+            if (savedCode.foremanDays) code.foremanDays = savedCode.foremanDays;
+            if (savedCode.laborerDays) code.laborerDays = savedCode.laborerDays;
+          }
+        });
+        // Also restore CO foremanDays/laborerDays
+        if (saved.cos && proj.cos) {
+          saved.cos.forEach(savedCo => {
+            const co = proj.cos.find(c => c.id === savedCo.id || c.num === savedCo.num);
+            if (co) {
+              if (savedCo.foremanDays) co.foremanDays = savedCo.foremanDays;
+              if (savedCo.laborerDays) co.laborerDays = savedCo.laborerDays;
+            }
+          });
+        }
+      });
+    } catch(e) { console.warn('restoreManualDays error:', e); }
 
     syncStatus = 'ok';
     updateSyncBadge();
@@ -1491,9 +1525,20 @@ function dashApproveCO(pid,cid,num){
   const p=DB.projects.find(x=>x.id===pid);if(!p){toast('Project not found');return;}
   const sc=(DB.allSheetCOs||[]).find(c=>(c.id===cid||c.num===num)&&c.pid===pid);if(sc)sc.status='Approved';
   const co=p.cos.find(c=>c.id===cid||c.num===num);
-  if(co){co.status='Approved';p.history.push({date:todate(),text:num+' APPROVED',type:'approved'});}
+  if(co){
+    co.status='Approved';
+    p.history.push({date:todate(),text:num+' APPROVED',type:'approved'});
+    // Add CO man-days to project cost code
+    if((co.foremanDays||0)+(co.laborerDays||0)>0 && co.code){
+      const tc=p.codes.find(c=>c.code===co.code);
+      if(tc){
+        tc.foremanDays=(tc.foremanDays||0)+(co.foremanDays||0);
+        tc.laborerDays=(tc.laborerDays||0)+(co.laborerDays||0);
+      }
+    }
+  }
   sheetWrite('updateCO',{projectId:pid,num,newStatus:'Approved'});
-  renderCOList();renderOverview();toast('✓ '+num+' approved');
+  saveLocal();renderCOList();renderOverview();toast('✓ '+num+' approved');
 }
 function dashCancelCO(pid,cid,num){
   const p=DB.projects.find(x=>x.id===pid);if(!p)return;
@@ -1925,6 +1970,15 @@ function approveCO(pid,cid){
   co.approvalDate=todate();
   if(!p.history) p.history=[];
   p.history.push({date:todate(),text:`${co.num} APPROVED — ${co.desc} (+${fmt(co.value)})`,type:'approved'});
+  // ── Add CO man-days to project cost code when approved ──────────────────
+  if((co.foremanDays||0)+(co.laborerDays||0)>0 && co.code){
+    const tc=p.codes.find(c=>c.code===co.code);
+    if(tc){
+      tc.foremanDays=(tc.foremanDays||0)+(co.foremanDays||0);
+      tc.laborerDays=(tc.laborerDays||0)+(co.laborerDays||0);
+      p.history.push({date:todate(),text:`${co.num} man-days → ${co.code}: +${co.foremanDays||0}F +${co.laborerDays||0}L`,type:'approved'});
+    }
+  }
   // Update in DB.allSheetCOs too
   const sheetCO=(DB.allSheetCOs||[]).find(c=>c.id===cid);
   if(sheetCO) sheetCO.status='Approved';
