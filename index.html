@@ -21,6 +21,7 @@
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
   body { background: var(--bg2); color: var(--text); font-size: 14px; line-height: 1.5; min-height: 100vh; }
+  :root { --space-1: 4px; --space-2: 8px; --space-3: 12px; --space-4: 16px; --space-5: 20px; --sticky-col-1: 160px; }
 
   /* Layout */
   .app { display: flex; flex-direction: column; min-height: 100vh; }
@@ -56,7 +57,7 @@
   .card-title { font-size: 11px; font-weight: 600; color: var(--text2); text-transform: uppercase; letter-spacing: .07em; }
   .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px; }
   .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 12px; margin-bottom: 16px; }
-  @media (max-width: 700px) { .main { margin-left: 0; padding: 16px; } .sidebar { display: none; } .grid-2, .grid-3 { grid-template-columns: 1fr; } }
+  @media (max-width: 700px) { .main { margin-left: 0; padding: 16px; } .sidebar { display: none; } .grid-2, .grid-3 { grid-template-columns: 1fr; } .toolbar-group, .roster-controls { width:100%; } .month-label { min-width:auto; } .roster-wrap { max-height:none; } }
 
   /* Tables */
   .tbl-wrap { overflow-x: auto; }
@@ -163,6 +164,37 @@
   .legend { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; font-size: 11px; color: var(--text2); }
   .li { display: flex; align-items: center; gap: 4px; }
   .lsq { width: 12px; height: 12px; border-radius: 3px; flex-shrink: 0; }
+
+  /* Unified UI */
+  .toolbar { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+  .toolbar-group { display:flex; align-items:center; gap:8px; flex-wrap:wrap; padding:8px 10px; background:var(--bg); border:0.5px solid var(--border); border-radius:var(--radius-lg); }
+  .toolbar-label { font-size:11px; color:var(--text2); font-weight:600; text-transform:uppercase; letter-spacing:.05em; }
+  .input, .select { font-size:12px; padding:6px 10px; border-radius:var(--radius); border:0.5px solid var(--border2); background:var(--bg); color:var(--text); min-height:32px; }
+  .section-toolbar { display:flex; align-items:center; justify-content:space-between; gap:12px; flex-wrap:wrap; margin-bottom:12px; }
+  .summary-grid { display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr)); gap:10px; margin-bottom:14px; }
+  .summary-card { background:var(--bg); border:0.5px solid var(--border); border-radius:var(--radius-lg); padding:12px 14px; }
+  .summary-label { font-size:11px; color:var(--text2); font-weight:600; text-transform:uppercase; letter-spacing:.05em; margin-bottom:4px; }
+  .summary-value { font-size:20px; font-weight:700; color:var(--text); }
+  .summary-sub { font-size:11px; color:var(--text3); margin-top:2px; }
+  .tag { display:inline-flex; align-items:center; gap:6px; font-size:11px; font-weight:600; padding:4px 9px; border-radius:999px; background:var(--bg3); color:var(--text2); }
+
+  /* Improved roster table */
+  .roster-wrap { overflow:auto; max-height:72vh; }
+  .roster-wrap.comfortable .rt th, .roster-wrap.comfortable .rt td.ic { padding-top:8px; padding-bottom:8px; }
+  .roster-wrap.compact .rt th { padding:4px 4px; font-size:9px; }
+  .roster-wrap.compact .rt td.ic { padding:4px 8px; font-size:11px; }
+  .roster-wrap.compact .day-cell { width:26px; min-width:26px; height:24px; }
+  .rt thead th { position: sticky; top: 0; z-index: 12; box-shadow: 0 1px 0 rgba(0,0,0,.06); }
+  .rt th.ic, .rt td.ic { position: sticky; left: 0; z-index: 11; background: var(--bg); box-shadow: 1px 0 0 rgba(0,0,0,.05); }
+  .rt th.ic { z-index: 14; background: var(--bg2); }
+  .rt .trs td { position: sticky; left: 0; z-index: 10; }
+  .roster-table-meta { display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; margin-bottom:10px; }
+  .roster-density { display:flex; align-items:center; gap:4px; background:var(--bg3); border-radius:var(--radius); padding:3px; }
+  .roster-density button { font-size:11px; padding:5px 10px; border:none; background:none; border-radius:6px; color:var(--text2); cursor:pointer; font-weight:600; }
+  .roster-density button.active { background:var(--bg); color:var(--text); box-shadow:0 1px 2px rgba(0,0,0,.08); }
+  .cell-conflict { box-shadow: inset 0 0 0 2px #E24B4A; }
+  .cell-weekend { background: rgba(0,0,0,0.025); }
+  .table-empty { padding:16px; color:var(--text3); font-size:12px; }
 
   /* Modal */
   .modal-backdrop { position: fixed; inset: 0; background: rgba(0,0,0,0.4); z-index: 1000; display: flex; align-items: flex-start; justify-content: center; padding: 40px 16px; overflow-y: auto; }
@@ -427,14 +459,14 @@
 <div id="view-roster" class="view">
   <div class="page-header">
     <div><div class="page-title">Staff roster</div><div class="page-subtitle">Monthly schedule by team, equipment &amp; rentals</div></div>
-    <div style="display:flex;gap:8px;flex-wrap:wrap">
+    <div class="toolbar">
       <button class="btn btn-ghost btn-sm" onclick="openModal('emp')">+ Employee</button>
       <button class="btn btn-ghost btn-sm" onclick="openModal('extraW')">+ Extra worker</button>
       <button class="btn btn-primary btn-sm" onclick="openModal('assign')">Assign project</button>
     </div>
   </div>
-  <div class="roster-controls">
-    <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap">
+  <div class="roster-controls toolbar">
+    <div class="toolbar-group">
       <div class="month-nav">
         <button onclick="prevM()">&#8249;</button>
         <span class="month-label" id="month-lbl"></span>
@@ -444,22 +476,31 @@
         <button class="vt-btn active" onclick="setCV('month',this)">Month</button>
         <button class="vt-btn" onclick="setCV('week',this)">2 weeks</button>
       </div>
-      <div style="display:flex;align-items:center;gap:8px">
-        <label style="font-size:12px;color:var(--text2);white-space:nowrap;margin:0">Filter by project:</label>
-        <select id="roster-proj-filter" onchange="setRosterProjFilter(this.value)" style="font-size:12px;padding:4px 8px;border-radius:var(--radius);border:0.5px solid var(--border2);background:var(--bg);color:var(--text);min-width:180px">
-          <option value="">— All projects —</option>
-        </select>
-        <button class="btn btn-sm btn-ghost" onclick="setRosterProjFilter('');document.getElementById('roster-proj-filter').value=''" style="font-size:11px;padding:3px 8px">✕ Clear</button>
-      </div>
-      <div style="display:flex;align-items:center;gap:8px">
-        <label style="font-size:12px;color:var(--text2);white-space:nowrap;margin:0">Filter by date:</label>
-        <select id="day-btn-row" onchange="setRosterDayFilter(this.value)" style="font-size:12px;padding:4px 8px;border-radius:var(--radius);border:0.5px solid var(--border2);background:var(--bg);color:var(--text);cursor:pointer;min-width:120px">
-          <option value="">— Select day —</option>
-        </select>
-        <button class="btn btn-sm btn-ghost" onclick="setRosterDayFilter('');renderDayButtons()" style="font-size:11px;padding:3px 8px">✕ Clear</button>
-        <button id="day-pdf-btn" onclick="downloadDayPDF()" style="display:none;font-size:11px;padding:4px 10px;background:#E24B4A;color:#fff;border:none;border-radius:var(--radius);cursor:pointer;font-weight:600">⬇ PDF</button>
+      <div class="roster-density">
+        <button id="density-comfortable" class="active" onclick="setRosterDensity('comfortable',this)">Comfortable</button>
+        <button id="density-compact" onclick="setRosterDensity('compact',this)">Compact</button>
       </div>
     </div>
+    <div class="toolbar-group">
+      <span class="toolbar-label">Project</span>
+      <select id="roster-proj-filter" class="select" onchange="setRosterProjFilter(this.value)">
+        <option value="">— All projects —</option>
+      </select>
+      <button class="btn btn-sm btn-ghost" onclick="setRosterProjFilter('');document.getElementById('roster-proj-filter').value=''">✕ Clear</button>
+    </div>
+    <div class="toolbar-group">
+      <span class="toolbar-label">Date</span>
+      <select id="day-btn-row" class="select" onchange="setRosterDayFilter(this.value)">
+        <option value="">— Select day —</option>
+      </select>
+      <button class="btn btn-sm btn-ghost" onclick="setRosterDayFilter('');renderDayButtons()">✕ Clear</button>
+      <button id="day-pdf-btn" class="btn btn-sm btn-deny" onclick="downloadDayPDF()" style="display:none">⬇ PDF</button>
+    </div>
+  </div>
+  <div id="roster-summary" class="summary-grid"></div>
+  <div class="roster-table-meta">
+    <div class="tag" id="roster-meta-tag">Schedule overview</div>
+    <div class="tag">Sticky headers + sticky first column enabled</div>
   </div>
   <div class="filter-tabs">
     <button class="ft active" onclick="setSect('all',this)">All</button>
@@ -470,7 +511,7 @@
   </div>
   <div class="legend" id="roster-legend"></div>
   <div id="pdf-print-header"></div>
-  <div class="roster-wrap"><table class="rt" id="roster-tbl"></table></div>
+  <div class="roster-wrap comfortable" id="roster-wrap"><table class="rt" id="roster-tbl"></table></div>
 </div>
 </div><!-- end main -->
 </div><!-- end app -->
@@ -1087,6 +1128,7 @@ const ALL_ROSTER_ITEMS=()=>[
 
 let selProj=null, subTab='codes', activeDash='analytics', rosterSect='all';
 let calYear=2026, calMonth=3, calView='month';
+let rosterDensity='comfortable';
 let annualChart=null, codeRowIdx=1;
 let assignSelected=new Set();
 let rosterProjFilter='';
@@ -1130,6 +1172,35 @@ function formatRosterFilterLabel(){
   const date = new Date(parts.year, parts.month - 1, parts.day);
   if(isNaN(date)) return '';
   return date.toLocaleDateString('en-US',{weekday:'short', month:'short', day:'numeric', year:'numeric'});
+}
+
+function setRosterDensity(mode, btn){
+  rosterDensity = mode === 'compact' ? 'compact' : 'comfortable';
+  const wrap = document.getElementById('roster-wrap');
+  if(wrap){
+    wrap.classList.remove('compact','comfortable');
+    wrap.classList.add(rosterDensity);
+  }
+  document.querySelectorAll('.roster-density button').forEach(b=>b.classList.remove('active'));
+  if(btn) btn.classList.add('active');
+}
+
+function buildRosterSummary(itemsVisible, conflictCount, assignedCount, dayMode){
+  const summary = document.getElementById('roster-summary');
+  const meta = document.getElementById('roster-meta-tag');
+  if(meta){
+    meta.textContent = dayMode ? `Day view · ${formatRosterFilterLabel()||'selected day'}` : `${calView==='week'?'2-week':'Month'} view · ${MONTHS[calMonth]} ${calYear}`;
+  }
+  if(!summary) return;
+  const activeProjects = new Set();
+  itemsVisible.forEach(item=>{
+    Object.values(item.a||{}).forEach(v=>getAsgnPids(v).forEach(pid=>{ if(pid && pid!=='OFF' && pid!=='NEW') activeProjects.add(pid); }));
+  });
+  summary.innerHTML = `
+    <div class="summary-card"><div class="summary-label">Visible rows</div><div class="summary-value">${itemsVisible.length}</div><div class="summary-sub">Filtered by section, project and date</div></div>
+    <div class="summary-card"><div class="summary-label">Assigned cells</div><div class="summary-value">${assignedCount}</div><div class="summary-sub">Cells with schedule data in current view</div></div>
+    <div class="summary-card"><div class="summary-label">Conflicts / warnings</div><div class="summary-value">${conflictCount}</div><div class="summary-sub">Unconfirmed assignments highlighted in red</div></div>
+    <div class="summary-card"><div class="summary-label">Projects in view</div><div class="summary-value">${activeProjects.size}</div><div class="summary-sub">Unique projects represented in the table</div></div>`;
 }
 
 // ─── NAV ────────────────────────────────────────────────────────────────────
@@ -2314,6 +2385,9 @@ function renderRoster(){
   const t=new Date(),todayD=t.getMonth()===calMonth&&t.getFullYear()===calYear?t.getDate():null;
   const show=s=>rosterSect==='all'||rosterSect===s;
   const dayMode=!!rosterDayFilter;
+  let visibleItems=[];
+  let conflictCount=0;
+  let assignedCount=0;
 
   const passFilter=item=>{
     if(dayMode){
@@ -2337,12 +2411,12 @@ function renderRoster(){
   // Build header
   let h='<thead><tr>';
   if(dayMode){
-    h+=`<th class="ic" style="min-width:140px">Nombre</th>`;
+    h+=`<th class="ic sticky-col" style="min-width:140px">Nombre</th>`;
     h+=`<th class="ic" style="min-width:180px">Trabajo · Cost code</th>`;
     h+=`<th class="ic" style="min-width:220px">Detalles del día</th>`;
     h+=`<th class="ic" style="min-width:180px;background:rgba(255,243,205,0.4)">📦 Warehouse</th>`;
   } else {
-    h+=`<th class="ic" style="min-width:130px">Name / Unit</th>`;
+    h+=`<th class="ic sticky-col" style="min-width:130px">Name / Unit</th>`;
     h+=`<th class="ic" style="min-width:46px;max-width:56px;font-size:10px">Info</th>`;
     days.forEach(d=>{const dw=dow(calYear,calMonth,d),wk=dw===0||dw===6;h+=`<th style="min-width:30px;${wk?'color:#c9a200':''}">${d}<br><span style="font-size:8px;font-weight:500">${DLBL[dw]}</span></th>`;});
   }
@@ -2373,6 +2447,8 @@ function renderRoster(){
     const cc    = item.cc?.[key]||'';
     const conf  = item.confirmed?.[key]!==false;
     if(!asgn && !note && !wh) return null;
+    if(asgn || note || wh) assignedCount++;
+    if(asgn && conf===false) conflictCount++;
 
     // ── Col 1: Trabajo + cost code ────────────────────────────────────────────
     let trabajoHtml = '';
@@ -2426,6 +2502,8 @@ function renderRoster(){
     const dw=dow(calYear,calMonth,d),wk=dw===0||dw===6,key=`${calYear}-${calMonth+1}-${d}`,asgn=item.a?.[key]||'',isT=d===todayD;
     const note=item.notes?.[key]||'';
     const conf=item.confirmed?.[key]!==false; // true by default
+    if(asgn || note) assignedCount++;
+    if(asgn && conf===false) conflictCount++;
     const pour2=item.pour?.[key]||'';
     const pourIcon=pour2?'<span style="position:absolute;bottom:0;left:1px;font-size:14px;line-height:1">🪣</span>':'';
         const noteDot=note?`<span style="position:absolute;top:1px;right:1px;width:5px;height:5px;border-radius:50%;background:rgba(255,255,255,0.8);"></span>`:'';
@@ -2452,7 +2530,7 @@ function renderRoster(){
       // Build title from project names only
       const titlePids = getAsgnPids(asgn);
       const titleTxt = titlePids.map(pid=>{ const p=DB.projects.find(x=>x.id===pid); return p?`${pid} — ${p.name}`:pid; }).join(', ');
-      return`<td class="day-cell${isT?' today-col':''}" style="position:relative;background:${bg0||'var(--bg3)'};${wk?'filter:brightness(0.97)':(conf?'':'outline:2px solid #E24B4A')}" onclick="clickCell('${item.id}','${key}','${d}','${type}')" title="${(titleTxt+(note?' — '+note:'')).replace(/"/g,'&quot;')}${!conf?' ⚠️ NOT CONFIRMED':''}"><div style="display:flex;flex-direction:column;gap:1px;align-items:center">${inner}</div>${noteDot}${warnIcon}</td>`;
+      return`<td class="day-cell${isT?' today-col':''}${wk?' cell-weekend':''}${!conf&&asgn?' cell-conflict':''}" style="position:relative;background:${bg0||'var(--bg3)'};${wk?'filter:brightness(0.97)':''}" onclick="clickCell('${item.id}','${key}','${d}','${type}')" title="${(titleTxt+(note?' — '+note:'')).replace(/"/g,'&quot;')}${!conf?' ⚠️ NOT CONFIRMED':''}"><div style="display:flex;flex-direction:column;gap:1px;align-items:center">${inner}</div>${noteDot}${warnIcon}</td>`;
     }
     const bg=asgn==='NEW'?'#FFEBEE':asgn?(()=>{ const pid=getAsgnFirstPid(asgn); return pc(pid||asgn); })():'';
     const tc=bg?ptc(bg):'';
@@ -2467,7 +2545,7 @@ function renderRoster(){
       return asgn.split('-')[1]||asgn.slice(0,4);
     })();
     const cellBorder=!conf&&asgn?'outline:2px solid #E24B4A;':'';
-    return`<td class="day-cell${isT?' today-col':''}" style="position:relative;${bg?`background:${bg};`:''}${wk&&!bg?'background:rgba(0,0,0,0.02);':''}${cellBorder}" onclick="clickCell('${item.id}','${key}','${d}','${type}')" title="${titleText.replace(/"/g,'&quot;')}${!conf?' ⚠️ NOT CONFIRMED':''}">${asgn?`<div class="day-block" style="color:${asgn==='NEW'?'#C62828':tc}">${dispLabel}</div>`:''}${noteDot}${warnIcon}${pourIcon}</td>`;
+    return`<td class="day-cell${isT?' today-col':''}${wk?' cell-weekend':''}${!conf&&asgn?' cell-conflict':''}" style="position:relative;${bg?`background:${bg};`:''}${wk&&!bg?'background:rgba(0,0,0,0.02);':''}" onclick="clickCell('${item.id}','${key}','${d}','${type}')" title="${titleText.replace(/"/g,'&quot;')}${!conf?' ⚠️ NOT CONFIRMED':''}">${asgn?`<div class="day-block" style="color:${asgn==='NEW'?'#C62828':tc}">${dispLabel}</div>`:''}${noteDot}${warnIcon}${pourIcon}</td>`;
   }).join('');
 
   // Render a row — returns '' if day mode and no assignment/note
@@ -2482,9 +2560,11 @@ function renderRoster(){
       const asgn=item.a?.[key]||'';
       const projKey=getAsgnFirstPid(asgn)||'ZZZ'; // sort by first project
       const rowHtml=`<tr style="${bgStyle}"><td class="ic day-note" style="vertical-align:top;padding:8px 10px;max-width:150px">${nameCell(item.id,type)}</td>${extra}</tr>`;
+      visibleItems.push(item);
       dayViewRows.push({proj:projKey, html:rowHtml});
       return ''; // will be added sorted later
     }
+    visibleItems.push(item);
     return`<tr style="${bgStyle}"><td class="ic">${nameCell(item.id,type)}</td><td class="ic" style="max-width:56px;font-size:10px;padding:3px 4px" ondblclick="editInfoCell('${item.id}','${type}')" title="Double-click to edit">${info}</td>${dayCells(item,type)}</tr>`;
   };
 
@@ -2547,7 +2627,9 @@ function renderRoster(){
     });
   }
   h+='</tbody>';
+  buildRosterSummary(visibleItems, conflictCount, assignedCount, dayMode);
   document.getElementById('roster-tbl').innerHTML=h;
+  setRosterDensity(rosterDensity, document.getElementById('density-'+rosterDensity));
   const usedAll=[...STAFF,...EXTRA,...EQUIP,...RENTALS].flatMap(e=>Object.values(e.a||{})).filter(Boolean);
   // Extract only project IDs (handle JSON multi-assign format)
   const allPids = usedAll.flatMap(v => getAsgnPids(v)).filter(p=>p&&p!=='OFF'&&p!=='NEW');
