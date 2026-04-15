@@ -6,6 +6,7 @@
 <meta name="color-scheme" content="light">
 <meta name="description" content="ZLC Project Manager for projects, roster, warehouse, and analytics.">
 <title>ZLC — Project Manager</title>
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%23185FA5'/%3E%3Ctext x='16' y='23' text-anchor='middle' font-size='18' font-weight='bold' fill='white' font-family='Arial,sans-serif'%3EZ%3C/text%3E%3C/svg%3E">
 <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
 <style>
   :root {
@@ -237,8 +238,49 @@
   .chip-x:hover { opacity: 1; color: var(--red); }
 
   /* Toast */
-  .toast { position: fixed; bottom: 24px; right: 24px; background: #1a1a18; color: #fff; font-size: 13px; font-weight: 500; padding: 10px 16px; border-radius: var(--radius); opacity: 0; transition: opacity .2s; pointer-events: none; z-index: 9999; box-shadow: 0 4px 16px rgba(0,0,0,.2); }
+  .toast { position: fixed; bottom: 24px; right: 24px; background: #1a1a18; color: #fff; font-size: 13px; font-weight: 500; padding: 10px 16px; border-radius: var(--radius); opacity: 0; transition: opacity .2s; pointer-events: none; z-index: 9999; box-shadow: 0 4px 16px rgba(0,0,0,.2); max-width: 320px; }
   .toast.show { opacity: 1; }
+  .toast.toast-error { background: #791F1F; }
+  .toast.toast-undo { background: #1a1a18; display:flex; align-items:center; gap:10px; pointer-events:all; cursor:default; }
+  .toast.toast-undo .toast-undo-btn { font-size:12px; font-weight:700; color:#6AAED6; cursor:pointer; border:none; background:none; padding:0; text-decoration:underline; }
+
+  /* ── Save indicator (top-right, always visible) ── */
+  #save-indicator { position:fixed; top:12px; right:16px; z-index:500; font-size:11px; font-weight:600; padding:4px 10px; border-radius:99px; background:var(--bg3); color:var(--text3); border:0.5px solid var(--border); transition:all .3s; opacity:0; pointer-events:none; }
+  #save-indicator.visible { opacity:1; }
+  #save-indicator.saving { background:#FAEEDA; color:#854F0B; border-color:#F0C879; }
+  #save-indicator.saved  { background:#EAF3DE; color:#3B6D11; border-color:#97C459; }
+  #save-indicator.error  { background:#FCEBEB; color:#791F1F; border-color:#F09595; }
+
+  /* ── Initial loading screen ── */
+  #app-loading { position:fixed; inset:0; background:#f7f7f5; z-index:9000; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:16px; transition:opacity .4s; }
+  #app-loading.hidden { opacity:0; pointer-events:none; }
+  .loading-logo { font-size:28px; font-weight:700; color:var(--text); letter-spacing:-0.5px; }
+  .loading-logo span { color:var(--blue); }
+  .loading-bar-wrap { width:200px; height:3px; background:var(--bg3); border-radius:2px; overflow:hidden; }
+  .loading-bar { height:100%; width:30%; background:var(--blue); border-radius:2px; animation:loadSlide 1.2s ease-in-out infinite; }
+  @keyframes loadSlide { 0%{transform:translateX(-100%)} 100%{transform:translateX(400%)} }
+  .loading-msg { font-size:12px; color:var(--text3); }
+
+  /* ── Mobile bottom nav ── */
+  #mobile-nav { display:none; position:fixed; bottom:0; left:0; right:0; background:var(--bg); border-top:0.5px solid var(--border); z-index:200; padding:6px 0 env(safe-area-inset-bottom,0); }
+  .mobile-nav-items { display:flex; justify-content:space-around; }
+  .mobile-nav-btn { display:flex; flex-direction:column; align-items:center; gap:2px; padding:6px 16px; border:none; background:none; color:var(--text3); font-size:10px; font-weight:600; cursor:pointer; }
+  .mobile-nav-btn.active { color:var(--blue); }
+  .mobile-nav-btn svg { width:20px; height:20px; }
+  @media (max-width:700px) {
+    .main { margin-left:0; padding:12px 12px 80px; }
+    .sidebar { display:none !important; }
+    #mobile-nav { display:block; }
+    .grid-2, .grid-3 { grid-template-columns:1fr; }
+    .toolbar-group, .roster-controls { width:100%; }
+    .month-label { min-width:auto; }
+    .roster-wrap { max-height:none; }
+    .page-header { margin-bottom:16px; }
+    .page-title { font-size:17px; }
+    #save-indicator { top:auto; bottom:72px; right:12px; }
+    .toast { bottom:80px; right:12px; left:12px; }
+    .metrics { grid-template-columns: 1fr 1fr; }
+  }
 
   /* Empty state */
   .empty { text-align: center; padding: 2.5rem; color: var(--text3); font-size: 13px; }
@@ -352,6 +394,16 @@
 </style>
 </head>
 <body>
+<!-- ── LOADING SCREEN ── -->
+<div id="app-loading">
+  <div class="loading-logo">ZLC <span>Corp</span></div>
+  <div class="loading-bar-wrap"><div class="loading-bar"></div></div>
+  <div class="loading-msg" id="loading-msg">Connecting to cloud…</div>
+</div>
+
+<!-- ── SAVE INDICATOR ── -->
+<div id="save-indicator">✓ Saved</div>
+
 <div class="app">
 
 <!-- SIDEBAR -->
@@ -378,7 +430,7 @@
     <button onclick="forceSaveToCloud()" title="Save all data to cloud so any device can access it" style="width:100%;margin-top:6px;font-size:11px;font-weight:600;padding:6px 12px;border-radius:var(--radius);border:0.5px solid #185FA5;cursor:pointer;background:#E8F0FE;color:#185FA5">☁ Save to cloud</button>
     <button onclick="loadFromCloud()" style="width:100%;margin-top:4px;font-size:11px;font-weight:600;padding:6px 12px;border-radius:var(--radius);border:0.5px solid var(--border2);cursor:pointer;background:var(--bg3);color:var(--text2)">↻ Load from cloud</button>
     <div id="cloud-status" style="font-size:10px;color:var(--text3);text-align:center;margin-top:4px"></div>
-    <button onclick="testWrite()" style="width:100%;margin-top:6px;font-size:11px;font-weight:600;padding:6px 12px;border-radius:var(--radius);border:0.5px solid var(--border2);cursor:pointer;background:#EAF3DE;color:#27500A">Test Sheet write</button>
+    <button onclick="testWrite()" id="debug-test-btn" style="display:none;width:100%;margin-top:6px;font-size:11px;font-weight:600;padding:6px 12px;border-radius:var(--radius);border:0.5px solid var(--border2);cursor:pointer;background:#EAF3DE;color:#27500A">Test Sheet write</button>
     <div id="write-log" style="font-size:10px;color:var(--text3);margin-top:6px;word-break:break-all;line-height:1.4"></div>
     <div style="font-size:10px;color:var(--text3);text-align:center;margin-top:6px">ZLC Project Manager v1.1</div>
   </div>
@@ -591,6 +643,24 @@
 </div>
 </div><!-- end main -->
 </div><!-- end app -->
+
+<!-- ── MOBILE BOTTOM NAV ── -->
+<nav id="mobile-nav">
+  <div class="mobile-nav-items">
+    <button class="mobile-nav-btn active" id="mnav-dashboard" onclick="goTab('dashboard',document.querySelector('.nav-item'));mnavActive('dashboard')">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1" y="1" width="6" height="6" rx="1"/><rect x="9" y="1" width="6" height="6" rx="1"/><rect x="1" y="9" width="6" height="6" rx="1"/><rect x="9" y="9" width="6" height="6" rx="1"/></svg>
+      Dashboard
+    </button>
+    <button class="mobile-nav-btn" id="mnav-projects" onclick="goTab('projects',document.querySelectorAll('.nav-item')[1]);mnavActive('projects')">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 4h12M2 8h8M2 12h10"/></svg>
+      Projects
+    </button>
+    <button class="mobile-nav-btn" id="mnav-roster" onclick="goTab('roster',document.querySelectorAll('.nav-item')[2]);mnavActive('roster')">
+      <svg viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><circle cx="6" cy="5" r="2.5"/><path d="M1 13c0-2.76 2.24-5 5-5s5 2.24 5 5"/><circle cx="12" cy="5" r="2"/><path d="M12 9c1.66 0 3 1.34 3 3"/></svg>
+      Roster
+    </button>
+  </div>
+</nav>
 
 <div id="modal-area"></div>
 <div class="toast" id="toast"></div>
@@ -1227,7 +1297,21 @@ function bc(s){
   if(sl==='complete') return 'b-teal';
   return 'b-gray';
 }
-function toast(m){const t=document.getElementById('toast');t.textContent=m;t.classList.add('show');setTimeout(()=>t.classList.remove('show'),2500);}
+function toast(m, opts={}) {
+  const t = document.getElementById('toast');
+  t.className = 'toast';
+  if (opts.error) t.classList.add('toast-error');
+  const dur = opts.error ? 5000 : opts.undo ? 6000 : 2500;
+  if (opts.undo) {
+    t.classList.add('toast-undo');
+    t.innerHTML = `<span>${m}</span><button class="toast-undo-btn" onclick="performUndo()">Undo</button>`;
+  } else {
+    t.textContent = m;
+  }
+  t.classList.add('show');
+  clearTimeout(t._timer);
+  t._timer = setTimeout(() => t.classList.remove('show'), dur);
+}
 function pc(id){if(!id)return '';if(id==='OFF')return '#FCEBEB';return PROJ_COLORS[id]||(()=>{const h=Math.abs([...id].reduce((a,c)=>a*31+c.charCodeAt(0),0)%0xFFFFFF);return '#'+h.toString(16).padStart(6,'0');})();}
 function ptc(bg){if(!bg||bg==='')return '#666';const h=bg.replace('#','');const r=parseInt(h.slice(0,2),16),g=parseInt(h.slice(2,4),16),b=parseInt(h.slice(4,6),16);return(r*299+g*587+b*114)/1000>145?'#2C2C2A':'#F7F7F5';}
 
@@ -2937,6 +3021,16 @@ function updateCellExtraFields(itemId, dateKey) {
 
 function saveCell(id,key,type){
   const item=getItem(id,type);
+  // Snapshot for undo
+  undoPush({id,key,type, snapshot:{
+    a:   item.a?.[key],
+    notes: item.notes?.[key],
+    wh:  item.wh?.[key],
+    cc:  item.cc?.[key],
+    co:  item.co?.[key],
+    confirmed: item.confirmed?.[key],
+    pour: item.pour?.[key],
+  }});
   if(!item.a)item.a={};
   if(!item.notes)item.notes={};
   if(!item.wh)item.wh={};
@@ -2985,6 +3079,15 @@ function saveCell(id,key,type){
 
 function clearCell(id,key,type){
   const item=getItem(id,type);
+  undoPush({id,key,type, snapshot:{
+    a:   item.a?.[key],
+    notes: item.notes?.[key],
+    wh:  item.wh?.[key],
+    cc:  item.cc?.[key],
+    co:  item.co?.[key],
+    confirmed: item.confirmed?.[key],
+    pour: item.pour?.[key],
+  }});
   if(item.a)         delete item.a[key];
   if(item.notes)     delete item.notes[key];
   if(item.wh)        delete item.wh[key];
@@ -3572,6 +3675,7 @@ async function _doCloudSave(rosterData){
   if(_cloudSaveInProgress)return;
   _cloudSaveInProgress=true;
   setCloudStatus('⏳ Saving...');
+  showSaveIndicator('saving', '⏳ Saving…');
   try{
     const c=compressRoster(rosterData);
     const CHUNK=3;
@@ -3588,11 +3692,13 @@ async function _doCloudSave(rosterData){
     await jsonpSave('gantt_data', GANTT.tasks);
     const t=new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'});
     setCloudStatus('✓ Saved '+t);
+    showSaveIndicator('saved', '✓ Saved');
     toast('✓ Saved to cloud');
   }catch(e){
     console.error('Cloud save failed:',e);
     setCloudStatus('✗ '+String(e).slice(0,50));
-    toast('✗ Save failed');
+    showSaveIndicator('error', '✗ Save failed');
+    toast('✗ Save failed — check connection', {error:true});
   }finally{_cloudSaveInProgress=false;}
 }
 
@@ -3802,17 +3908,78 @@ loadLocal();
 renderAnalytics();
 renderProjTable();
 syncFromSheets();
-loadFromCloud();
+
+// Show loading screen while cloud data loads
+(async () => {
+  const loadEl = document.getElementById('app-loading');
+  const loadMsg = document.getElementById('loading-msg');
+  try {
+    if (loadMsg) loadMsg.textContent = 'Loading data from cloud…';
+    await loadFromCloud();
+    if (loadMsg) loadMsg.textContent = 'Ready!';
+  } catch(e) {
+    if (loadMsg) loadMsg.textContent = 'Loaded from cache';
+  } finally {
+    if (loadEl) {
+      loadEl.classList.add('hidden');
+      setTimeout(() => { loadEl.style.display = 'none'; }, 500);
+    }
+  }
+})();
 
 // Corrected build: removed duplicate CO filter functions and added config fallback support.
+
+// ─── UNDO ──────────────────────────────────────────────────────────────────────
+const _undoStack = [];
+const UNDO_LIMIT = 10;
+
+function undoPush(entry) {
+  _undoStack.push(entry);
+  if (_undoStack.length > UNDO_LIMIT) _undoStack.shift();
+}
+
+function performUndo() {
+  const entry = _undoStack.pop();
+  if (!entry) { toast('Nothing to undo'); return; }
+  const item = getItem(entry.id, entry.type)
+    || getItem(entry.id,'staff') || getItem(entry.id,'extra')
+    || getItem(entry.id,'equip') || getItem(entry.id,'rental');
+  if (!item) return;
+  const { key, snapshot: s } = entry;
+  if (!item.a) item.a = {};
+  if (!item.notes) item.notes = {};
+  if (!item.wh) item.wh = {};
+  if (!item.cc) item.cc = {};
+  if (!item.co) item.co = {};
+  if (!item.confirmed) item.confirmed = {};
+  if (!item.pour) item.pour = {};
+  s.a         !== undefined ? (s.a ? item.a[key]=s.a : delete item.a[key]) : null;
+  s.notes     !== undefined ? (s.notes ? item.notes[key]=s.notes : delete item.notes[key]) : null;
+  s.wh        !== undefined ? (s.wh ? item.wh[key]=s.wh : delete item.wh[key]) : null;
+  s.cc        !== undefined ? (s.cc ? item.cc[key]=s.cc : delete item.cc[key]) : null;
+  s.co        !== undefined ? (s.co ? item.co[key]=s.co : delete item.co[key]) : null;
+  s.pour      !== undefined ? (s.pour ? item.pour[key]=s.pour : delete item.pour[key]) : null;
+  if (s.confirmed !== undefined) item.confirmed[key] = s.confirmed;
+  saveLocal(); renderRoster();
+  toast('↩ Undone');
+}
+
+// Keyboard shortcut: Ctrl+Z / Cmd+Z
+document.addEventListener('keydown', e => {
+  if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
+    const modal = document.querySelector('#modal-area .modal-backdrop');
+    if (!modal) { e.preventDefault(); performUndo(); }
+  }
+});
 
 // ─── GANTT ────────────────────────────────────────────────────────────────────
 const GANTT = {
   projId: null,
-  zoom: 'month',   // 'week' | 'month' | 'quarter'
+  zoom: 'month',
   rangeStart: null,
   rangeEnd: null,
-  tasks: {},       // projId → [{id, name, color, cells:{dateKey:true}}]
+  tasks: {},        // projId → [{id, name, color, cells:{dateKey:true}}]
+  projRanges: {},   // projId → {start, end, zoom} — remembers per-project settings
   nextId: 1,
 };
 
@@ -3877,6 +4044,10 @@ function ganttPopulateProjectSelect() {
 
 /* ── project selection ── */
 function ganttSelectProject(projId) {
+  // Save current project's range before switching
+  if (GANTT.projId && GANTT.rangeStart) {
+    GANTT.projRanges[GANTT.projId] = { start: GANTT.rangeStart, end: GANTT.rangeEnd, zoom: GANTT.zoom };
+  }
   GANTT.projId = projId || null;
   if (!projId) {
     document.getElementById('gantt-body').innerHTML = `
@@ -3892,13 +4063,19 @@ function ganttSelectProject(projId) {
     GANTT.tasks[projId] = [];
   }
 
-  // Default range: today ±45 days
-  if (!GANTT.rangeStart) {
+  // Restore this project's saved range, or default to today ±45 days
+  if (GANTT.projRanges[projId]) {
+    const pr = GANTT.projRanges[projId];
+    GANTT.rangeStart = pr.start;
+    GANTT.rangeEnd   = pr.end;
+    GANTT.zoom       = pr.zoom || 'month';
+  } else {
     const today = new Date();
     const s = new Date(today); s.setDate(s.getDate() - 7);
     const e = new Date(today); e.setDate(e.getDate() + 53);
     GANTT.rangeStart = fmtDate(s);
     GANTT.rangeEnd   = fmtDate(e);
+    GANTT.zoom = 'month';
   }
 
   ganttRender();
