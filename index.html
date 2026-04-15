@@ -3584,6 +3584,8 @@ async function _doCloudSave(rosterData){
     await jsonpSave('scMeta',{staff:c.staff.slice(Math.ceil(c.staff.length/2)*CHUNK/CHUNK),extra:c.extra,equip:c.equip,rentals:c.rentals,extraList:c.extraList,staffList:c.staffList,chunkCount:chunks.length});
     await new Promise(r=>setTimeout(r,400));
     await jsonpSave('orders',DB.openOrders||[]);
+    await new Promise(r=>setTimeout(r,300));
+    await jsonpSave('gantt_data', GANTT.tasks);
     const t=new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'});
     setCloudStatus('✓ Saved '+t);
     toast('✓ Saved to cloud');
@@ -3625,6 +3627,12 @@ async function loadFromCloud(){
     }
     if(d.orders){DB.openOrders=d.orders;changed=true;}
     if(d.historical){DB.historical=d.historical;changed=true;}
+    if(d.gantt_data && typeof d.gantt_data==='object'){
+      Object.assign(GANTT.tasks, d.gantt_data);
+      // Refresh gantt view if open
+      if(GANTT.projId && document.getElementById('gantt-body')) ganttRender();
+      console.log('Gantt data loaded from cloud');
+    }
     const t=new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'});
     setCloudStatus(changed?'✓ Synced '+t:'☁️ Up to date');
     if(changed){renderRoster();renderAnalytics();renderProjTable();renderOverview();toast('☁️ Data loaded from cloud');}
@@ -3736,6 +3744,19 @@ function saveLocal() {
     // Only save to cloud — no localStorage
     saveToCloud(rosterData);
   } catch(e) { console.warn('saveLocal error:', e); }
+}
+
+// Debounced Gantt save — called after any gantt task/cell change
+let _ganttSaveTimer = null;
+function ganttSaveToCloud() {
+  if (!APPS_SCRIPT_URL) return;
+  clearTimeout(_ganttSaveTimer);
+  _ganttSaveTimer = setTimeout(async () => {
+    try {
+      await jsonpSave('gantt_data', GANTT.tasks);
+      console.log('Gantt saved to cloud');
+    } catch(e) { console.warn('Gantt save error:', e); }
+  }, 2000);
 }
 
 // Cloud save queue — batches changes and sends automatically
@@ -4062,54 +4083,49 @@ function ganttDownloadPDF() {
   days.forEach(d => {
     const m = d.slice(0,7);
     if (!months.length || months[months.length-1].key !== m) {
-      months.push({ key: m, label: parseDate(d).toLocaleDateString('en-US',{month:'short',year:'numeric'}), count: 1 });
+      months.push({ key: m, label: parseDate(d).toLocaleDateString('en-US',{month:'long',year:'numeric'}), count: 1 });
     } else { months[months.length-1].count++; }
   });
 
-  const CELL_W = 22;
-  const LABEL_W = 160;
-  const ROW_H = 28;
-  const HEAD_H = 44;
-  const totalW = LABEL_W + days.length * CELL_W;
+  const CELL_W = 26;
+  const LABEL_W = 180;
+  const ROW_H = 32;
+  const HEAD_H = 50;
+  const PAD = 32; // horizontal padding on each side inside the page
+  const tableW = LABEL_W + days.length * CELL_W;
 
   // Build SVG rows
   let taskRows = '';
   tasks.forEach((task, ti) => {
     const y = HEAD_H + ti * ROW_H;
     const color = task.color || ganttTaskColor(ti);
-    const bg = ti % 2 === 0 ? '#ffffff' : '#f9f8f6';
-    taskRows += `<rect x="0" y="${y}" width="${totalW}" height="${ROW_H}" fill="${bg}"/>`;
-    // Task name cell
-    taskRows += `<rect x="0" y="${y}" width="${LABEL_W}" height="${ROW_H}" fill="${bg}"/>`;
-    taskRows += `<circle cx="14" cy="${y + ROW_H/2}" r="5" fill="${color}"/>`;
-    taskRows += `<text x="24" y="${y + ROW_H/2 + 4}" font-size="11" fill="#1a1a18" font-family="Arial,sans-serif">${escHtml(task.name)}</text>`;
-    taskRows += `<line x1="0" y1="${y+ROW_H}" x2="${totalW}" y2="${y+ROW_H}" stroke="#e0e0dc" stroke-width="0.5"/>`;
+    const bg = ti % 2 === 0 ? '#ffffff' : '#f9f8f7';
+    taskRows += `<rect x="0" y="${y}" width="${tableW}" height="${ROW_H}" fill="${bg}"/>`;
+    taskRows += `<circle cx="16" cy="${y + ROW_H/2}" r="6" fill="${color}"/>`;
+    taskRows += `<text x="30" y="${y + ROW_H/2 + 5}" font-size="12" fill="#1a1a18" font-family="Georgia,serif" font-weight="500">${escHtml(task.name)}</text>`;
+    taskRows += `<line x1="0" y1="${y+ROW_H}" x2="${tableW}" y2="${y+ROW_H}" stroke="#e8e6e2" stroke-width="0.5"/>`;
 
-    // Day cells
     days.forEach((d, di) => {
       const x = LABEL_W + di * CELL_W;
       const filled = !!(task.cells||{})[d];
       const weekend = isWeekend(d);
       const isToday = d === today;
-      const cellBg = filled ? color : weekend ? '#f0eeea' : 'none';
-      if (filled || weekend) {
-        taskRows += `<rect x="${x}" y="${y+2}" width="${CELL_W}" height="${ROW_H-4}" rx="${filled?3:0}" fill="${cellBg}" opacity="${filled?0.85:1}"/>`;
-      }
-      if (isToday) {
-        taskRows += `<rect x="${x}" y="${y}" width="${CELL_W}" height="${ROW_H}" fill="none" stroke="#185FA5" stroke-width="1.5"/>`;
-      }
-      taskRows += `<line x1="${x}" y1="${y}" x2="${x}" y2="${y+ROW_H}" stroke="#e8e6e2" stroke-width="0.5"/>`;
+      if (weekend && !filled) taskRows += `<rect x="${x}" y="${y}" width="${CELL_W}" height="${ROW_H}" fill="rgba(0,0,0,0.03)"/>`;
+      if (filled) taskRows += `<rect x="${x+1}" y="${y+4}" width="${CELL_W-2}" height="${ROW_H-8}" rx="4" fill="${color}" opacity="0.88"/>`;
+      if (isToday) taskRows += `<rect x="${x}" y="${y}" width="${CELL_W}" height="${ROW_H}" fill="none" stroke="#185FA5" stroke-width="1.5"/>`;
+      taskRows += `<line x1="${x}" y1="${y}" x2="${x}" y2="${y+ROW_H}" stroke="#ebebea" stroke-width="0.5"/>`;
     });
   });
 
-  // Month headers
+  // Month headers — bold, centered, colored bar
   let monthHdHtml = '';
   let mxOff = LABEL_W;
-  months.forEach(m => {
+  months.forEach((m, mi) => {
     const mw = m.count * CELL_W;
-    monthHdHtml += `<rect x="${mxOff}" y="0" width="${mw}" height="22" fill="#f0eeea"/>`;
-    monthHdHtml += `<text x="${mxOff + mw/2}" y="15" text-anchor="middle" font-size="10" font-weight="bold" fill="#6b6a65" font-family="Arial,sans-serif" text-transform="uppercase">${m.label.toUpperCase()}</text>`;
-    monthHdHtml += `<line x1="${mxOff}" y1="0" x2="${mxOff}" y2="22" stroke="#d8d6d2" stroke-width="0.5"/>`;
+    const mBg = mi % 2 === 0 ? '#1a3a5c' : '#185FA5';
+    monthHdHtml += `<rect x="${mxOff}" y="0" width="${mw}" height="26" fill="${mBg}"/>`;
+    monthHdHtml += `<text x="${mxOff + mw/2}" y="17" text-anchor="middle" font-size="11" font-weight="bold" fill="#ffffff" font-family="Arial,sans-serif" letter-spacing="1">${m.label.toUpperCase()}</text>`;
+    monthHdHtml += `<line x1="${mxOff}" y1="0" x2="${mxOff}" y2="26" stroke="rgba(255,255,255,0.3)" stroke-width="1"/>`;
     mxOff += mw;
   });
 
@@ -4120,47 +4136,60 @@ function ganttDownloadPDF() {
     const dn = parseDate(d).getDate();
     const weekend = isWeekend(d);
     const isToday = d === today;
-    if (isToday) dayHdHtml += `<rect x="${x}" y="22" width="${CELL_W}" height="22" fill="#185FA5"/>`;
-    else if (weekend) dayHdHtml += `<rect x="${x}" y="22" width="${CELL_W}" height="22" fill="#f0eeea"/>`;
-    dayHdHtml += `<text x="${x+CELL_W/2}" y="37" text-anchor="middle" font-size="9" fill="${isToday?'#ffffff':weekend?'#9e9c97':'#6b6a65'}" font-family="Arial,sans-serif">${dn}</text>`;
-    dayHdHtml += `<line x1="${x}" y1="22" x2="${x}" y2="${HEAD_H}" stroke="#d8d6d2" stroke-width="0.5"/>`;
+    const dayBg = isToday ? '#185FA5' : weekend ? '#f0eeea' : '#f7f7f5';
+    dayHdHtml += `<rect x="${x}" y="26" width="${CELL_W}" height="24" fill="${dayBg}"/>`;
+    dayHdHtml += `<text x="${x+CELL_W/2}" y="42" text-anchor="middle" font-size="10" font-weight="${isToday?'bold':'normal'}" fill="${isToday?'#ffffff':weekend?'#b0aea8':'#4a4a48'}" font-family="Arial,sans-serif">${dn}</text>`;
+    dayHdHtml += `<line x1="${x}" y1="26" x2="${x}" y2="${HEAD_H}" stroke="#d8d6d2" stroke-width="0.5"/>`;
   });
 
-  // Header label cell
-  const labelHd = `<rect x="0" y="0" width="${LABEL_W}" height="${HEAD_H}" fill="#f0eeea"/>
-    <text x="10" y="28" font-size="10" font-weight="bold" fill="#6b6a65" font-family="Arial,sans-serif">TASK / PHASE</text>`;
+  // TASK/PHASE header cell
+  const labelHd = `
+    <rect x="0" y="0" width="${LABEL_W}" height="${HEAD_H}" fill="#1a3a5c"/>
+    <text x="16" y="30" font-size="10" font-weight="bold" fill="#ffffff" font-family="Arial,sans-serif" letter-spacing="1">TASK / PHASE</text>`;
 
   const totalH = HEAD_H + Math.max(tasks.length, 1) * ROW_H;
 
-  // Empty state
   const emptyRow = tasks.length === 0
-    ? `<text x="${totalW/2}" y="${HEAD_H + 20}" text-anchor="middle" font-size="12" fill="#9e9c97" font-family="Arial,sans-serif">No tasks</text>`
+    ? `<text x="${tableW/2}" y="${HEAD_H+22}" text-anchor="middle" font-size="13" fill="#b0aea8" font-family="Arial,sans-serif">No tasks added yet</text>`
     : '';
 
-  // Borders
   const borders = `
-    <rect x="0" y="0" width="${totalW}" height="${totalH}" fill="none" stroke="#d0cec9" stroke-width="1"/>
-    <line x1="${LABEL_W}" y1="0" x2="${LABEL_W}" y2="${totalH}" stroke="#d0cec9" stroke-width="1"/>
-    <line x1="0" y1="${HEAD_H}" x2="${totalW}" y2="${HEAD_H}" stroke="#d0cec9" stroke-width="1"/>
-    <line x1="0" y1="22" x2="${totalW}" y2="22" stroke="#d0cec9" stroke-width="0.5"/>`;
+    <rect x="0" y="0" width="${tableW}" height="${totalH}" fill="none" stroke="#c8c6c2" stroke-width="1"/>
+    <line x1="${LABEL_W}" y1="0" x2="${LABEL_W}" y2="${totalH}" stroke="#c8c6c2" stroke-width="1"/>
+    <line x1="0" y1="${HEAD_H}" x2="${tableW}" y2="${HEAD_H}" stroke="#c8c6c2" stroke-width="1"/>
+    <line x1="0" y1="26" x2="${tableW}" y2="26" stroke="rgba(255,255,255,0.2)" stroke-width="0.5"/>`;
 
-  const TITLE_H = 52;
-  const SUBTITLE_H = 24;
-  const pageW = Math.max(totalW, 600);
-  const pageH = TITLE_H + SUBTITLE_H + totalH + 20;
+  // Page dimensions — add padding so table is centered
+  const HEADER_H = 80;  // title block height
+  const META_H = 28;
+  const FOOTER_H = 28;
+  const pageW = tableW + PAD * 2;
+  const pageH = HEADER_H + META_H + totalH + FOOTER_H + 16;
+  const tableY = HEADER_H + META_H;
+  const genDate = new Date().toLocaleDateString('en-US',{month:'long',day:'numeric',year:'numeric'});
+  const rangeLabel = parseDate(GANTT.rangeStart).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})
+    + ' – ' + parseDate(GANTT.rangeEnd).toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'});
 
   const svgContent = `<svg xmlns="http://www.w3.org/2000/svg" width="${pageW}" height="${pageH}" viewBox="0 0 ${pageW} ${pageH}">
     <rect width="${pageW}" height="${pageH}" fill="#ffffff"/>
+
+    <!-- Header bar -->
+    <rect x="0" y="0" width="${pageW}" height="6" fill="#185FA5"/>
+
     <!-- Title -->
-    <text x="16" y="28" font-size="18" font-weight="bold" fill="#1a1a18" font-family="Arial,sans-serif">ZLC Corp — Gantt</text>
-    <text x="16" y="46" font-size="12" fill="#6b6a65" font-family="Arial,sans-serif">${projName}</text>
-    <line x1="0" y1="${TITLE_H}" x2="${pageW}" y2="${TITLE_H}" stroke="#e0e0dc" stroke-width="1"/>
-    <!-- Subtitle bar -->
-    <rect x="0" y="${TITLE_H}" width="${pageW}" height="${SUBTITLE_H}" fill="#f7f7f5"/>
-    <text x="16" y="${TITLE_H+16}" font-size="10" fill="#9e9c97" font-family="Arial,sans-serif">${GANTT.rangeStart} → ${GANTT.rangeEnd}  ·  ${tasks.length} task${tasks.length!==1?'s':''}  ·  Generated ${new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})}</text>
-    <line x1="0" y1="${TITLE_H+SUBTITLE_H}" x2="${pageW}" y2="${TITLE_H+SUBTITLE_H}" stroke="#e0e0dc" stroke-width="1"/>
-    <!-- Gantt table -->
-    <g transform="translate(0,${TITLE_H+SUBTITLE_H})">
+    <text x="${PAD}" y="38" font-size="22" font-weight="bold" fill="#1a1a18" font-family="Georgia,serif">ZLC Corp — Project Schedule</text>
+    <text x="${PAD}" y="60" font-size="13" fill="#6b6a65" font-family="Arial,sans-serif">${escHtml(projName)}</text>
+
+    <!-- Divider -->
+    <line x1="${PAD}" y1="70" x2="${pageW-PAD}" y2="70" stroke="#e0e0dc" stroke-width="1"/>
+
+    <!-- Meta bar -->
+    <rect x="0" y="${HEADER_H}" width="${pageW}" height="${META_H}" fill="#f7f7f5"/>
+    <text x="${PAD}" y="${HEADER_H+18}" font-size="10" fill="#9e9c97" font-family="Arial,sans-serif">${rangeLabel}  ·  ${tasks.length} task${tasks.length!==1?'s':''}  ·  Generated ${genDate}</text>
+    <line x1="0" y1="${HEADER_H+META_H}" x2="${pageW}" y2="${HEADER_H+META_H}" stroke="#e8e6e2" stroke-width="0.5"/>
+
+    <!-- Gantt table — centered with padding -->
+    <g transform="translate(${PAD},${tableY})">
       ${taskRows}
       ${emptyRow}
       ${monthHdHtml}
@@ -4168,34 +4197,37 @@ function ganttDownloadPDF() {
       ${labelHd}
       ${borders}
     </g>
+
+    <!-- Footer -->
+    <line x1="0" y1="${pageH-FOOTER_H}" x2="${pageW}" y2="${pageH-FOOTER_H}" stroke="#e8e6e2" stroke-width="0.5"/>
+    <text x="${PAD}" y="${pageH-10}" font-size="9" fill="#b0aea8" font-family="Arial,sans-serif">ZLC Corp  ·  Confidential</text>
+    <text x="${pageW-PAD}" y="${pageH-10}" text-anchor="end" font-size="9" fill="#b0aea8" font-family="Arial,sans-serif">${genDate}</text>
   </svg>`;
 
-  // Wrap in printable HTML and trigger browser print-to-PDF
-  const printWin = window.open('', '_blank', 'width=1200,height=800');
+  const printWin = window.open('', '_blank', 'width=1200,height=900');
   if (!printWin) { toast('Allow popups to download PDF'); return; }
 
   const printDoc = `<!DOCTYPE html>
 <html>
 <head>
   <meta charset="UTF-8">
-  <title>ZLC Corp — Gantt · ${projName}</title>
+  <title>ZLC Corp — Project Schedule · ${escHtml(projName)}</title>
   <style>
     * { margin:0; padding:0; box-sizing:border-box; }
-    body { background:#fff; font-family:Arial,sans-serif; }
-    .page { padding: 0; }
-    svg { display:block; max-width:100%; height:auto; }
+    html, body { width:100%; height:100%; background:#fff; }
+    body { display:flex; align-items:flex-start; justify-content:center; padding:20px 0; }
+    svg { display:block; max-width:100%; height:auto; box-shadow:0 2px 16px rgba(0,0,0,.08); }
     @media print {
-      @page { margin:10mm; size: auto; }
-      body { background:#fff; }
+      @page { margin:8mm; size:auto; }
+      body { padding:0; box-shadow:none; display:block; }
+      svg { box-shadow:none; max-width:100%; }
     }
   </style>
 </head>
 <body>
-  <div class="page">${svgContent}</div>
+  ${svgContent}
   <script>
-    window.onload = function() {
-      setTimeout(function(){ window.print(); }, 300);
-    };
+    window.onload = function() { setTimeout(function(){ window.print(); }, 400); };
   <\/script>
 </body>
 </html>`;
@@ -4210,7 +4242,10 @@ let _ganttDragMode = null; // 'fill' or 'clear'
 let _ganttDragTask = null;
 let _ganttDragProj = null;
 
-document.addEventListener('mouseup', () => { _ganttDragging = false; _ganttDragMode = null; });
+document.addEventListener('mouseup', () => {
+  if (_ganttDragging && _ganttDragTask) ganttSaveToCloud();
+  _ganttDragging = false; _ganttDragMode = null;
+});
 
 function ganttDragStart(taskId, projId, dateStr) {
   const task = ganttFindTask(taskId, projId);
@@ -4249,6 +4284,7 @@ function ganttToggleCell(taskId, projId, dateStr, cell) {
   }
   // Re-render to get proper rounded corners
   ganttRender();
+  ganttSaveToCloud();
 }
 
 /* ── add / delete tasks ── */
@@ -4265,6 +4301,7 @@ function ganttAddTask(projId) {
     cells: {},
   });
   ganttRender();
+  ganttSaveToCloud();
   const newInp = document.getElementById('gantt-new-task');
   if (newInp) { newInp.value = ''; newInp.focus(); }
 }
@@ -4273,12 +4310,14 @@ function ganttDeleteTask(taskId, projId) {
   if (!GANTT.tasks[projId]) return;
   GANTT.tasks[projId] = GANTT.tasks[projId].filter(t => t.id !== taskId);
   ganttRender();
+  ganttSaveToCloud();
 }
 
 function ganttClearAll(projId) {
   if (!confirm('Clear all tasks for this project?')) return;
   GANTT.tasks[projId] = [];
   ganttRender();
+  ganttSaveToCloud();
 }
 
 /* ── edit name ── */
@@ -4301,6 +4340,7 @@ function ganttSaveName(taskId, projId) {
   span.textContent = task ? task.name : '';
   span.style.display = '';
   inp.style.display = 'none';
+  ganttSaveToCloud();
 }
 
 function ganttCancelName(taskId) {
@@ -4318,6 +4358,7 @@ function ganttCycleColor(taskId, projId) {
   const cur = GANTT_PALETTE.indexOf(task.color);
   task.color = GANTT_PALETTE[(cur + 1) % GANTT_PALETTE.length];
   ganttRender();
+  ganttSaveToCloud();
 }
 
 /* ── zoom ── */
