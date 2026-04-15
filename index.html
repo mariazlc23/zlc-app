@@ -1116,6 +1116,25 @@ async function syncFromSheets() {
     // Add approved CO totals by approval year on top of base project values
     DB.coYearTotals = computeCOYearTotals(coData.rows);
 
+    // ── Fetch E39:G39 from "Whole data Won / Approved" — the official 2026 total ──
+    try {
+      const sheetName = projData.name;
+      const encName   = encodeURIComponent(sheetName);
+      const cellRes   = await fetch(
+        `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/${encName}!E39:G39?key=${API_KEY}&valueRenderOption=UNFORMATTED_VALUE`
+      );
+      if (cellRes.ok) {
+        const cellData = await cellRes.json();
+        // Sum all numeric values found in the range E39:G39
+        let rangeSum = 0;
+        (cellData.values || []).forEach(row => row.forEach(cell => {
+          const n = parseFloat(String(cell).replace(/[$,\s]/g,''));
+          if (!isNaN(n)) rangeSum += n;
+        }));
+        if (rangeSum > 0) DB.total2026 = rangeSum;
+      }
+    } catch(e) { console.warn('E39:G39 fetch error:', e); }
+
     // Parse COs, RFIs, Subs and attach to projects
     const cosByProj  = parseCORows(coData.rows);
     const rfisByProj = parseRFIRows(rfiData.rows);
@@ -1482,21 +1501,13 @@ function renderOverview(){
   const openRFIs=DB.projects.flatMap(p=>p.rfis.filter(r=>r.status==='Open').map(r=>({...r,pid:p.id,pname:p.name})));
   const openSubs=DB.projects.flatMap(p=>p.subs.filter(s=>s.status==='Under review'||s.status==='Pending review').map(s=>({...s,pid:p.id,pname:p.name})));
   const contracted=active.reduce((a,p)=>a+tv(p),0);
-  // 2026 total: sum everything in col J with year=2026 + approved COs in 2026
-  // DB.yearTotals and DB.coYearTotals are populated from raw sheet rows by syncFromSheets()
-  // Falls back to tv(p) per-project calculation if sync hasn't run yet
-  const base2026 = DB.yearTotals?.[2026] || DB.projects.filter(p=>{
-    const yr=p.year||parseInt('20'+p.id.slice(0,2)); return yr===2026;
-  }).reduce((a,p)=>a+bv(p),0);
-  const co2026   = DB.coYearTotals?.[2026] || 0;
-  const won2026  = base2026 + co2026;
-  const projs2026 = DB.projects.filter(p => { const yr=p.year||parseInt('20'+p.id.slice(0,2)); return yr===2026; });
-  const approvedCOs2026 = projs2026.flatMap(p=>(p.cos||[]).filter(c=>/approv/i.test(String(c.status||''))));
   const pendCOVal=pendCOs.reduce((a,c)=>a+(c.value||0),0);
+  // 2026 total from E39:G39 (loaded on Sync)
+  const won2026 = DB.total2026 || 0;
+  const won2026Sub = won2026 ? `${fmt(won2026)} won 2026` : 'Sync to load 2026 total';
   document.getElementById('dash-metrics').innerHTML=`
     <div class="metric"><div class="metric-label">Active projects</div><div class="metric-value">${active.length}</div></div>
-    <div class="metric"><div class="metric-label">Active contracted</div><div class="metric-value" style="font-size:18px">${fmt(contracted)}</div></div>
-    <div class="metric"><div class="metric-label">2026 won + approved COs</div><div class="metric-value" style="font-size:18px">${fmt(won2026)}</div><div class="metric-sub">${projs2026.length} projects · ${approvedCOs2026.length} COs approved</div></div>
+    <div class="metric"><div class="metric-label">Active contracted</div><div class="metric-value" style="font-size:18px">${fmt(contracted)}</div><div class="metric-sub">${won2026Sub}</div></div>
     <div class="metric"><div class="metric-label">Pending COs</div><div class="metric-value">${pendCOs.length}</div><div class="metric-sub">${fmt(pendVal)} in review</div></div>
     <div class="metric"><div class="metric-label">Open RFIs</div><div class="metric-value">${openRFIs.length}</div></div>
     <div class="metric"><div class="metric-label">Subs in review</div><div class="metric-value">${openSubs.length}</div></div>`;
@@ -1914,17 +1925,13 @@ function saveOrder(){
 function renderAnalytics(){
   const hist = DB.historical;
 
-  // 2026 total: directly from col J sheet rows (same source as Overview card)
-  // DB.yearTotals = base project values by col J year
-  // DB.coYearTotals = approved CO values by approval year
+  // 2026 total from E39:G39 of "Whole data Won / Approved" sheet (fetched on Sync)
   const proj2026 = DB.projects.filter(p => {
     const yr = p.year || parseInt('20' + p.id.slice(0, 2));
     return yr === 2026;
   });
-  const _base2026 = DB.yearTotals?.[2026] || proj2026.reduce((a,p)=>a+bv(p),0);
-  const _co2026   = DB.coYearTotals?.[2026] || 0;
-  const appTot    = _base2026 + _co2026;
-  const appCount  = proj2026.length;
+  const appTot   = DB.total2026 || proj2026.reduce((a,p)=>a+tv(p),0);
+  const appCount = proj2026.length;
   document.getElementById('comp-metrics').innerHTML=`${hist.map(h=>`<div class="metric"><div class="metric-label">Total ${h.year}</div><div class="metric-value" style="font-size:18px">${fmtS(h.total)}</div></div>`).join('')}
     <div class="metric"><div class="metric-label">2026 won / approved</div><div class="metric-value" style="font-size:18px">${fmtS(appTot)}</div><div class="metric-sub">${appCount} project${appCount!==1?'s':''}</div></div>`;
   if(annualChart){annualChart.destroy();annualChart=null;}
