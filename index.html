@@ -297,6 +297,58 @@
   ::-webkit-scrollbar { width: 6px; height: 6px; }
   ::-webkit-scrollbar-track { background: transparent; }
   ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 3px; }
+
+  /* ── GANTT ── */
+  #gantt-view { display:none; }
+  #gantt-view.active { display:block; }
+  .gantt-proj-picker { display:flex; align-items:center; gap:12px; flex-wrap:wrap; margin-bottom:20px; }
+  .gantt-proj-picker select { font-size:13px; padding:7px 12px; border-radius:var(--radius); border:0.5px solid var(--border2); background:var(--bg); color:var(--text); min-width:220px; }
+  .gantt-container { background:var(--bg); border:0.5px solid var(--border); border-radius:var(--radius-lg); overflow:hidden; }
+  .gantt-toolbar { display:flex; align-items:center; justify-content:space-between; gap:10px; padding:12px 16px; border-bottom:0.5px solid var(--border); flex-wrap:wrap; }
+  .gantt-toolbar-left { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+  .gantt-zoom { display:flex; background:var(--bg3); border-radius:var(--radius); padding:2px; }
+  .gantt-zoom button { font-size:11px; padding:4px 10px; border:none; background:none; border-radius:5px; color:var(--text2); cursor:pointer; font-weight:600; }
+  .gantt-zoom button.active { background:var(--bg); color:var(--text); box-shadow:0 1px 2px rgba(0,0,0,.1); }
+  .gantt-wrap { overflow-x:auto; overflow-y:auto; max-height:68vh; position:relative; }
+  .gantt-table { border-collapse:collapse; font-size:12px; min-width:100%; }
+  .gantt-table th { background:var(--bg2); border-bottom:0.5px solid var(--border); border-right:0.5px solid var(--border); font-size:10px; font-weight:600; color:var(--text2); text-transform:uppercase; letter-spacing:.05em; white-space:nowrap; text-align:center; padding:5px 4px; position:sticky; top:0; z-index:10; }
+  .gantt-table th.gantt-task-hd { text-align:left; padding:5px 10px; min-width:180px; width:180px; max-width:180px; position:sticky; top:0; left:0; z-index:20; background:var(--bg2); }
+  .gantt-table td { border-bottom:0.5px solid var(--border); border-right:0.5px solid var(--border); padding:0; vertical-align:middle; }
+  .gantt-table td.gantt-task-name { padding:0; min-width:180px; width:180px; max-width:180px; position:sticky; left:0; z-index:5; background:var(--bg); white-space:nowrap; }
+  .gantt-name-inner { display:flex; align-items:center; gap:6px; padding:6px 10px; cursor:pointer; }
+  .gantt-name-inner:hover { background:var(--bg2); }
+  .gantt-name-text { flex:1; font-size:12px; color:var(--text); font-weight:500; overflow:hidden; text-overflow:ellipsis; }
+  .gantt-name-edit { display:none; width:100%; font-size:12px; padding:4px 6px; border:0.5px solid var(--blue); border-radius:4px; background:var(--bg); color:var(--text); font-family:inherit; }
+  .gantt-drag-handle { cursor:grab; color:var(--text3); font-size:14px; flex-shrink:0; opacity:.5; }
+  .gantt-drag-handle:hover { opacity:1; }
+  .gantt-cell { min-width:28px; width:28px; height:32px; cursor:pointer; position:relative; }
+  .gantt-cell.weekend { background:rgba(0,0,0,.025); }
+  .gantt-cell.today-mark { outline:2px solid var(--blue); outline-offset:-1px; }
+  .gantt-cell.filled { background:var(--gantt-color, #185FA5); }
+  .gantt-cell.filled.start { border-radius:4px 0 0 4px; }
+  .gantt-cell.filled.end { border-radius:0 4px 4px 0; }
+  .gantt-cell.filled.solo { border-radius:4px; }
+  .gantt-cell:hover { background:var(--blue-light); }
+  .gantt-cell.filled:hover { opacity:.85; }
+  .gantt-month-hd { background:var(--bg3) !important; font-size:11px !important; font-weight:700 !important; color:var(--text) !important; }
+  .gantt-add-row { display:flex; align-items:center; gap:8px; padding:10px 16px; border-top:0.5px solid var(--border); background:var(--bg2); }
+  .gantt-add-row input { font-size:12px; padding:6px 10px; border-radius:var(--radius); border:0.5px solid var(--border2); background:var(--bg); color:var(--text); width:220px; font-family:inherit; }
+  .gantt-add-row input:focus { outline:none; border-color:var(--blue); box-shadow:0 0 0 3px rgba(24,95,165,.12); }
+  .gantt-legend { display:flex; align-items:center; gap:12px; padding:10px 16px; border-top:0.5px solid var(--border); font-size:11px; color:var(--text2); flex-wrap:wrap; }
+  .gantt-legend-item { display:flex; align-items:center; gap:4px; }
+  .gantt-legend-sq { width:12px; height:12px; border-radius:2px; }
+  .gantt-no-proj { display:flex; flex-direction:column; align-items:center; justify-content:center; padding:60px 20px; color:var(--text3); font-size:13px; gap:10px; }
+  .gantt-no-proj svg { opacity:.3; }
+  .gantt-row-group-hd td { background:var(--bg2); font-size:10px; font-weight:700; color:var(--text2); text-transform:uppercase; letter-spacing:.07em; padding:4px 10px; }
+  .gantt-date-range { display:flex; align-items:center; gap:8px; flex-wrap:wrap; }
+  .gantt-date-range input[type=date] { font-size:12px; padding:5px 8px; border-radius:var(--radius); border:0.5px solid var(--border2); background:var(--bg); color:var(--text); }
+  .gantt-row-actions { display:flex; gap:4px; opacity:0; transition:opacity .1s; padding-right:4px; }
+  .gantt-table tr:hover .gantt-row-actions { opacity:1; }
+  .gantt-row-del { font-size:12px; padding:2px 6px; border-radius:4px; border:none; background:none; color:var(--text3); cursor:pointer; }
+  .gantt-row-del:hover { background:var(--red-light); color:var(--red); }
+  .gantt-color-dot { width:9px; height:9px; border-radius:50%; flex-shrink:0; }
+  .gantt-progress-bar { height:6px; border-radius:3px; background:var(--bg3); overflow:hidden; margin-top:3px; }
+  .gantt-progress-fill { height:100%; border-radius:3px; background:var(--blue); }
 </style>
 </head>
 <body>
@@ -504,7 +556,7 @@
   <div id="roster-summary" class="summary-grid"></div>
   <div class="roster-table-meta">
     <div class="tag" id="roster-meta-tag">Schedule overview</div>
-    <div class="tag">Sticky headers + sticky first column enabled</div>
+    <div class="tag" onclick="openModal('unscheduled')" title="Projects never scheduled" style="cursor:pointer;user-select:none;background:var(--blue-light);color:var(--blue);border:0.5px solid var(--blue-mid)" onmouseenter="this.style.background='var(--blue-mid)'" onmouseleave="this.style.background='var(--blue-light)'">📋 Unscheduled projects</div>
   </div>
   <div class="filter-tabs">
     <button class="ft active" onclick="setSect('all',this)">All</button>
@@ -512,10 +564,30 @@
     <button class="ft" onclick="setSect('extra',this)">Extra workers</button>
     <button class="ft" onclick="setSect('equip',this)">Equipment</button>
     <button class="ft" onclick="setSect('rentals',this)">Rentals</button>
+    <button class="ft" id="gantt-tab-btn" onclick="openGanttView(this)" style="margin-left:auto;background:var(--blue-light);color:var(--blue);border-color:var(--blue-mid);font-weight:600">📅 Project Gantt</button>
   </div>
   <div class="legend" id="roster-legend"></div>
   <div id="pdf-print-header"></div>
   <div class="roster-wrap comfortable" id="roster-wrap"><table class="rt" id="roster-tbl"></table></div>
+
+  <!-- ── GANTT PANEL ── -->
+  <div id="gantt-view">
+    <div class="gantt-proj-picker">
+      <div>
+        <label style="font-size:11px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.05em;display:block;margin-bottom:4px">Select project</label>
+        <select id="gantt-proj-select" onchange="ganttSelectProject(this.value)">
+          <option value="">— Choose an active project —</option>
+        </select>
+      </div>
+      <button class="btn btn-ghost btn-sm" onclick="closeGanttView()" style="margin-top:18px">✕ Close Gantt</button>
+    </div>
+    <div id="gantt-body">
+      <div class="gantt-no-proj">
+        <svg width="48" height="48" viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="4" y="8" width="40" height="34" rx="3"/><path d="M4 16h40M14 4v8M34 4v8M12 26h8M12 32h12M28 26h8"/></svg>
+        <span>Select an active project to view its Gantt chart</span>
+      </div>
+    </div>
+  </div>
 </div>
 </div><!-- end main -->
 </div><!-- end app -->
@@ -989,7 +1061,7 @@ async function syncFromSheets() {
 
     // Restore foremanDays/laborerDays from localStorage for all projects
     try {
-      const savedManual = JSON.parse(localStorage.getItem('zlc_manual_projects')||'[]');
+      const savedManual = [];  // manual projects loaded from cloud only
       savedManual.forEach(saved => {
         const proj = DB.projects.find(p => p.id === saved.id);
         if (!proj) return;
@@ -3025,16 +3097,64 @@ function doAssign(){
   const from=parseInt(document.getElementById('assign-from').value);
   const to=parseInt(document.getElementById('assign-to').value);
   if(from>to){toast('Start day must be before end day');return;}
+  const confRadio=document.querySelector('input[name="assign-conf"]:checked');
+  const conf=confRadio?confRadio.value!=='no':true;
+  const cc=document.getElementById('assign-cc')?.value||'';
+  const co=document.getElementById('assign-co')?.value||'';
+  const pourEnabled=document.getElementById('assign-pour-enabled')?.checked;
+  const pT=(document.getElementById('assign-pour-time')?.value||'').trim();
+  const pPs=(document.getElementById('assign-pour-psi')?.value||'').trim();
+  const pYd=(document.getElementById('assign-pour-yards')?.value||'').trim();
+  const pVal=pourEnabled&&(pT||pPs||pYd)?[pT,pPs,pYd].join('|'):'';
   const items=ALL_ROSTER_ITEMS();
   let count=0;
   assignSelected.forEach(id=>{
     const item=items.find(i=>i.id===id);if(!item)return;
     const realItem=getItem(id,item.cat==='extra'?'extra':item.cat==='equip'?'equip':item.cat==='rental'?'rental':'staff');
-    if(!realItem)return;if(!realItem.a)realItem.a={};
-    for(let d=from;d<=to;d++){realItem.a[`${calYear}-${calMonth+1}-${d}`]=projId;}
+    if(!realItem)return;
+    if(!realItem.a)realItem.a={};
+    if(!realItem.cc)realItem.cc={};
+    if(!realItem.co)realItem.co={};
+    if(!realItem.confirmed)realItem.confirmed={};
+    if(!realItem.pour)realItem.pour={};
+    for(let d=from;d<=to;d++){
+      const key=`${calYear}-${calMonth+1}-${d}`;
+      realItem.a[key]=projId;
+      realItem.confirmed[key]=conf;
+      if(cc)realItem.cc[key]=cc; else delete realItem.cc[key];
+      if(co)realItem.co[key]=co; else delete realItem.co[key];
+      if(pVal)realItem.pour[key]=pVal; else delete realItem.pour[key];
+    }
     count++;
   });
   closeModal();renderRoster();saveLocal();toast(`Assigned ${projId} to ${count} people/units · days ${from}–${to}`);
+}
+
+function updateAssignExtraFields(){
+  const pid=document.getElementById('assign-proj')?.value||'';
+  const el=document.getElementById('assign-extra-fields');
+  if(!el)return;
+  const proj=DB.projects.find(p=>p.id===pid);
+  if(!proj||!pid||pid==='OFF'||pid==='Warehouse'){el.innerHTML='';return;}
+  let html='';
+  if(proj.codes&&proj.codes.length){
+    const ccOpts=`<option value="">— Select cost code —</option>`
+      +proj.codes.map(c=>`<option value="${c.code}">${c.code} — ${CODES_MAP[c.code]||c.code} (${fmt(c.value)})</option>`).join('');
+    html+=`<div class="fg" style="margin-bottom:8px">
+      <label style="font-size:11px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.05em">Cost code</label>
+      <select id="assign-cc" style="width:100%;font-size:13px;padding:6px 8px;border-radius:var(--radius);border:0.5px solid var(--border2);background:var(--bg);color:var(--text)">${ccOpts}</select>
+    </div>`;
+  }
+  const openCOs=(proj.cos||[]).filter(c=>c.status==='Pending'||c.status==='Approved');
+  if(openCOs.length){
+    const coOpts=`<option value="">— No CO —</option>`
+      +openCOs.map(c=>`<option value="${c.id}">${c.num} — ${c.desc} (${fmt(c.value)}) [${c.status}]</option>`).join('');
+    html+=`<div class="fg" style="margin-bottom:8px">
+      <label style="font-size:11px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.05em">Change order (CO)</label>
+      <select id="assign-co" style="width:100%;font-size:13px;padding:6px 8px;border-radius:var(--radius);border:0.5px solid var(--border2);background:var(--bg);color:var(--text)">${coOpts}</select>
+    </div>`;
+  }
+  el.innerHTML=html;
 }
 
 // ─── MODALS ──────────────────────────────────────────────────────────────────
@@ -3056,11 +3176,39 @@ function openModal(type,pid,extra){
   if(type==='assign'){
     assignSelected.clear();
     showModal(`<div class="modal-title">Assign project to date range</div>
-      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:14px">
-        <div class="fg" style="margin-bottom:0;grid-column:1/3"><label>Project</label><select id="assign-proj" class="fi">${pOpts}</select></div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:10px;margin-bottom:12px">
+        <div class="fg" style="margin-bottom:0;grid-column:1/3"><label>Project / assignment</label>
+          <select id="assign-proj" class="fi" onchange="updateAssignExtraFields()">${pOpts}</select>
+        </div>
         <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
           <div class="fg" style="margin-bottom:0"><label>Start day</label><input id="assign-from" type="number" class="fi" min="1" max="${total}" value="1"></div>
           <div class="fg" style="margin-bottom:0"><label>End day</label><input id="assign-to" type="number" class="fi" min="1" max="${total}" value="${total}"></div>
+        </div>
+      </div>
+      <div style="display:flex;align-items:center;gap:12px;background:var(--bg3);padding:8px 10px;border-radius:var(--radius);margin-bottom:8px">
+        <span style="font-size:12px;font-weight:600;color:var(--text)">Confirmed?</span>
+        <label style="display:flex;align-items:center;gap:4px;cursor:pointer;font-size:12px;margin:0">
+          <input type="radio" name="assign-conf" value="yes" checked style="width:auto;accent-color:#3B6D11"> ✅ Yes
+        </label>
+        <label style="display:flex;align-items:center;gap:4px;cursor:pointer;font-size:12px;margin:0">
+          <input type="radio" name="assign-conf" value="no" style="width:auto;accent-color:#E24B4A"> ⚠️ Not confirmed
+        </label>
+      </div>
+      <div id="assign-extra-fields" style="margin-bottom:4px"></div>
+      <div class="fg" style="background:rgba(200,230,255,0.3);border:0.5px solid #6AAED6;border-radius:var(--radius);padding:10px 12px;margin-bottom:10px">
+        <label style="color:#185FA5;font-weight:600;display:flex;align-items:center;gap:6px;margin-bottom:0">
+          <span style="font-size:16px">🪣</span> Pour
+          <label style="display:flex;align-items:center;gap:4px;cursor:pointer;font-size:11px;font-weight:400;color:var(--text2);margin:0;margin-left:auto">
+            <input type="checkbox" id="assign-pour-enabled" style="width:auto;accent-color:#185FA5" onchange="document.getElementById('assign-pour-fields').style.display=this.checked?'flex':'none'"> Enable pour
+          </label>
+        </label>
+        <div id="assign-pour-fields" style="display:none;gap:8px;flex-wrap:wrap;margin-top:8px">
+          <div style="flex:1;min-width:90px"><label style="font-size:11px;color:var(--text2)">Time</label>
+            <input id="assign-pour-time" type="text" placeholder="e.g. 6:00am" style="width:100%;font-size:13px;padding:5px 8px;border-radius:var(--radius);border:0.5px solid #6AAED6;background:var(--bg);color:var(--text)"></div>
+          <div style="flex:1;min-width:70px"><label style="font-size:11px;color:var(--text2)">PSI</label>
+            <input id="assign-pour-psi" type="number" placeholder="3000" style="width:100%;font-size:13px;padding:5px 8px;border-radius:var(--radius);border:0.5px solid #6AAED6;background:var(--bg);color:var(--text)"></div>
+          <div style="flex:1;min-width:70px"><label style="font-size:11px;color:var(--text2)">Yards</label>
+            <input id="assign-pour-yards" type="number" placeholder="50" style="width:100%;font-size:13px;padding:5px 8px;border-radius:var(--radius);border:0.5px solid #6AAED6;background:var(--bg);color:var(--text)"></div>
         </div>
       </div>
       <div class="divider"></div>
@@ -3079,7 +3227,53 @@ function openModal(type,pid,extra){
         <button class="btn" onclick="closeModal()">Cancel</button>
         <button class="btn btn-primary" onclick="doAssign()">Assign to all selected</button>
       </div>`,true);
-    setTimeout(renderAssignPicker,10);
+    setTimeout(()=>{ renderAssignPicker(); updateAssignExtraFields(); },10);
+    return;
+  }
+
+  if(type==='unscheduled'){
+    // Collect all project IDs that have ever been scheduled in any roster item
+    const scheduledPids = new Set();
+    const allRosterItems = [...STAFF, ...EXTRA, ...EQUIP, ...RENTALS];
+    allRosterItems.forEach(item => {
+      Object.values(item.a || {}).forEach(v => {
+        getAsgnPids(v).forEach(pid => { if(pid && pid !== 'OFF' && pid !== 'NEW' && pid !== 'Warehouse') scheduledPids.add(pid); });
+      });
+    });
+
+    const unscheduled = DB.projects.filter(p => (p.status === 'Active' || p.status === 'Pending') && !scheduledPids.has(p.id));
+
+    const unscheduledRows = unscheduled.length === 0
+      ? `<div style="text-align:center;padding:24px;color:var(--text3);font-size:13px">🎉 All active projects have been scheduled at least once.</div>`
+      : unscheduled.map(p => {
+          const codes = (p.codes||[]).map(c => {
+            const color = CODE_COLORS[c.code] || '#888780';
+            const name = CODES_MAP[c.code] || c.code;
+            const val = c.value ? ` — $${(c.value/1000).toFixed(0)}k` : '';
+            return `<span style="display:inline-flex;align-items:center;gap:4px;font-size:10px;font-weight:600;padding:2px 7px;border-radius:99px;background:${color}22;color:${color};border:0.5px solid ${color}55;margin-right:4px;margin-bottom:3px">${c.code} ${name}${val}</span>`;
+          }).join('');
+          const totalVal = (p.codes||[]).reduce((s,c)=>s+(c.value||0),0);
+          const valStr = totalVal ? `<span style="font-size:11px;color:var(--text2);font-weight:600;margin-left:6px">$${(totalVal/1000).toFixed(0)}k</span>` : '';
+          return `<div style="padding:10px 14px;border-bottom:0.5px solid var(--border)">
+            <div style="display:flex;align-items:center;gap:8px;margin-bottom:4px;flex-wrap:wrap">
+              <span style="font-size:13px;font-weight:600;color:var(--text)">${p.id}</span>
+              <span style="font-size:12px;color:var(--text2)">${p.name}</span>
+              ${valStr}
+              <span style="margin-left:auto"><span class="badge ${p.status==='Active'?'b-green':'b-amber'}">${p.status}</span></span>
+            </div>
+            ${p.pm ? `<div style="font-size:11px;color:var(--text3);margin-bottom:4px">PM: ${p.pm}${p.client?' · '+p.client:''}</div>` : ''}
+            <div style="display:flex;flex-wrap:wrap;gap:2px">${codes || '<span style="font-size:11px;color:var(--text3)">No cost codes</span>'}</div>
+          </div>`;
+        }).join('');
+
+    showModal(`<div class="modal-title">Projects never scheduled</div>
+      <div style="font-size:12px;color:var(--text2);margin-bottom:12px">Active &amp; Pending projects with no roster assignments yet — <strong style="color:var(--text)">${unscheduled.length}</strong> project${unscheduled.length!==1?'s':''}</div>
+      <div style="border:0.5px solid var(--border);border-radius:var(--radius-lg);overflow:hidden;max-height:420px;overflow-y:auto;background:var(--bg)">
+        ${unscheduledRows}
+      </div>
+      <div class="form-actions">
+        <button class="btn btn-primary" onclick="closeModal()">Close</button>
+      </div>`, true);
     return;
   }
 
@@ -3423,14 +3617,14 @@ async function loadFromCloud(){
     let allStaff=[];
     if(chunkCount>0){for(let i=0;i<chunkCount;i++)allStaff=allStaff.concat(d['sc'+i]||[]);}
     if(!allStaff.length&&d.staff1){const s2=d.staff2||{};allStaff=[...(d.staff1||[]),...(s2.staff||[])];if(!meta.extra){meta.extra=s2.extra||[];meta.equip=s2.equip||[];meta.rentals=s2.rentals||[];}}
-    if(!allStaff.length&&d.roster){applyRosterData(d.roster);localStorage.setItem('zlc_roster',JSON.stringify(d.roster));changed=true;}
+    if(!allStaff.length&&d.roster){applyRosterData(d.roster);changed=true;}
     else if(allStaff.length){
       const mr={staff:allStaff,extra:meta.extra||[],equip:meta.equip||[],rentals:meta.rentals||[],extraList:meta.extraList||[],staffList:meta.staffList||[]};
-      applyRosterData(mr);localStorage.setItem('zlc_roster',JSON.stringify(mr));changed=true;
+      applyRosterData(mr);changed=true;
       console.log('Loaded '+allStaff.length+' staff from cloud');
     }
-    if(d.orders){DB.openOrders=d.orders;localStorage.setItem('zlc_orders',JSON.stringify(d.orders));changed=true;}
-    if(d.historical){DB.historical=d.historical;localStorage.setItem('zlc_historical',JSON.stringify(d.historical));changed=true;}
+    if(d.orders){DB.openOrders=d.orders;changed=true;}
+    if(d.historical){DB.historical=d.historical;changed=true;}
     const t=new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'});
     setCloudStatus(changed?'✓ Synced '+t:'☁️ Up to date');
     if(changed){renderRoster();renderAnalytics();renderProjTable();renderOverview();toast('☁️ Data loaded from cloud');}
@@ -3539,14 +3733,7 @@ function buildRosterData() {
 function saveLocal() {
   try {
     const rosterData = buildRosterData();
-    // 1. Save to localStorage immediately (fast, works offline)
-    localStorage.setItem('zlc_roster', JSON.stringify(rosterData));
-    localStorage.setItem('zlc_orders', JSON.stringify(DB.openOrders||[]));
-    localStorage.setItem('zlc_manual_projects', JSON.stringify(DB.projects.filter(p=>p._manual)));
-    localStorage.setItem('zlc_historical', JSON.stringify(DB.historical));
-
-    // 2. Debounce cloud save — wait 1.5s after last change before writing to sheet
-    // Auto cloud save after 2s of inactivity
+    // Only save to cloud — no localStorage
     saveToCloud(rosterData);
   } catch(e) { console.warn('saveLocal error:', e); }
 }
@@ -3556,22 +3743,14 @@ function saveLocal() {
 
 
 function loadLocal() {
+  // Data is loaded exclusively from cloud (Google Sheets).
+  // Clear any stale localStorage so it never overrides cloud data.
   try {
-    const rosterRaw = localStorage.getItem('zlc_roster');
-    if (rosterRaw) {
-      const rd = JSON.parse(rosterRaw);
-      applyRosterData(rd);
-    }
-    const ordersRaw = localStorage.getItem('zlc_orders');
-    if (ordersRaw) DB.openOrders = JSON.parse(ordersRaw);
-    const manualRaw = localStorage.getItem('zlc_manual_projects');
-    if (manualRaw) {
-      const manual = JSON.parse(manualRaw);
-      manual.forEach(p => { if (!DB.projects.find(x=>x.id===p.id)) DB.projects.push(p); });
-    }
-    const histRaw = localStorage.getItem('zlc_historical');
-    if (histRaw) DB.historical = JSON.parse(histRaw);
-  } catch(e) { console.warn('loadLocal error:', e); }
+    localStorage.removeItem('zlc_roster');
+    localStorage.removeItem('zlc_orders');
+    localStorage.removeItem('zlc_manual_projects');
+    localStorage.removeItem('zlc_historical');
+  } catch(e) {}
 }
 
 function applyRosterData(rd) {
@@ -3605,6 +3784,572 @@ syncFromSheets();
 loadFromCloud();
 
 // Corrected build: removed duplicate CO filter functions and added config fallback support.
+
+// ─── GANTT ────────────────────────────────────────────────────────────────────
+const GANTT = {
+  projId: null,
+  zoom: 'month',   // 'week' | 'month' | 'quarter'
+  rangeStart: null,
+  rangeEnd: null,
+  tasks: {},       // projId → [{id, name, color, cells:{dateKey:true}}]
+  nextId: 1,
+};
+
+const GANTT_PALETTE = [
+  '#185FA5','#3B6D11','#854F0B','#791F1F','#085041',
+  '#378ADD','#1D9E75','#BA7517','#D85A30','#7F77DD',
+  '#D4537E','#674ea7','#45818e','#c9a200','#134f5c',
+];
+
+function ganttTaskColor(idx) {
+  return GANTT_PALETTE[idx % GANTT_PALETTE.length];
+}
+
+/* ── open / close ── */
+function openGanttView(btn) {
+  // deactivate all other filter-tab buttons
+  document.querySelectorAll('#view-roster .filter-tabs .ft').forEach(b => b.classList.remove('active'));
+  btn.classList.add('active');
+
+  // hide roster elements, show gantt
+  document.getElementById('roster-summary').style.display = 'none';
+  document.querySelector('.roster-table-meta').style.display = 'none';
+  document.getElementById('roster-legend').style.display = 'none';
+  document.getElementById('pdf-print-header').style.display = 'none';
+  document.getElementById('roster-wrap').style.display = 'none';
+  document.getElementById('gantt-view').style.display = 'block';
+
+  // Populate project selector with active projects
+  ganttPopulateProjectSelect();
+}
+
+function closeGanttView() {
+  document.getElementById('gantt-view').style.display = 'none';
+  document.getElementById('roster-summary').style.display = '';
+  document.querySelector('.roster-table-meta').style.display = '';
+  document.getElementById('roster-legend').style.display = '';
+  document.getElementById('pdf-print-header').style.display = '';
+  document.getElementById('roster-wrap').style.display = '';
+
+  // restore "All" tab active
+  const allBtn = document.querySelector('#view-roster .filter-tabs .ft');
+  if (allBtn) {
+    document.querySelectorAll('#view-roster .filter-tabs .ft').forEach(b => b.classList.remove('active'));
+    allBtn.classList.add('active');
+  }
+  document.getElementById('gantt-tab-btn').classList.remove('active');
+}
+
+function ganttPopulateProjectSelect() {
+  const sel = document.getElementById('gantt-proj-select');
+  const active = (DB.projects || []).filter(p => p.status === 'Active' || p.status === 'Finish');
+  const current = sel.value;
+  sel.innerHTML = '<option value="">— Choose an active project —</option>';
+  active.sort((a,b) => b.id.localeCompare(a.id)).forEach(p => {
+    const opt = document.createElement('option');
+    opt.value = p.id;
+    opt.textContent = `${p.id} — ${p.name}`;
+    if (p.id === current) opt.selected = true;
+    sel.appendChild(opt);
+  });
+}
+
+/* ── project selection ── */
+function ganttSelectProject(projId) {
+  GANTT.projId = projId || null;
+  if (!projId) {
+    document.getElementById('gantt-body').innerHTML = `
+      <div class="gantt-no-proj">
+        <svg width="48" height="48" viewBox="0 0 48 48" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="4" y="8" width="40" height="34" rx="3"/><path d="M4 16h40M14 4v8M34 4v8M12 26h8M12 32h12M28 26h8"/></svg>
+        <span>Select an active project to view its Gantt chart</span>
+      </div>`;
+    return;
+  }
+
+  // Init task list for project if not exists
+  if (!GANTT.tasks[projId]) {
+    GANTT.tasks[projId] = [];
+  }
+
+  // Default range: today ±45 days
+  if (!GANTT.rangeStart) {
+    const today = new Date();
+    const s = new Date(today); s.setDate(s.getDate() - 7);
+    const e = new Date(today); e.setDate(e.getDate() + 53);
+    GANTT.rangeStart = fmtDate(s);
+    GANTT.rangeEnd   = fmtDate(e);
+  }
+
+  ganttRender();
+}
+
+/* ── helpers ── */
+function fmtDate(d) {
+  return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+}
+function parseDate(s) {
+  const [y,m,d] = s.split('-').map(Number);
+  return new Date(y, m-1, d);
+}
+function addDays(dateStr, n) {
+  const d = parseDate(dateStr);
+  d.setDate(d.getDate() + n);
+  return fmtDate(d);
+}
+function daysBetween(a, b) {
+  return Math.round((parseDate(b) - parseDate(a)) / 86400000);
+}
+function dateRange(start, end) {
+  const days = [];
+  let cur = start;
+  while (cur <= end) { days.push(cur); cur = addDays(cur, 1); }
+  return days;
+}
+function isWeekend(dateStr) {
+  const d = parseDate(dateStr);
+  return d.getDay() === 0 || d.getDay() === 6;
+}
+function dayLabel(dateStr, zoom) {
+  const d = parseDate(dateStr);
+  if (zoom === 'quarter') return d.getDate() % 7 === 1 ? String(d.getDate()) : '';
+  return String(d.getDate());
+}
+
+/* ── main render ── */
+function ganttRender() {
+  const pid = GANTT.projId;
+  if (!pid) return;
+  const proj = (DB.projects || []).find(p => p.id === pid);
+  const projName = proj ? `${proj.id} — ${proj.name}` : pid;
+  const tasks = GANTT.tasks[pid] || [];
+  const days = dateRange(GANTT.rangeStart, GANTT.rangeEnd);
+  const today = fmtDate(new Date());
+
+  // Group days by month for header
+  const months = [];
+  days.forEach(d => {
+    const m = d.slice(0,7);
+    if (!months.length || months[months.length-1].key !== m) {
+      months.push({ key: m, label: parseDate(d).toLocaleDateString('en-US',{month:'short',year:'numeric'}), count: 1 });
+    } else {
+      months[months.length-1].count++;
+    }
+  });
+
+  let html = `
+  <div class="gantt-container">
+    <div class="gantt-toolbar">
+      <div class="gantt-toolbar-left">
+        <strong style="font-size:13px;color:var(--text)">${projName}</strong>
+        <div class="gantt-zoom">
+          <button onclick="ganttSetZoom('week',this)" class="${GANTT.zoom==='week'?'active':''}">2 Weeks</button>
+          <button onclick="ganttSetZoom('month',this)" class="${GANTT.zoom==='month'?'active':''}">Month</button>
+          <button onclick="ganttSetZoom('quarter',this)" class="${GANTT.zoom==='quarter'?'active':''}">Quarter</button>
+        </div>
+      </div>
+      <div class="gantt-date-range">
+        <span style="font-size:11px;color:var(--text2);font-weight:600">Range:</span>
+        <input type="date" id="gantt-start" value="${GANTT.rangeStart}" onchange="ganttSetRange()">
+        <span style="font-size:11px;color:var(--text3)">→</span>
+        <input type="date" id="gantt-end" value="${GANTT.rangeEnd}" onchange="ganttSetRange()">
+        <button class="btn btn-sm" onclick="ganttDownloadPDF()" style="background:var(--red-light);color:var(--red);border-color:var(--red-mid);white-space:nowrap">⬇ PDF</button>
+      </div>
+    </div>
+    <div class="gantt-wrap">
+      <table class="gantt-table">
+        <thead>
+          <tr>
+            <th class="gantt-task-hd">Task / Phase</th>
+            ${months.map(m=>`<th colspan="${m.count}" class="gantt-month-hd">${m.label}</th>`).join('')}
+          </tr>
+          <tr>
+            <th class="gantt-task-hd" style="top:26px"></th>
+            ${days.map(d=>`<th style="top:26px;${isWeekend(d)?'color:var(--text3)':''}">${dayLabel(d,GANTT.zoom)}</th>`).join('')}
+          </tr>
+        </thead>
+        <tbody>`;
+
+  if (tasks.length === 0) {
+    html += `<tr><td class="gantt-task-name" style="padding:14px 10px;color:var(--text3);font-size:12px">No tasks yet — add one below</td>${days.map(()=>'<td></td>').join('')}</tr>`;
+  } else {
+    tasks.forEach((task, ti) => {
+      const color = task.color || ganttTaskColor(ti);
+      // Determine consecutive filled segments for rounded corners
+      const filledSet = task.cells || {};
+      html += `<tr data-task-id="${task.id}">
+        <td class="gantt-task-name">
+          <div class="gantt-name-inner" ondblclick="ganttEditName(this,'${task.id}','${pid}')">
+            <span class="gantt-drag-handle" title="Drag to reorder">⠿</span>
+            <span class="gantt-color-dot" style="background:${color}" onclick="ganttCycleColor('${task.id}','${pid}')" title="Click to change color"></span>
+            <span class="gantt-name-text" id="gantt-name-${task.id}">${escHtml(task.name)}</span>
+            <input class="gantt-name-edit" id="gantt-name-input-${task.id}" value="${escHtml(task.name)}"
+              onblur="ganttSaveName('${task.id}','${pid}')" onkeydown="if(event.key==='Enter')this.blur();if(event.key==='Escape'){ganttCancelName('${task.id}');}">
+            <div class="gantt-row-actions">
+              <button class="gantt-row-del" title="Delete task" onclick="ganttDeleteTask('${task.id}','${pid}')">✕</button>
+            </div>
+          </div>
+        </td>`;
+
+      days.forEach((d, di) => {
+        const filled = !!filledSet[d];
+        const prevFilled = di > 0 ? !!filledSet[days[di-1]] : false;
+        const nextFilled = di < days.length-1 ? !!filledSet[days[di+1]] : false;
+        let cls = 'gantt-cell';
+        if (isWeekend(d)) cls += ' weekend';
+        if (d === today) cls += ' today-mark';
+        if (filled) {
+          cls += ' filled';
+          if (!prevFilled && !nextFilled) cls += ' solo';
+          else if (!prevFilled) cls += ' start';
+          else if (!nextFilled) cls += ' end';
+        }
+        html += `<td class="${cls}" style="${filled?`--gantt-color:${color}`:''}" title="${d}" onclick="ganttToggleCell('${task.id}','${pid}','${d}',this)" onmousedown="ganttDragStart('${task.id}','${pid}','${d}')" onmouseenter="ganttDragEnter('${task.id}','${pid}','${d}',this)"></td>`;
+      });
+
+      html += `</tr>`;
+    });
+  }
+
+  // Progress summary row
+  if (tasks.length > 0) {
+    const totalCells = tasks.reduce((s,t) => s + Object.keys(t.cells||{}).filter(k=>k>=GANTT.rangeStart&&k<=GANTT.rangeEnd).length, 0);
+    const maxPossible = tasks.length * days.length;
+    html += `<tr style="background:var(--bg2)">
+      <td class="gantt-task-name" style="padding:6px 10px;font-size:10px;color:var(--text2);font-weight:600;text-transform:uppercase;letter-spacing:.05em">Schedule density</td>
+      ${days.map(d=>{
+        const filledCount = tasks.filter(t=>!!(t.cells||{})[d]).length;
+        const pct = tasks.length ? Math.round(filledCount/tasks.length*100) : 0;
+        const bg = pct===0 ? 'transparent' : pct===100 ? '#3B6D11' : pct>50 ? '#185FA5' : '#BA7517';
+        return `<td style="background:${bg};opacity:${pct?0.15+pct/100*0.85:0}" title="${d}: ${filledCount}/${tasks.length} tasks"></td>`;
+      }).join('')}
+    </tr>`;
+  }
+
+  html += `</tbody></table></div>
+    <div class="gantt-add-row">
+      <input type="text" id="gantt-new-task" placeholder="New task name (press Enter)..."
+        onkeydown="if(event.key==='Enter')ganttAddTask('${pid}')">
+      <button class="btn btn-primary btn-sm" onclick="ganttAddTask('${pid}')">+ Add task</button>
+      ${tasks.length>0?`<button class="btn btn-sm btn-ghost" onclick="ganttClearAll('${pid}')" style="color:var(--red);border-color:var(--red-mid)">Clear all</button>`:''}
+    </div>
+    <div class="gantt-legend">
+      <div class="gantt-legend-item"><div class="gantt-legend-sq" style="background:var(--blue)"></div> Active day</div>
+      <div class="gantt-legend-item"><div class="gantt-legend-sq" style="background:rgba(0,0,0,.04)"></div> Weekend</div>
+      <div class="gantt-legend-item"><div class="gantt-legend-sq" style="outline:2px solid var(--blue);outline-offset:-1px"></div> Today</div>
+      <span style="margin-left:auto;font-size:10px;color:var(--text3)">Click cells to toggle · Double-click task name to edit · Click color dot to change color</span>
+    </div>
+  </div>`;
+
+  document.getElementById('gantt-body').innerHTML = html;
+}
+
+function escHtml(s) {
+  return String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+
+/* ── Gantt PDF download ── */
+function ganttDownloadPDF() {
+  const pid = GANTT.projId;
+  if (!pid) return;
+  const proj = (DB.projects || []).find(p => p.id === pid);
+  const projName = proj ? `${proj.id} — ${proj.name}` : pid;
+  const tasks = GANTT.tasks[pid] || [];
+  const days = dateRange(GANTT.rangeStart, GANTT.rangeEnd);
+  const today = fmtDate(new Date());
+
+  // Build month groups for header
+  const months = [];
+  days.forEach(d => {
+    const m = d.slice(0,7);
+    if (!months.length || months[months.length-1].key !== m) {
+      months.push({ key: m, label: parseDate(d).toLocaleDateString('en-US',{month:'short',year:'numeric'}), count: 1 });
+    } else { months[months.length-1].count++; }
+  });
+
+  const CELL_W = 22;
+  const LABEL_W = 160;
+  const ROW_H = 28;
+  const HEAD_H = 44;
+  const totalW = LABEL_W + days.length * CELL_W;
+
+  // Build SVG rows
+  let taskRows = '';
+  tasks.forEach((task, ti) => {
+    const y = HEAD_H + ti * ROW_H;
+    const color = task.color || ganttTaskColor(ti);
+    const bg = ti % 2 === 0 ? '#ffffff' : '#f9f8f6';
+    taskRows += `<rect x="0" y="${y}" width="${totalW}" height="${ROW_H}" fill="${bg}"/>`;
+    // Task name cell
+    taskRows += `<rect x="0" y="${y}" width="${LABEL_W}" height="${ROW_H}" fill="${bg}"/>`;
+    taskRows += `<circle cx="14" cy="${y + ROW_H/2}" r="5" fill="${color}"/>`;
+    taskRows += `<text x="24" y="${y + ROW_H/2 + 4}" font-size="11" fill="#1a1a18" font-family="Arial,sans-serif">${escHtml(task.name)}</text>`;
+    taskRows += `<line x1="0" y1="${y+ROW_H}" x2="${totalW}" y2="${y+ROW_H}" stroke="#e0e0dc" stroke-width="0.5"/>`;
+
+    // Day cells
+    days.forEach((d, di) => {
+      const x = LABEL_W + di * CELL_W;
+      const filled = !!(task.cells||{})[d];
+      const weekend = isWeekend(d);
+      const isToday = d === today;
+      const cellBg = filled ? color : weekend ? '#f0eeea' : 'none';
+      if (filled || weekend) {
+        taskRows += `<rect x="${x}" y="${y+2}" width="${CELL_W}" height="${ROW_H-4}" rx="${filled?3:0}" fill="${cellBg}" opacity="${filled?0.85:1}"/>`;
+      }
+      if (isToday) {
+        taskRows += `<rect x="${x}" y="${y}" width="${CELL_W}" height="${ROW_H}" fill="none" stroke="#185FA5" stroke-width="1.5"/>`;
+      }
+      taskRows += `<line x1="${x}" y1="${y}" x2="${x}" y2="${y+ROW_H}" stroke="#e8e6e2" stroke-width="0.5"/>`;
+    });
+  });
+
+  // Month headers
+  let monthHdHtml = '';
+  let mxOff = LABEL_W;
+  months.forEach(m => {
+    const mw = m.count * CELL_W;
+    monthHdHtml += `<rect x="${mxOff}" y="0" width="${mw}" height="22" fill="#f0eeea"/>`;
+    monthHdHtml += `<text x="${mxOff + mw/2}" y="15" text-anchor="middle" font-size="10" font-weight="bold" fill="#6b6a65" font-family="Arial,sans-serif" text-transform="uppercase">${m.label.toUpperCase()}</text>`;
+    monthHdHtml += `<line x1="${mxOff}" y1="0" x2="${mxOff}" y2="22" stroke="#d8d6d2" stroke-width="0.5"/>`;
+    mxOff += mw;
+  });
+
+  // Day number headers
+  let dayHdHtml = '';
+  days.forEach((d, di) => {
+    const x = LABEL_W + di * CELL_W;
+    const dn = parseDate(d).getDate();
+    const weekend = isWeekend(d);
+    const isToday = d === today;
+    if (isToday) dayHdHtml += `<rect x="${x}" y="22" width="${CELL_W}" height="22" fill="#185FA5"/>`;
+    else if (weekend) dayHdHtml += `<rect x="${x}" y="22" width="${CELL_W}" height="22" fill="#f0eeea"/>`;
+    dayHdHtml += `<text x="${x+CELL_W/2}" y="37" text-anchor="middle" font-size="9" fill="${isToday?'#ffffff':weekend?'#9e9c97':'#6b6a65'}" font-family="Arial,sans-serif">${dn}</text>`;
+    dayHdHtml += `<line x1="${x}" y1="22" x2="${x}" y2="${HEAD_H}" stroke="#d8d6d2" stroke-width="0.5"/>`;
+  });
+
+  // Header label cell
+  const labelHd = `<rect x="0" y="0" width="${LABEL_W}" height="${HEAD_H}" fill="#f0eeea"/>
+    <text x="10" y="28" font-size="10" font-weight="bold" fill="#6b6a65" font-family="Arial,sans-serif">TASK / PHASE</text>`;
+
+  const totalH = HEAD_H + Math.max(tasks.length, 1) * ROW_H;
+
+  // Empty state
+  const emptyRow = tasks.length === 0
+    ? `<text x="${totalW/2}" y="${HEAD_H + 20}" text-anchor="middle" font-size="12" fill="#9e9c97" font-family="Arial,sans-serif">No tasks</text>`
+    : '';
+
+  // Borders
+  const borders = `
+    <rect x="0" y="0" width="${totalW}" height="${totalH}" fill="none" stroke="#d0cec9" stroke-width="1"/>
+    <line x1="${LABEL_W}" y1="0" x2="${LABEL_W}" y2="${totalH}" stroke="#d0cec9" stroke-width="1"/>
+    <line x1="0" y1="${HEAD_H}" x2="${totalW}" y2="${HEAD_H}" stroke="#d0cec9" stroke-width="1"/>
+    <line x1="0" y1="22" x2="${totalW}" y2="22" stroke="#d0cec9" stroke-width="0.5"/>`;
+
+  const TITLE_H = 52;
+  const SUBTITLE_H = 24;
+  const pageW = Math.max(totalW, 600);
+  const pageH = TITLE_H + SUBTITLE_H + totalH + 20;
+
+  const svgContent = `<svg xmlns="http://www.w3.org/2000/svg" width="${pageW}" height="${pageH}" viewBox="0 0 ${pageW} ${pageH}">
+    <rect width="${pageW}" height="${pageH}" fill="#ffffff"/>
+    <!-- Title -->
+    <text x="16" y="28" font-size="18" font-weight="bold" fill="#1a1a18" font-family="Arial,sans-serif">ZLC Corp — Gantt</text>
+    <text x="16" y="46" font-size="12" fill="#6b6a65" font-family="Arial,sans-serif">${projName}</text>
+    <line x1="0" y1="${TITLE_H}" x2="${pageW}" y2="${TITLE_H}" stroke="#e0e0dc" stroke-width="1"/>
+    <!-- Subtitle bar -->
+    <rect x="0" y="${TITLE_H}" width="${pageW}" height="${SUBTITLE_H}" fill="#f7f7f5"/>
+    <text x="16" y="${TITLE_H+16}" font-size="10" fill="#9e9c97" font-family="Arial,sans-serif">${GANTT.rangeStart} → ${GANTT.rangeEnd}  ·  ${tasks.length} task${tasks.length!==1?'s':''}  ·  Generated ${new Date().toLocaleDateString('en-US',{month:'short',day:'numeric',year:'numeric'})}</text>
+    <line x1="0" y1="${TITLE_H+SUBTITLE_H}" x2="${pageW}" y2="${TITLE_H+SUBTITLE_H}" stroke="#e0e0dc" stroke-width="1"/>
+    <!-- Gantt table -->
+    <g transform="translate(0,${TITLE_H+SUBTITLE_H})">
+      ${taskRows}
+      ${emptyRow}
+      ${monthHdHtml}
+      ${dayHdHtml}
+      ${labelHd}
+      ${borders}
+    </g>
+  </svg>`;
+
+  // Wrap in printable HTML and trigger browser print-to-PDF
+  const printWin = window.open('', '_blank', 'width=1200,height=800');
+  if (!printWin) { toast('Allow popups to download PDF'); return; }
+
+  const printDoc = `<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>ZLC Corp — Gantt · ${projName}</title>
+  <style>
+    * { margin:0; padding:0; box-sizing:border-box; }
+    body { background:#fff; font-family:Arial,sans-serif; }
+    .page { padding: 0; }
+    svg { display:block; max-width:100%; height:auto; }
+    @media print {
+      @page { margin:10mm; size: auto; }
+      body { background:#fff; }
+    }
+  </style>
+</head>
+<body>
+  <div class="page">${svgContent}</div>
+  <script>
+    window.onload = function() {
+      setTimeout(function(){ window.print(); }, 300);
+    };
+  <\/script>
+</body>
+</html>`;
+
+  printWin.document.write(printDoc);
+  printWin.document.close();
+}
+
+/* ── cell toggle + drag ── */
+let _ganttDragging = false;
+let _ganttDragMode = null; // 'fill' or 'clear'
+let _ganttDragTask = null;
+let _ganttDragProj = null;
+
+document.addEventListener('mouseup', () => { _ganttDragging = false; _ganttDragMode = null; });
+
+function ganttDragStart(taskId, projId, dateStr) {
+  const task = ganttFindTask(taskId, projId);
+  if (!task) return;
+  _ganttDragging = true;
+  _ganttDragTask = taskId;
+  _ganttDragProj = projId;
+  // mode: if currently filled → dragging clears; else → dragging fills
+  _ganttDragMode = (task.cells||{})[dateStr] ? 'clear' : 'fill';
+}
+
+function ganttDragEnter(taskId, projId, dateStr, cell) {
+  if (!_ganttDragging || _ganttDragTask !== taskId) return;
+  const task = ganttFindTask(taskId, projId);
+  if (!task) return;
+  if (!task.cells) task.cells = {};
+  if (_ganttDragMode === 'fill') {
+    task.cells[dateStr] = true;
+    cell.classList.add('filled');
+    cell.style.setProperty('--gantt-color', task.color || ganttTaskColor(ganttTaskIndex(taskId, projId)));
+  } else {
+    delete task.cells[dateStr];
+    cell.classList.remove('filled','start','end','solo');
+    cell.style.removeProperty('--gantt-color');
+  }
+}
+
+function ganttToggleCell(taskId, projId, dateStr, cell) {
+  const task = ganttFindTask(taskId, projId);
+  if (!task) return;
+  if (!task.cells) task.cells = {};
+  if (task.cells[dateStr]) {
+    delete task.cells[dateStr];
+  } else {
+    task.cells[dateStr] = true;
+  }
+  // Re-render to get proper rounded corners
+  ganttRender();
+}
+
+/* ── add / delete tasks ── */
+function ganttAddTask(projId) {
+  const inp = document.getElementById('gantt-new-task');
+  const name = (inp ? inp.value : '').trim();
+  if (!name) return;
+  if (!GANTT.tasks[projId]) GANTT.tasks[projId] = [];
+  const idx = GANTT.tasks[projId].length;
+  GANTT.tasks[projId].push({
+    id: 't' + (++GANTT.nextId),
+    name,
+    color: ganttTaskColor(idx),
+    cells: {},
+  });
+  ganttRender();
+  const newInp = document.getElementById('gantt-new-task');
+  if (newInp) { newInp.value = ''; newInp.focus(); }
+}
+
+function ganttDeleteTask(taskId, projId) {
+  if (!GANTT.tasks[projId]) return;
+  GANTT.tasks[projId] = GANTT.tasks[projId].filter(t => t.id !== taskId);
+  ganttRender();
+}
+
+function ganttClearAll(projId) {
+  if (!confirm('Clear all tasks for this project?')) return;
+  GANTT.tasks[projId] = [];
+  ganttRender();
+}
+
+/* ── edit name ── */
+function ganttEditName(el, taskId, projId) {
+  const span = document.getElementById('gantt-name-' + taskId);
+  const inp  = document.getElementById('gantt-name-input-' + taskId);
+  if (!span || !inp) return;
+  span.style.display = 'none';
+  inp.style.display = 'block';
+  inp.focus();
+  inp.select();
+}
+
+function ganttSaveName(taskId, projId) {
+  const inp  = document.getElementById('gantt-name-input-' + taskId);
+  const span = document.getElementById('gantt-name-' + taskId);
+  if (!inp || !span) return;
+  const task = ganttFindTask(taskId, projId);
+  if (task && inp.value.trim()) task.name = inp.value.trim();
+  span.textContent = task ? task.name : '';
+  span.style.display = '';
+  inp.style.display = 'none';
+}
+
+function ganttCancelName(taskId) {
+  const inp  = document.getElementById('gantt-name-input-' + taskId);
+  const span = document.getElementById('gantt-name-' + taskId);
+  if (!inp || !span) return;
+  span.style.display = '';
+  inp.style.display = 'none';
+}
+
+/* ── color cycle ── */
+function ganttCycleColor(taskId, projId) {
+  const task = ganttFindTask(taskId, projId);
+  if (!task) return;
+  const cur = GANTT_PALETTE.indexOf(task.color);
+  task.color = GANTT_PALETTE[(cur + 1) % GANTT_PALETTE.length];
+  ganttRender();
+}
+
+/* ── zoom ── */
+function ganttSetZoom(zoom, btn) {
+  GANTT.zoom = zoom;
+  let days = zoom === 'week' ? 14 : zoom === 'quarter' ? 91 : 30;
+  const s = new Date(); s.setDate(s.getDate() - Math.floor(days*0.2));
+  const e = new Date(s); e.setDate(e.getDate() + days - 1);
+  GANTT.rangeStart = fmtDate(s);
+  GANTT.rangeEnd   = fmtDate(e);
+  ganttRender();
+}
+
+/* ── date range ── */
+function ganttSetRange() {
+  const s = document.getElementById('gantt-start');
+  const e = document.getElementById('gantt-end');
+  if (!s || !e) return;
+  if (s.value && e.value && s.value < e.value) {
+    GANTT.rangeStart = s.value;
+    GANTT.rangeEnd   = e.value;
+    ganttRender();
+  }
+}
+
+/* ── util ── */
+function ganttFindTask(taskId, projId) {
+  return (GANTT.tasks[projId] || []).find(t => t.id === taskId);
+}
+function ganttTaskIndex(taskId, projId) {
+  return (GANTT.tasks[projId] || []).findIndex(t => t.id === taskId);
+}
 </script>
 </body>
 </html>
