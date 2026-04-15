@@ -771,7 +771,7 @@ async function fetchSheetByGid(gid) {
   if (!sheet) throw new Error(`Sheet gid ${gid} not found`);
   const sheetName = sheet.properties.title;
   const encName = encodeURIComponent(sheetName);
-  const valRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/${encName}!A:Z?key=${API_KEY}`);
+  const valRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/${encName}!A:Z?key=${API_KEY}&valueRenderOption=FORMATTED_VALUE&dateTimeRenderOption=FORMATTED_STRING`);
   if (!valRes.ok) throw new Error(`Values API ${valRes.status}: ${await valRes.text()}`);
   const val = await valRes.json();
   return { name: sheetName, rows: val.values || [] };
@@ -1077,7 +1077,14 @@ function parseMonthStr(val) {
 function extractYear(val) {
   if (!val) return null;
   const s = String(val).trim();
-  // Try parsing as a date first — handles "1/1/2026", "2026-01-01", etc.
+  // Handle Google Sheets date serial numbers (numeric, e.g. 46388 = 1/1/2026)
+  // Sheets epoch is Dec 30, 1899
+  const num = parseFloat(s);
+  if (!isNaN(num) && num > 40000 && num < 60000 && s === String(Math.floor(num))) {
+    const d = new Date(Date.UTC(1899, 11, 30) + num * 86400000);
+    if (d.getUTCFullYear() > 2000) return d.getUTCFullYear();
+  }
+  // Try parsing as a date string — handles "1/1/2026", "2026-01-01", "Jan 2026" etc.
   const d = new Date(s);
   if (!isNaN(d) && d.getFullYear() > 2000) return d.getFullYear();
   // Try to find a 4-digit year in the string
