@@ -1116,39 +1116,41 @@ async function syncFromSheets() {
     // Add approved CO totals by approval year on top of base project values
     DB.coYearTotals = computeCOYearTotals(coData.rows);
 
-    // ── Fetch A1:J1447 — sum col I where col J = 2026, group by col H cost code ──
+    // ── Fetch A1:J1447 — two passes: FORMATTED for dates, UNFORMATTED for values ──
     try {
       const sheetName = projData.name;
       const encName   = encodeURIComponent(sheetName);
-      const fullRes   = await fetch(
-        `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/${encName}!A1:J1447?key=${API_KEY}&valueRenderOption=UNFORMATTED_VALUE&dateTimeRenderOption=FORMATTED_STRING`
-      );
-      if (fullRes.ok) {
-        const fullData = await fullRes.json();
-        const rows2026 = fullData.values || [];
+      // Fetch dates (col J) as formatted strings so "1/1/2026" not serial number
+      const [fmtRes, rawRes] = await Promise.all([
+        fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/${encName}!J2:J1447?key=${API_KEY}&valueRenderOption=FORMATTED_VALUE`),
+        fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/${encName}!H2:I1447?key=${API_KEY}&valueRenderOption=UNFORMATTED_VALUE`)
+      ]);
+      if (fmtRes.ok && rawRes.ok) {
+        const fmtData = await fmtRes.json();
+        const rawData = await rawRes.json();
+        const dateRows = fmtData.values || [];   // col J formatted: "1/1/2026"
+        const hiRows   = rawData.values || [];   // col H=code, col I=value
         let total = 0;
         const codes = {};
-        for (let i = 1; i < rows2026.length; i++) {
-          const r = rows2026[i];
-          if (!r || r.length < 9) continue;
-          // col J (index 9) — year check
-          const yr = extractYear(r[9] != null ? String(r[9]) : '');
+        const maxLen = Math.max(dateRows.length, hiRows.length);
+        for (let i = 0; i < maxLen; i++) {
+          const dateCell = (dateRows[i] || [])[0] || '';
+          const yr = extractYear(String(dateCell));
           if (yr !== 2026) continue;
-          // col I (index 8) — value
-          const rawVal = String(r[8] || '').replace(/[$,\s]/g, '');
-          const val = parseFloat(rawVal) || 0;
+          const hiRow  = hiRows[i] || [];
+          const val    = parseFloat(String(hiRow[1] || '').replace(/[$,\s]/g,'')) || 0;
           if (!val || val < 0) continue;
           total += val;
-          // col H (index 7) — cost code (first 3 digits)
-          const codeRaw = String(r[7] || '').trim();
-          const codeMatch = codeRaw.match(/^(\d{3})/);
+          // col H: extract first 3-digit code anywhere in the string
+          const codeRaw   = String(hiRow[0] || '').trim();
+          const codeMatch = codeRaw.match(/(\d{3})/);
           if (codeMatch) {
             const code = codeMatch[1];
             codes[code] = (codes[code] || 0) + val;
           }
         }
         if (total > 0) { DB.total2026 = total; DB.codes2026 = codes; }
-        console.log('2026 total from sheet rows:', total, 'codes:', codes);
+        console.log('2026 total:', total, 'codes:', codes);
       }
     } catch(e) { console.warn('2026 fetch error:', e); }
 
