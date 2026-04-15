@@ -333,6 +333,8 @@
 
     /* Print header */
     #pdf-print-header { font-size: 11px; }
+    /* Hide placeholder text and edit hints in PDF */
+    .no-print { display: none !important; }
   }
   #pdf-print-header { display: none; }
 
@@ -2679,7 +2681,7 @@ function renderRoster(){
     const detallesHtml = `<div>
       <div id="${noteId}-disp" style="font-size:12px;color:var(--text);line-height:1.4;cursor:text;min-height:20px;border-radius:4px;padding:2px 4px"
         ondblclick="startInlineNoteEdit('${item.id}','${key}','${type||'staff'}')" title="Double-click to edit">
-        ${note||'<span style=\'color:var(--text3);font-size:11px\'>double-click to add note</span>'}
+        ${note||'<span class="no-print" style=\'color:var(--text3);font-size:11px\'>double-click to add note</span>'}
       </div>
     </div>`;
 
