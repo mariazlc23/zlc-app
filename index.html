@@ -1116,24 +1116,41 @@ async function syncFromSheets() {
     // Add approved CO totals by approval year on top of base project values
     DB.coYearTotals = computeCOYearTotals(coData.rows);
 
-    // ── Fetch E39:G39 from "Whole data Won / Approved" — the official 2026 total ──
+    // ── Fetch A1:J1447 — sum col I where col J = 2026, group by col H cost code ──
     try {
       const sheetName = projData.name;
       const encName   = encodeURIComponent(sheetName);
-      const cellRes   = await fetch(
-        `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/${encName}!E39:G39?key=${API_KEY}&valueRenderOption=UNFORMATTED_VALUE`
+      const fullRes   = await fetch(
+        `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/${encName}!A1:J1447?key=${API_KEY}&valueRenderOption=UNFORMATTED_VALUE&dateTimeRenderOption=FORMATTED_STRING`
       );
-      if (cellRes.ok) {
-        const cellData = await cellRes.json();
-        // Sum all numeric values found in the range E39:G39
-        let rangeSum = 0;
-        (cellData.values || []).forEach(row => row.forEach(cell => {
-          const n = parseFloat(String(cell).replace(/[$,\s]/g,''));
-          if (!isNaN(n)) rangeSum += n;
-        }));
-        if (rangeSum > 0) DB.total2026 = rangeSum;
+      if (fullRes.ok) {
+        const fullData = await fullRes.json();
+        const rows2026 = fullData.values || [];
+        let total = 0;
+        const codes = {};
+        for (let i = 1; i < rows2026.length; i++) {
+          const r = rows2026[i];
+          if (!r || r.length < 9) continue;
+          // col J (index 9) — year check
+          const yr = extractYear(r[9] != null ? String(r[9]) : '');
+          if (yr !== 2026) continue;
+          // col I (index 8) — value
+          const rawVal = String(r[8] || '').replace(/[$,\s]/g, '');
+          const val = parseFloat(rawVal) || 0;
+          if (!val || val < 0) continue;
+          total += val;
+          // col H (index 7) — cost code (first 3 digits)
+          const codeRaw = String(r[7] || '').trim();
+          const codeMatch = codeRaw.match(/^(\d{3})/);
+          if (codeMatch) {
+            const code = codeMatch[1];
+            codes[code] = (codes[code] || 0) + val;
+          }
+        }
+        if (total > 0) { DB.total2026 = total; DB.codes2026 = codes; }
+        console.log('2026 total from sheet rows:', total, 'codes:', codes);
       }
-    } catch(e) { console.warn('E39:G39 fetch error:', e); }
+    } catch(e) { console.warn('2026 fetch error:', e); }
 
     // Parse COs, RFIs, Subs and attach to projects
     const cosByProj  = parseCORows(coData.rows);
@@ -1949,9 +1966,12 @@ function renderAnalytics(){
     `<div class="grid-3">${hist.map(h=>{const mx=Math.max(...qs.map(q=>h.quarters[q]||0));return`<div class="yr-col"><div class="yr-title">${h.year} — ${fmtS(h.total)}</div>${qs.map(q=>{const v=h.quarters[q]||0,pct=mx>0?Math.round((v/mx)*100):0;return`<div class="bar-row"><span class="bar-lbl">${q}</span><div class="bar-track"><div class="bar-fill" style="width:${pct}%;background:${qc[q]}"></div></div><span class="bar-val" style="color:var(--text)">${fmtS(v)}</span></div>`;}).join('')}</div>`;}).join('')}</div>`
     :'<div class="empty">Add historical data to see breakdown</div>';
   const allCodes=Object.keys(CODES_MAP);
-  let ch=`<div class="tbl-wrap"><table><thead><tr><th style="width:60px">Code</th><th>Name</th>${hist.map(h=>`<th style="width:90px;text-align:right">${h.year}</th>`).join('')}<th style="width:100px;text-align:right">2026 (app)</th></tr></thead><tbody>`;
+  let ch=`<div class="tbl-wrap"><table><thead><tr><th style="width:60px">Code</th><th>Name</th>${hist.map(h=>`<th style="width:90px;text-align:right">${h.year}</th>`).join('')}<th style="width:100px;text-align:right">2026</th></tr></thead><tbody>`;
   allCodes.forEach(code=>{
-    const av=proj2026.reduce((a,p)=>a+(p.codes.find(c=>c.code===code)?.value||0)+(p.cos.filter(c=>c.code===code&&c.status==='Approved').reduce((s,c)=>s+c.value,0)),0);
+    // Use DB.codes2026 (from col H/I of sheet) if available, else fall back to project list
+    const av = DB.codes2026
+      ? (DB.codes2026[code] || 0)
+      : proj2026.reduce((a,p)=>a+(p.codes.find(c=>c.code===code)?.value||0)+(p.cos.filter(c=>c.code===code&&c.status==='Approved').reduce((s,c)=>s+c.value,0)),0);
     if(!hist.some(h=>h.codes[code]>0)&&!av)return;
     const color=CODE_COLORS[code]||'#888';
     ch+=`<tr><td><span style="display:flex;align-items:center;gap:5px"><span style="width:8px;height:8px;border-radius:2px;background:${color};flex-shrink:0;display:inline-block"></span><strong>${code}</strong></span></td><td>${CODES_MAP[code]}</td>
