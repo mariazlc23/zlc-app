@@ -340,6 +340,10 @@
   ::-webkit-scrollbar-track { background: transparent; }
   ::-webkit-scrollbar-thumb { background: var(--border2); border-radius: 3px; }
 
+  /* ── Roster drag & drop ── */
+  .roster-cell-dragging { opacity: 0.4; outline: 2px dashed var(--blue); }
+  .roster-cell-drag-over { background: var(--blue-light) !important; outline: 2px solid var(--blue); }
+
   /* ── GANTT ── */
   #gantt-view { display:none; }
   #gantt-view.active { display:block; }
@@ -1116,41 +1120,44 @@ async function syncFromSheets() {
     // Add approved CO totals by approval year on top of base project values
     DB.coYearTotals = computeCOYearTotals(coData.rows);
 
-    // ── Fetch A1:J1447 — two passes: FORMATTED for dates, UNFORMATTED for values ──
+    // ── Single fetch H:J (cols H=costcode, I=value, J=date) ──
+    // One request keeps all 3 columns aligned on the same row index.
+    // FORMATTED_VALUE so dates arrive as "1/1/2026" not serial numbers.
     try {
       const sheetName = projData.name;
       const encName   = encodeURIComponent(sheetName);
-      // Fetch dates (col J) as formatted strings so "1/1/2026" not serial number
-      const [fmtRes, rawRes] = await Promise.all([
-        fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/${encName}!J2:J1447?key=${API_KEY}&valueRenderOption=FORMATTED_VALUE`),
-        fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/${encName}!H2:I1447?key=${API_KEY}&valueRenderOption=UNFORMATTED_VALUE`)
-      ]);
-      if (fmtRes.ok && rawRes.ok) {
-        const fmtData = await fmtRes.json();
-        const rawData = await rawRes.json();
-        const dateRows = fmtData.values || [];   // col J formatted: "1/1/2026"
-        const hiRows   = rawData.values || [];   // col H=code, col I=value
+      const hijRes = await fetch(
+        `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/${encName}!H:J?key=${API_KEY}&valueRenderOption=FORMATTED_VALUE`
+      );
+      if (hijRes.ok) {
+        const hijJson = await hijRes.json();
+        const rows    = hijJson.values || [];
         let total = 0;
         const codes = {};
-        const maxLen = Math.max(dateRows.length, hiRows.length);
-        for (let i = 0; i < maxLen; i++) {
-          const dateCell = (dateRows[i] || [])[0] || '';
-          const yr = extractYear(String(dateCell));
+        // Skip header row (row 0)
+        for (let i = 1; i < rows.length; i++) {
+          const r = rows[i];
+          if (!r) continue;
+          // r[0]=H (cost code text), r[1]=I (value), r[2]=J (date "M/D/YYYY")
+          const dateStr = String(r[2] || '').trim();
+          if (!dateStr) continue;
+          // Date format is M/D/YYYY — extract year from last segment
+          const yr = extractYear(dateStr);
           if (yr !== 2026) continue;
-          const hiRow  = hiRows[i] || [];
-          const val    = parseFloat(String(hiRow[1] || '').replace(/[$,\s]/g,'')) || 0;
-          if (!val || val < 0) continue;
+          // Parse value — FORMATTED_VALUE may include $ or commas
+          const val = parseFloat(String(r[1] || '').replace(/[^0-9.\-]/g, '')) || 0;
+          if (!val) continue;  // include negatives — they are valid adjustments
           total += val;
-          // col H: extract first 3-digit code anywhere in the string
-          const codeRaw   = String(hiRow[0] || '').trim();
-          const codeMatch = codeRaw.match(/(\d{3})/);
+          // Cost code: first 3 digits of col H (e.g. "001 Hard Demolition" → "001")
+          const codeStr = String(r[0] || '').trim();
+          const codeMatch = codeStr.match(/^(\d{3})/);
           if (codeMatch) {
-            const code = codeMatch[1];
-            codes[code] = (codes[code] || 0) + val;
+            codes[codeMatch[1]] = (codes[codeMatch[1]] || 0) + val;
           }
         }
-        if (total > 0) { DB.total2026 = total; DB.codes2026 = codes; }
-        console.log('2026 total:', total, 'codes:', codes);
+        DB.total2026 = total;
+        DB.codes2026 = codes;
+        console.log('2026 total:', total, 'codes:', codes, 'rows scanned:', rows.length);
       }
     } catch(e) { console.warn('2026 fetch error:', e); }
 
@@ -2719,7 +2726,7 @@ function renderRoster(){
       // Build title from project names only
       const titlePids = getAsgnPids(asgn);
       const titleTxt = titlePids.map(pid=>{ const p=DB.projects.find(x=>x.id===pid); return p?`${pid} — ${p.name}`:pid; }).join(', ');
-      return`<td class="day-cell${isT?' today-col':''}${wk?' cell-weekend':''}${!conf&&asgn?' cell-conflict':''}" style="position:relative;background:${bg0||'var(--bg3)'};${wk?'filter:brightness(0.97)':''}" onclick="clickCell('${item.id}','${key}','${d}','${type}')" title="${(titleTxt+(note?' — '+note:'')).replace(/"/g,'&quot;')}${!conf?' ⚠️ NOT CONFIRMED':''}"><div style="display:flex;flex-direction:column;gap:1px;align-items:center">${inner}</div>${noteDot}${warnIcon}</td>`;
+      return`<td class="day-cell${isT?' today-col':''}${wk?' cell-weekend':''}${!conf&&asgn?' cell-conflict':''}" style="position:relative;background:${bg0||'var(--bg3)'};${wk?'filter:brightness(0.97)':''}" draggable="${asgn?'true':'false'}" onclick="clickCell('${item.id}','${key}','${d}','${type}')" ondragstart="rosterDragStart('${item.id}','${key}','${type}',this)" ondragend="rosterDragEnd(this)" ondragover="rosterDragOver(event,this)" ondrop="rosterDrop(event,'${item.id}','${key}','${type}',this)" title="${(titleTxt+(note?' — '+note:'')).replace(/"/g,'&quot;')}${!conf?' ⚠️ NOT CONFIRMED':''}"><div style="display:flex;flex-direction:column;gap:1px;align-items:center">${inner}</div>${noteDot}${warnIcon}</td>`;
     }
     const bg=asgn==='NEW'?'#FFEBEE':asgn?(()=>{ const pid=getAsgnFirstPid(asgn); return pc(pid||asgn); })():'';
     const tc=bg?ptc(bg):'';
@@ -2734,7 +2741,7 @@ function renderRoster(){
       return asgn.split('-')[1]||asgn.slice(0,4);
     })();
     const cellBorder=!conf&&asgn?'outline:2px solid #E24B4A;':'';
-    return`<td class="day-cell${isT?' today-col':''}${wk?' cell-weekend':''}${!conf&&asgn?' cell-conflict':''}" style="position:relative;${bg?`background:${bg};`:''}${wk&&!bg?'background:rgba(0,0,0,0.02);':''}" onclick="clickCell('${item.id}','${key}','${d}','${type}')" title="${titleText.replace(/"/g,'&quot;')}${!conf?' ⚠️ NOT CONFIRMED':''}">${asgn?`<div class="day-block" style="color:${asgn==='NEW'?'#C62828':tc}">${dispLabel}</div>`:''}${noteDot}${warnIcon}${pourIcon}</td>`;
+    return`<td class="day-cell${isT?' today-col':''}${wk?' cell-weekend':''}${!conf&&asgn?' cell-conflict':''}" style="position:relative;${bg?`background:${bg};`:''}${wk&&!bg?'background:rgba(0,0,0,0.02);':''}" draggable="${asgn?'true':'false'}" onclick="clickCell('${item.id}','${key}','${d}','${type}')" ondragstart="rosterDragStart('${item.id}','${key}','${type}',this)" ondragend="rosterDragEnd(this)" ondragover="rosterDragOver(event,this)" ondrop="rosterDrop(event,'${item.id}','${key}','${type}',this)" title="${titleText.replace(/"/g,'&quot;')}${!conf?' ⚠️ NOT CONFIRMED':''}">${asgn?`<div class="day-block" style="color:${asgn==='NEW'?'#C62828':tc}">${dispLabel}</div>`:''}${noteDot}${warnIcon}${pourIcon}</td>`;
   }).join('');
 
   // Render a row — returns '' if day mode and no assignment/note
@@ -2833,6 +2840,7 @@ function renderRoster(){
 
 
 function clickCell(itemId,dateKey,day,type){
+  rosterSelectCell(itemId, dateKey, type); // track for Ctrl+C/V
   const item=getItem(itemId,type);if(!item)return;
   if(!item.a)item.a={};
   if(!item.notes)item.notes={};
@@ -3060,6 +3068,8 @@ function updateCellExtraFields(itemId, dateKey) {
 
 function saveCell(id,key,type){
   const item=getItem(id,type);
+  // Track as selected for copy/paste
+  rosterSelectCell(id, key, type);
   // Snapshot for undo
   undoPush({id,key,type, snapshot:{
     a:   item.a?.[key],
@@ -3114,6 +3124,12 @@ function saveCell(id,key,type){
   }
 
   saveLocal();closeModal();renderRoster();
+  // Update clipboard snapshot with saved values so next paste is current
+  const _si = getItem(id,type);
+  if(_si) _rosterClipboard = {
+    a:_si.a?.[key], notes:_si.notes?.[key], wh:_si.wh?.[key],
+    cc:_si.cc?.[key], co:_si.co?.[key], confirmed:_si.confirmed?.[key], pour:_si.pour?.[key],
+  };
 }
 
 function clearCell(id,key,type){
@@ -3580,6 +3596,11 @@ function saveCO(){
   const coLaborerDays=parseInt(document.getElementById('f-co-laborer')?.value)||0;
   p.cos.push({id:uid(),num,desc,value:val,status,date:ds,code,foremanDays:coForemanDays,laborerDays:coLaborerDays});
   p.history.push({date:todate(),text:`${num} created — ${desc} (${fmt(val)} · code ${code})`,type:'co'});
+  // Auto-add cost code to project if it's new
+  if(code && !p.codes.find(c=>c.code===code)){
+    p.codes.push({code,value:val,foremanDays:coForemanDays,laborerDays:coLaborerDays});
+    p.history.push({date:todate(),text:`Cost code ${code} (${CODES_MAP[code]||code}) added from ${num}`,type:'co'});
+  }
   if(status==='Approved'){
     p.history.push({date:todate(),text:`${num} APPROVED — +${fmt(val)} added to project value`,type:'approved'});
     // approvalDate for col J = first day of the month of the selected date (or today)
@@ -4008,11 +4029,146 @@ function performUndo() {
 
 // Keyboard shortcut: Ctrl+Z / Cmd+Z
 document.addEventListener('keydown', e => {
+  const modal = document.querySelector('#modal-area .modal-backdrop');
+  if (modal) return; // don't intercept when modal is open
+
+  // Ctrl+Z — Undo
   if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
-    const modal = document.querySelector('#modal-area .modal-backdrop');
-    if (!modal) { e.preventDefault(); performUndo(); }
+    e.preventDefault(); performUndo();
+  }
+  // Ctrl+C — Copy selected roster cell
+  if ((e.ctrlKey || e.metaKey) && e.key === 'c') {
+    if (_rosterSelected) {
+      _rosterClipboard = JSON.parse(JSON.stringify(_rosterSelected));
+      toast('📋 Cell copied');
+      e.preventDefault();
+    }
+  }
+  // Ctrl+V — Paste to selected roster cell
+  if ((e.ctrlKey || e.metaKey) && e.key === 'v') {
+    if (_rosterClipboard && _rosterSelected) {
+      rosterPasteCell(_rosterSelected.id, _rosterSelected.key, _rosterSelected.type);
+      e.preventDefault();
+    } else if (_rosterClipboard) {
+      toast('Click a cell first, then Ctrl+V to paste');
+    }
   }
 });
+
+// Clipboard state
+let _rosterClipboard = null; // {a, notes, wh, cc, co, confirmed, pour}
+let _rosterSelected  = null; // {id, key, type}
+
+function rosterSelectCell(id, key, type) {
+  _rosterSelected = {id, key, type};
+}
+
+function rosterPasteCell(id, key, type) {
+  if (!_rosterClipboard) return;
+  const item = getItem(id, type);
+  if (!item) return;
+  undoPush({id, key, type, snapshot:{
+    a: item.a?.[key], notes: item.notes?.[key], wh: item.wh?.[key],
+    cc: item.cc?.[key], co: item.co?.[key], confirmed: item.confirmed?.[key], pour: item.pour?.[key],
+  }});
+  if (!item.a) item.a = {};
+  if (!item.notes) item.notes = {};
+  if (!item.wh) item.wh = {};
+  if (!item.cc) item.cc = {};
+  if (!item.co) item.co = {};
+  if (!item.confirmed) item.confirmed = {};
+  if (!item.pour) item.pour = {};
+  const c = _rosterClipboard;
+  if (c.a)         item.a[key]         = c.a;         else delete item.a[key];
+  if (c.notes)     item.notes[key]     = c.notes;     else delete item.notes[key];
+  if (c.wh)        item.wh[key]        = c.wh;        else delete item.wh[key];
+  if (c.cc)        item.cc[key]        = c.cc;        else delete item.cc[key];
+  if (c.co)        item.co[key]        = c.co;        else delete item.co[key];
+  if (c.pour)      item.pour[key]      = c.pour;      else delete item.pour[key];
+  item.confirmed[key] = c.confirmed !== undefined ? c.confirmed : true;
+  saveLocal(); renderRoster();
+  toast('📋 Pasted → ' + key);
+}
+
+// ─── ROSTER DRAG & DROP ───────────────────────────────────────────────────────
+let _dndSrc = null; // {id, key, type, data}
+
+function rosterDragStart(id, key, type, el) {
+  const item = getItem(id, type);
+  if (!item || !item.a?.[key]) return;
+  _dndSrc = {
+    id, key, type,
+    data: {
+      a: item.a[key], notes: item.notes?.[key], wh: item.wh?.[key],
+      cc: item.cc?.[key], co: item.co?.[key],
+      confirmed: item.confirmed?.[key], pour: item.pour?.[key],
+    }
+  };
+  el.classList.add('roster-cell-dragging');
+}
+
+function rosterDragEnd(el) {
+  el.classList.remove('roster-cell-dragging');
+}
+
+function rosterDragOver(e, el) {
+  if (!_dndSrc) return;
+  e.preventDefault();
+  document.querySelectorAll('.roster-cell-drag-over').forEach(x => x.classList.remove('roster-cell-drag-over'));
+  el.classList.add('roster-cell-drag-over');
+}
+
+function rosterDrop(e, id, key, type, el) {
+  e.preventDefault();
+  el.classList.remove('roster-cell-drag-over');
+  if (!_dndSrc) return;
+  const src = _dndSrc;
+  _dndSrc = null;
+
+  // Don't drop on itself
+  if (src.id === id && src.key === key) return;
+
+  const srcItem = getItem(src.id, src.type);
+  const dstItem = getItem(id, type);
+  if (!srcItem || !dstItem) return;
+
+  // Snapshot both for undo (push source first, then dest)
+  undoPush({id: src.id, key: src.key, type: src.type, snapshot:{
+    a: srcItem.a?.[src.key], notes: srcItem.notes?.[src.key], wh: srcItem.wh?.[src.key],
+    cc: srcItem.cc?.[src.key], co: srcItem.co?.[src.key],
+    confirmed: srcItem.confirmed?.[src.key], pour: srcItem.pour?.[src.key],
+  }});
+
+  // Write to destination
+  if (!dstItem.a) dstItem.a = {};
+  if (!dstItem.notes) dstItem.notes = {};
+  if (!dstItem.wh) dstItem.wh = {};
+  if (!dstItem.cc) dstItem.cc = {};
+  if (!dstItem.co) dstItem.co = {};
+  if (!dstItem.confirmed) dstItem.confirmed = {};
+  if (!dstItem.pour) dstItem.pour = {};
+  const d = src.data;
+  if (d.a)     dstItem.a[key]     = d.a;     else delete dstItem.a[key];
+  if (d.notes) dstItem.notes[key] = d.notes; else delete dstItem.notes[key];
+  if (d.wh)    dstItem.wh[key]    = d.wh;    else delete dstItem.wh[key];
+  if (d.cc)    dstItem.cc[key]    = d.cc;    else delete dstItem.cc[key];
+  if (d.co)    dstItem.co[key]    = d.co;    else delete dstItem.co[key];
+  if (d.pour)  dstItem.pour[key]  = d.pour;  else delete dstItem.pour[key];
+  dstItem.confirmed[key] = d.confirmed !== undefined ? d.confirmed : true;
+
+  // Clear source cell
+  if (!srcItem.a) srcItem.a = {};
+  delete srcItem.a[src.key];
+  delete srcItem.notes?.[src.key];
+  delete srcItem.wh?.[src.key];
+  delete srcItem.cc?.[src.key];
+  delete srcItem.co?.[src.key];
+  delete srcItem.pour?.[src.key];
+  if (srcItem.confirmed) delete srcItem.confirmed[src.key];
+
+  saveLocal(); renderRoster();
+  toast(`↔ Moved to ${id} · ${key}`);
+}
 
 // ─── GANTT ────────────────────────────────────────────────────────────────────
 const GANTT = {
@@ -4225,6 +4381,7 @@ function ganttRender() {
             <input class="gantt-name-edit" id="gantt-name-input-${task.id}" value="${escHtml(task.name)}"
               onblur="ganttSaveName('${task.id}','${pid}')" onkeydown="if(event.key==='Enter')this.blur();if(event.key==='Escape'){ganttCancelName('${task.id}');}">
             <div class="gantt-row-actions">
+              <button class="gantt-row-del" title="Assign filled days to Staff Roster" onclick="ganttAssignToRoster('${task.id}','${pid}')" style="color:var(--blue);font-size:11px;padding:2px 7px;border-radius:4px;border:none;background:var(--blue-light);cursor:pointer;font-weight:600">→ Roster</button>
               <button class="gantt-row-del" title="Delete task" onclick="ganttDeleteTask('${task.id}','${pid}')">✕</button>
             </div>
           </div>
@@ -4606,6 +4763,187 @@ function ganttSetRange() {
 /* ── util ── */
 function ganttFindTask(taskId, projId) {
   return (GANTT.tasks[projId] || []).find(t => t.id === taskId);
+}
+
+/* ── Assign Gantt task days to Staff Roster ── */
+function ganttAssignToRoster(taskId, projId) {
+  const task = ganttFindTask(taskId, projId);
+  if (!task) return;
+  const filledDays = Object.keys(task.cells || {}).filter(d => task.cells[d]).sort();
+  if (!filledDays.length) { toast('No days filled in this task row'); return; }
+
+  // Convert Gantt keys (YYYY-MM-DD) → Roster keys (YYYY-M-D, no zero-padding)
+  // Roster stores keys as calYear + '-' + (calMonth+1) + '-' + day  (no padding)
+  const toRosterKey = iso => {
+    const [y, m, d] = iso.split('-').map(Number);
+    return `${y}-${m}-${d}`;
+  };
+  const rosterDays = filledDays.map(toRosterKey);
+
+  const people = [
+    ...STAFF.map(e => ({id:e.id, name:e.name, group:e.team||'Staff', cat:'staff'})),
+    ...EXTRA.map(e => ({id:e.id, name:e.name, group:'Extra', cat:'extra'})),
+  ];
+
+  // Helper: get what a person has assigned on rosterDays
+  const getPersonStatus = (item) => {
+    const assigned = new Set();
+    rosterDays.forEach(d => { if (item.a?.[d]) assigned.add(item.a[d]); });
+    return [...assigned];
+  };
+
+  // Build person picker grouped by team — show current assignments per person
+  const buildPersonRow = (p, cat) => {
+    const item = getItem(p.id, cat);
+    const assignedProjs = item ? getPersonStatus(item) : [];
+    // Filter out OFF/Warehouse for display
+    const realProjs = assignedProjs.filter(x => x && x !== 'OFF' && x !== 'Warehouse');
+    let statusHtml = '';
+    if (realProjs.length > 0) {
+      const colors = realProjs.map(pid => {
+        const color = PROJ_COLORS[pid] || '#888';
+        return `<span style="display:inline-flex;align-items:center;gap:3px;font-size:10px;font-weight:600;padding:1px 6px;border-radius:99px;background:${color}22;color:${color};border:0.5px solid ${color}55">${pid}</span>`;
+      }).join(' ');
+      statusHtml = `<span style="margin-left:auto;display:flex;gap:3px;flex-wrap:wrap;align-items:center">${colors}</span>`;
+    } else {
+      statusHtml = `<span style="margin-left:auto;font-size:10px;color:var(--text3)">free</span>`;
+    }
+    return `<div class="person-row" id="grp-${p.id}" onclick="ganttTogglePerson('${p.id}',this)" style="gap:6px">
+      <input type="checkbox" id="gchk-${p.id}" style="width:14px;height:14px;accent-color:var(--blue);flex-shrink:0">
+      <span class="person-name">${p.name}</span>
+      ${statusHtml}
+    </div>`;
+  };
+
+  const teams = [...new Set(STAFF.map(e => e.team||'Staff'))];
+  let rows = '';
+  teams.forEach(team => {
+    const members = STAFF.filter(e => (e.team||'Staff') === team);
+    if (!members.length) return;
+    rows += `<div class="team-group">
+      <div class="team-group-hd"><span class="team-dot" style="background:${TEAM_COLORS[team]||'#888'}"></span>${team}</div>
+      ${members.map(p => buildPersonRow(p, 'staff')).join('')}
+    </div>`;
+  });
+  if (EXTRA.length) {
+    rows += `<div class="team-group">
+      <div class="team-group-hd">Extra workers</div>
+      ${EXTRA.map(p => buildPersonRow(p, 'extra')).join('')}
+    </div>`;
+  }
+
+  const dayList = filledDays.length <= 5
+    ? filledDays.join(', ')
+    : filledDays.slice(0,3).join(', ') + ` … +${filledDays.length-3} more`;
+
+  showModal(`<div class="modal-title">Assign to Staff Roster</div>
+    <div style="font-size:12px;color:var(--text2);margin-bottom:8px">
+      <strong>${task.name}</strong> · ${filledDays.length} day${filledDays.length!==1?'s':''}<br>
+      <span style="font-size:11px;color:var(--text3)">${dayList}</span>
+    </div>
+    <div style="display:flex;gap:12px;font-size:10px;color:var(--text3);margin-bottom:8px">
+      <span>Colored badge = already scheduled · <span style="color:var(--green)">"free"</span> = available</span>
+    </div>
+    <input class="picker-search" placeholder="Search person..." oninput="ganttFilterPeople(this.value)" style="margin-bottom:8px">
+    <div class="picker-box" id="gantt-person-picker" style="max-height:300px;overflow-y:auto">${rows}</div>
+    <div class="sel-summary" style="margin-top:8px">
+      <span style="font-size:12px;color:var(--text2)">Selected: <span id="gantt-sel-count" style="font-weight:600;color:var(--blue)">0</span></span>
+    </div>
+    <div class="form-actions">
+      <button class="btn" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-primary" onclick="ganttDoAssign('${taskId}','${projId}')">Assign to roster</button>
+    </div>`, true);
+
+  window._ganttAssignDays    = rosterDays;   // roster-format keys
+  window._ganttAssignPeople  = people;
+  window._ganttAssignSelected = new Set();
+}
+
+function ganttFilterPeople(q) {
+  document.querySelectorAll('#gantt-person-picker .person-row').forEach(row => {
+    row.style.display = row.textContent.toLowerCase().includes(q.toLowerCase()) ? '' : 'none';
+  });
+}
+
+function ganttTogglePerson(id, row) {
+  const chk = document.getElementById('gchk-' + id);
+  if (!chk) return;
+  const sel = window._ganttAssignSelected;
+  if (sel.has(id)) { sel.delete(id); row.classList.remove('checked'); chk.checked = false; }
+  else             { sel.add(id);    row.classList.add('checked');    chk.checked = true; }
+  document.getElementById('gantt-sel-count').textContent = sel.size;
+}
+
+function ganttDoAssign(taskId, projId) {
+  const sel    = window._ganttAssignSelected;
+  const days   = window._ganttAssignDays || [];
+  const people = window._ganttAssignPeople || [];
+  if (!sel || !sel.size) { toast('Select at least one person'); return; }
+  if (!days.length)      { toast('No days to assign'); return; }
+
+  // Check conflicts: person already has ANY different project on these days
+  const conflicts = [];
+  sel.forEach(pid => {
+    const person = people.find(p => p.id === pid);
+    const item   = getItem(pid, 'staff') || getItem(pid, 'extra');
+    if (!item) return;
+    days.forEach(d => {
+      const existing = item.a?.[d];
+      if (existing && existing !== projId) {
+        const hasNote = !!(item.notes?.[d]);
+        conflicts.push({ name: person?.name || pid, day: d, proj: existing, hasNote });
+      }
+    });
+  });
+
+  if (conflicts.length > 0) {
+    // Show unique people+days (cap at 5)
+    const shown = conflicts.slice(0, 5);
+    const cList = shown.map(c =>
+      `<li style="margin-bottom:4px"><strong>${c.name}</strong> — ${c.day} already has <em>${c.proj}</em>${c.hasNote?' <span style="color:var(--amber)">+ notes</span>':''}</li>`
+    ).join('') + (conflicts.length > 5 ? `<li style="color:var(--text3)">…and ${conflicts.length-5} more</li>` : '');
+
+    showModal(`<div class="modal-title">⚠️ Scheduling conflict</div>
+      <div style="font-size:13px;color:var(--text);margin-bottom:12px">
+        Some people already have a project assigned on these days:
+      </div>
+      <ul style="font-size:12px;color:var(--text2);margin:0 0 12px 16px;line-height:1.8">${cList}</ul>
+      <div style="font-size:12px;padding:8px 10px;background:var(--amber-light);border-radius:var(--radius);color:var(--amber)">
+        Continuing will overwrite their existing assignments.
+      </div>
+      <div class="form-actions">
+        <button class="btn" onclick="closeModal()">Cancel</button>
+        <button class="btn btn-primary" onclick="ganttForceAssign('${taskId}','${projId}')">Continue anyway</button>
+      </div>`, true);
+    return;
+  }
+  ganttForceAssign(taskId, projId);
+}
+
+function ganttForceAssign(taskId, projId) {
+  const sel    = window._ganttAssignSelected;
+  const days   = window._ganttAssignDays || [];
+  const people = window._ganttAssignPeople || [];
+  if (!sel || !sel.size) { toast('No people selected'); return; }
+  let count = 0;
+  sel.forEach(pid => {
+    const pInfo = people.find(p => p.id === pid);
+    const cat   = pInfo?.cat === 'extra' ? 'extra' : 'staff';
+    const item  = getItem(pid, cat);
+    if (!item) { console.warn('Could not find item for', pid, cat); return; }
+    if (!item.a)         item.a         = {};
+    if (!item.confirmed) item.confirmed = {};
+    days.forEach(d => {
+      item.a[d]         = projId;
+      item.confirmed[d] = true;
+    });
+    count++;
+  });
+  if (count === 0) { toast('Could not find selected people in roster'); return; }
+  closeModal();
+  saveLocal();
+  renderRoster();
+  toast(`✓ Assigned ${projId} to ${count} person${count!==1?'s':''} · ${days.length} day${days.length!==1?'s':''}`);
 }
 function ganttTaskIndex(taskId, projId) {
   return (GANTT.tasks[projId] || []).findIndex(t => t.id === taskId);
