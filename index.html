@@ -303,37 +303,48 @@
   @media print {
     * { -webkit-print-color-adjust: exact !important; print-color-adjust: exact !important; }
     body { background: white !important; margin: 0; }
-    .sidebar, .page-header, .roster-controls, .filter-tabs, .legend,
-    #modal-area, .toast, #view-dashboard, #view-projects,
-    .btn, button:not(.no-hide) { display: none !important; }
-    .app, .main, #view-roster { display: block !important; width: 100% !important;
-      height: auto !important; overflow: visible !important; padding: 0 !important; }
-    .roster-wrap { overflow: visible !important; max-height: none !important; }
+
+    /* Hide EVERYTHING except the print header and the roster table */
+    body > * { display: none !important; }
+    #app-loading { display: none !important; }
+    #save-indicator { display: none !important; }
+    #mobile-nav { display: none !important; }
+
+    /* Show only the daily schedule content */
     #pdf-print-header { display: block !important; margin-bottom: 12px; }
+    .roster-wrap { display: block !important; overflow: visible !important; max-height: none !important; }
+
+    /* Re-show only what we need */
+    .app { display: block !important; }
+    .main { display: block !important; margin-left: 0 !important; padding: 0 !important; width: 100% !important; }
+    #view-roster { display: block !important; width: 100% !important; height: auto !important; overflow: visible !important; padding: 0 !important; }
+
+    /* Hide everything inside the roster view EXCEPT the table and header */
+    .page-header, .roster-controls, .roster-table-meta,
+    .filter-tabs, .legend, #roster-summary,
+    .sidebar, #modal-area, .toast,
+    #view-dashboard, #view-projects,
+    .btn, button { display: none !important; }
 
     /* Portrait A4 */
     @page { margin: 10mm; size: A4 portrait; }
 
     /* Table layout for portrait */
-    .rt { font-size: 10px !important; width: 100% !important; border-collapse: collapse !important; table-layout: fixed; }
+    .rt { font-size: 10px !important; width: 100% !important; border-collapse: collapse !important; table-layout: fixed; display: table !important; }
     .rt th, .rt td { padding: 5px 6px !important; border: 0.5px solid #ddd !important; word-wrap: break-word; overflow-wrap: break-word; }
     .rt td.ic, .rt td.day-note { white-space: normal !important; overflow: visible !important;
       text-overflow: unset !important; max-width: none !important; }
 
     /* Column widths for portrait day view */
-    .rt th:nth-child(1), .rt td:nth-child(1) { width: 15% !important; }  /* Nombre */
-    .rt th:nth-child(2), .rt td:nth-child(2) { width: 22% !important; }  /* Trabajo */
-    .rt th:nth-child(3), .rt td:nth-child(3) { width: 40% !important; }  /* Detalles */
-    .rt th:nth-child(4), .rt td:nth-child(4) { width: 23% !important; }  /* Warehouse */
+    .rt th:nth-child(1), .rt td:nth-child(1) { width: 15% !important; }
+    .rt th:nth-child(2), .rt td:nth-child(2) { width: 22% !important; }
+    .rt th:nth-child(3), .rt td:nth-child(3) { width: 40% !important; }
+    .rt th:nth-child(4), .rt td:nth-child(4) { width: 23% !important; }
 
     .trs td { font-size: 9px !important; background: #f0f0f0 !important; font-weight: 700 !important; }
     .badge { font-size: 8px !important; padding: 1px 4px !important; }
-    /* Section header spans full width */
     .trs td[colspan] { padding: 4px 6px !important; }
-
-    /* Print header */
-    #pdf-print-header { font-size: 11px; }
-    /* Hide placeholder text and edit hints in PDF */
+    #pdf-print-header { font-size: 11px; display: block !important; }
     .no-print { display: none !important; }
   }
   #pdf-print-header { display: none; }
