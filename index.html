@@ -1905,17 +1905,14 @@ function saveOrder(){
 function renderAnalytics(){
   const hist = DB.historical;
 
-  // Use year totals computed directly from raw sheet rows (col J date, col I value)
-  // Plus approved CO totals by their approval year
-  // Falls back to counting from projects array if sync hasn't happened yet
-  // Use the Outlook summary total requested by the user (cells E39:G39)
-  const appTot = 704077.61;
-
-  // For the project count badge, still use project list
+  // Calculate 2026 total the same way as the Overview card:
+  // projects whose col J year is 2026 (p.year===2026) or id starts with '26-'
+  // tv(p) = base value + approved COs
   const proj2026 = DB.projects.filter(p => {
-    const yr = p.year || parseInt('20'+p.id.slice(0,2));
+    const yr = p.year || parseInt('20' + p.id.slice(0, 2));
     return yr === 2026;
   });
+  const appTot = proj2026.reduce((a, p) => a + tv(p), 0);
   const appCount = proj2026.length;
   document.getElementById('comp-metrics').innerHTML=`${hist.map(h=>`<div class="metric"><div class="metric-label">Total ${h.year}</div><div class="metric-value" style="font-size:18px">${fmtS(h.total)}</div></div>`).join('')}
     <div class="metric"><div class="metric-label">2026 won / approved</div><div class="metric-value" style="font-size:18px">${fmtS(appTot)}</div><div class="metric-sub">${appCount} project${appCount!==1?'s':''}</div></div>`;
@@ -2218,10 +2215,12 @@ function approveCO(pid,cid){
   if(sheetCO) sheetCO.status='Approved';
   // Write to sheet
   sheetWrite('updateCO',{projectId:pid,pm:p.pm||'',pmEmail:p.pmEmail||'',num:co.num,newStatus:'Approved',approvalDate:co.approvalDate});
-  const yr=new Date().getFullYear(),mo=new Date().getMonth()+1;
+  // col J = first day of the current month when approved
+  const _now=new Date();
+  const _apprJ=`${_now.getMonth()+1}/1/${_now.getFullYear()}`;
   sheetWrite('addApprovedCO',{
     projectId:pid, projectName:p.name||co.projName||'', coNum:co.num, desc:co.desc,
-    code:co.code||'', value:co.value, approvalDate:`${mo}/1/${yr}`,
+    code:co.code||'', value:co.value, approvalDate:_apprJ,
   });
   saveLocal();
   toast(`✓ ${co.num} approved — value added to 2026 total`);
@@ -3543,7 +3542,10 @@ function saveCO(){
   p.history.push({date:todate(),text:`${num} created — ${desc} (${fmt(val)} · code ${code})`,type:'co'});
   if(status==='Approved'){
     p.history.push({date:todate(),text:`${num} APPROVED — +${fmt(val)} added to project value`,type:'approved'});
-    sheetWrite('addApprovedCO',{projectId:pid,projectName:p.name,coNum:num,desc,code,value:val,approvalDate:ds});
+    // approvalDate for col J = first day of the month of the selected date (or today)
+    const _coApprD = dr ? new Date(dr) : new Date();
+    const _coApprJ = `${_coApprD.getMonth()+1}/1/${_coApprD.getFullYear()}`;
+    sheetWrite('addApprovedCO',{projectId:pid,projectName:p.name,coNum:num,desc,code,value:val,approvalDate:_coApprJ});
   }
   // Send pm + pmEmail so CO sheet cols A=Email B=Name are filled correctly
   sheetWrite('addCO',{projectId:pid,projectName:p.name,pm:p.pm||'',pmEmail:p.pmEmail||'',num,desc,code,value:val,status,date:ds,foremanDays:coForemanDays,laborerDays:coLaborerDays});
