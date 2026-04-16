@@ -3117,7 +3117,7 @@ function updateCellExtraFields(itemId, dateKey) {
   el.innerHTML = html;
 }
 
-async function sendRosterEmail(itemId, dateKey) {
+function sendRosterEmail(itemId, dateKey) {
   const to  = document.getElementById('cp-email-to')?.value||'';
   const msg = (document.getElementById('cp-email-msg')?.value||'').trim();
   if (!to)  { toast('Select a recipient first'); return; }
@@ -3139,25 +3139,43 @@ async function sendRosterEmail(itemId, dateKey) {
   const btn = document.getElementById('cp-email-send-btn');
   if (btn) { btn.textContent = '⏳'; btn.disabled = true; }
 
-  try {
-    // Use fetch POST — Apps Script doPost handles this with no CORS issues in no-cors mode
-    const payload = JSON.stringify({ action: 'sendEmail', to, subject, body });
-    await fetch(APPS_SCRIPT_URL, {
-      method: 'POST',
-      mode: 'no-cors',
-      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
-      body: payload
-    });
-    // no-cors means we can't read the response, but if it didn't throw it was sent
-    toast('✉️ Email sent to ' + to);
-    if (btn) { btn.textContent = '✉️ Sent!'; btn.style.background='#3B6D11'; btn.disabled=false; }
-    if (document.getElementById('cp-email-msg')) document.getElementById('cp-email-msg').value='';
-    setTimeout(() => { if(btn){ btn.textContent='✉️ Send'; btn.style.background='#185FA5'; btn.disabled=false; } }, 3000);
-  } catch(e) {
-    console.error('Email send error:', e);
-    toast('✗ Could not send email — check connection', {error:true});
-    if (btn) { btn.textContent = '✉️ Send'; btn.style.background='#185FA5'; btn.disabled=false; }
-  }
+  // JSONP call with real callback — same pattern as sheetWrite but reads the result
+  if (!APPS_SCRIPT_URL) { toast('No Apps Script URL configured', {error:true}); if(btn){btn.textContent='✉️ Send';btn.disabled=false;} return; }
+  const _cbName = '_zlcEmail_' + Date.now();
+  const _payload = JSON.stringify({ action: 'sendEmail', to, subject, body });
+  const _encoded = encodeURIComponent(_payload);
+  const _url = APPS_SCRIPT_URL + '?data=' + _encoded + '&callback=' + _cbName;
+  let _done = false;
+  const _cleanup = () => { _done=true; delete window[_cbName]; const s=document.getElementById('_zlcEmailScript'); if(s) s.remove(); };
+
+  window[_cbName] = (result) => {
+    _cleanup();
+    if (result && result.ok) {
+      toast('✉️ Email sent to ' + to);
+      if (btn) { btn.textContent='✉️ Sent!'; btn.style.background='#3B6D11'; btn.disabled=false; }
+      if (document.getElementById('cp-email-msg')) document.getElementById('cp-email-msg').value='';
+      setTimeout(() => { if(btn){ btn.textContent='✉️ Send'; btn.style.background='#185FA5'; btn.disabled=false; }}, 3000);
+    } else {
+      const err = result?.error || 'Unknown error';
+      console.error('Email failed:', err);
+      toast('✗ Email failed: ' + String(err).slice(0,80), {error:true});
+      if (btn) { btn.textContent='✉️ Send'; btn.style.background='#185FA5'; btn.disabled=false; }
+    }
+  };
+
+  const _script = document.createElement('script');
+  _script.id = '_zlcEmailScript';
+  const _old = document.getElementById('_zlcEmailScript'); if(_old) _old.remove();
+  _script.src = _url;
+  _script.onerror = () => {
+    _cleanup();
+    toast('✗ Could not reach Apps Script', {error:true});
+    if (btn) { btn.textContent='✉️ Send'; btn.style.background='#185FA5'; btn.disabled=false; }
+  };
+  document.head.appendChild(_script);
+
+  // Timeout after 15s
+  setTimeout(() => { if(!_done){ _cleanup(); toast('✗ Email timed out', {error:true}); if(btn){btn.textContent='✉️ Send';btn.style.background='#185FA5';btn.disabled=false;} } }, 15000);
 }
 
 function saveCell(id,key,type){
