@@ -431,6 +431,7 @@
     <button class="nav-item active" onclick="goTab('dashboard',this)">
       <svg class="nav-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1" y="1" width="6" height="6" rx="1"/><rect x="9" y="1" width="6" height="6" rx="1"/><rect x="1" y="9" width="6" height="6" rx="1"/><rect x="9" y="9" width="6" height="6" rx="1"/></svg>
       Dashboard
+      <span id="co-pending-badge" style="display:none;margin-left:auto;font-size:9px;font-weight:700;padding:1px 5px;border-radius:99px;background:#E24B4A;color:#fff;flex-shrink:0"></span>
     </button>
     <button class="nav-item" onclick="goTab('projects',this)">
       <svg class="nav-icon" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 4h12M2 8h8M2 12h10"/></svg>
@@ -442,7 +443,16 @@
     </button>
   </div>
   <div style="flex:1"></div>
-  <div style="padding:12px 16px;border-top:0.5px solid var(--border)">
+  <!-- Global search -->
+  <div style="padding:10px 12px 0">
+    <div style="position:relative">
+      <input id="global-search-input" type="text" placeholder="🔍 Search people, projects…"
+        oninput="globalSearch(this.value)"
+        style="width:100%;font-size:12px;padding:6px 10px;border-radius:var(--radius);border:0.5px solid var(--border2);background:var(--bg2);color:var(--text);font-family:inherit">
+      <div id="global-search-results" style="display:none;position:absolute;bottom:calc(100% + 4px);left:0;right:0;background:var(--bg);border:0.5px solid var(--border2);border-radius:var(--radius-lg);box-shadow:0 4px 20px rgba(0,0,0,.12);max-height:320px;overflow-y:auto;z-index:500"></div>
+    </div>
+  </div>
+  <div style="padding:12px 16px;border-top:0.5px solid var(--border);margin-top:10px">
     <button id="sync-badge" onclick="syncFromSheets()" style="width:100%;font-size:11px;font-weight:600;padding:7px 12px;border-radius:var(--radius);border:0.5px solid var(--border2);cursor:pointer;transition:all .15s;background:#f0eeea;color:#9e9c97">↻ Sync from Sheets</button>
     <button onclick="forceSaveToCloud()" title="Save all data to cloud so any device can access it" style="width:100%;margin-top:6px;font-size:11px;font-weight:600;padding:6px 12px;border-radius:var(--radius);border:0.5px solid #185FA5;cursor:pointer;background:#E8F0FE;color:#185FA5">☁ Save to cloud</button>
     <button onclick="loadFromCloud()" style="width:100%;margin-top:4px;font-size:11px;font-weight:600;padding:6px 12px;border-radius:var(--radius);border:0.5px solid var(--border2);cursor:pointer;background:var(--bg3);color:var(--text2)">↻ Load from cloud</button>
@@ -588,6 +598,7 @@
       <button class="btn btn-ghost btn-sm" onclick="openModal('emp')">+ Employee</button>
       <button class="btn btn-ghost btn-sm" onclick="openModal('extraW')">+ Extra worker</button>
       <button class="btn btn-primary btn-sm" onclick="openModal('assign')">Assign project</button>
+      <button class="btn btn-ghost btn-sm" onclick="showRosterHistory()" title="View roster change history this session">📋 History</button>
     </div>
   </div>
   <div class="roster-controls toolbar">
@@ -1113,9 +1124,9 @@ function extractYear(val) {
 // ─── SYNC FROM SHEETS ─────────────────────────────────────────────────────────
 let syncStatus = 'idle'; // idle | loading | ok | error
 
-async function syncFromSheets() {
+async function syncFromSheets(silent=false) {
   syncStatus = 'loading';
-  updateSyncBadge();
+  if(!silent) updateSyncBadge();
   try {
     // Fetch all 4 sheets in parallel
     const [projData, coData, rfiData, subData] = await Promise.all([
@@ -1222,7 +1233,7 @@ async function syncFromSheets() {
 
     syncStatus = 'ok';
     updateSyncBadge();
-    toast(`Loaded ${projects.length} projects from ZLC Outlook`);
+    if(!silent) toast(`Loaded ${projects.length} projects from ZLC Outlook`);
 
     // Re-render active view
     renderAnalytics();
@@ -1566,6 +1577,7 @@ function renderOverview(){
     if(curVal)spSel.value=curVal;
   }
   renderOpenItems();
+  updateCOBadge();
 
   document.getElementById('dash-tbody').innerHTML=active.map(p=>`
     <tr><td><strong>${p.id}</strong></td><td>${p.name}</td><td>${p.client}</td>
@@ -2115,7 +2127,7 @@ function renderSub(p,tab){
     p.codes.forEach(c=>{
       const extra=byCode[c.code]||0,tot=c.value+extra,pct=base>0?Math.round((c.value/base)*100):0,col=CODE_COLORS[c.code]||'#888';
       // Include CO man-days for this cost code
-      const coCOs=(p.cos||[]).filter(co=>co.code===c.code&&((co.foremanDays||0)+(co.laborerDays||0)>0));
+      const coCOs=(p.cos||[]).filter(co=>co.code===c.code&&/approv/i.test(co.status||'')&&((co.foremanDays||0)+(co.laborerDays||0)>0));
       const coFD=coCOs.reduce((a,co)=>a+(co.foremanDays||0),0);
       const coLD=coCOs.reduce((a,co)=>a+(co.laborerDays||0),0);
       const fD=(c.foremanDays||0)+coFD, lD=(c.laborerDays||0)+coLD, totD=fD+lD;
@@ -2894,7 +2906,7 @@ function clickCell(itemId,dateKey,day,type){
       const ccOpts=`<option value="">— Select cost code —</option>`
         +proj.codes.map(c=>{
           // Include CO days for this cost code
-          const coCOs2=((DB.projects.find(x=>x.id===pid)||{}).cos||[]).filter(co=>co.code===c.code&&((co.foremanDays||0)+(co.laborerDays||0)>0));
+          const coCOs2=((DB.projects.find(x=>x.id===pid)||{}).cos||[]).filter(co=>co.code===c.code&&/approv/i.test(co.status||'')&&((co.foremanDays||0)+(co.laborerDays||0)>0));
           const coFD2=coCOs2.reduce((a,co)=>a+(co.foremanDays||0),0);
           const coLD2=coCOs2.reduce((a,co)=>a+(co.laborerDays||0),0);
           const fD=(c.foremanDays||0)+coFD2,lD=(c.laborerDays||0)+coLD2,totD=fD+lD;
@@ -3085,6 +3097,7 @@ function saveCell(id,key,type){
   const item=getItem(id,type);
   // Track as selected for copy/paste
   rosterSelectCell(id, key, type);
+  const _snap_a = item.a?.[key]; // capture for history
   // Snapshot for undo
   undoPush({id,key,type, snapshot:{
     a:   item.a?.[key],
@@ -3138,10 +3151,12 @@ function saveCell(id,key,type){
     });
   }
 
+  // Log change to session history
+  const _newItem = getItem(id,type);
+  rosterHistoryPush(id, key, _snap_a, _newItem?.a?.[key]);
   saveLocal();closeModal();renderRoster();
   // Update clipboard snapshot with saved values so next paste is current
-  const _si = getItem(id,type);
-  if(_si) _rosterClipboard = {
+  if(_newItem) _rosterClipboard = {
     a:_si.a?.[key], notes:_si.notes?.[key], wh:_si.wh?.[key],
     cc:_si.cc?.[key], co:_si.co?.[key], confirmed:_si.confirmed?.[key], pour:_si.pour?.[key],
   };
@@ -3149,6 +3164,7 @@ function saveCell(id,key,type){
 
 function clearCell(id,key,type){
   const item=getItem(id,type);
+  const _clearOld = item.a?.[key];
   undoPush({id,key,type, snapshot:{
     a:   item.a?.[key],
     notes: item.notes?.[key],
@@ -3158,6 +3174,7 @@ function clearCell(id,key,type){
     confirmed: item.confirmed?.[key],
     pour: item.pour?.[key],
   }});
+  rosterHistoryPush(id, key, _clearOld, '(cleared)');
   if(item.a)         delete item.a[key];
   if(item.notes)     delete item.notes[key];
   if(item.wh)        delete item.wh[key];
@@ -3939,8 +3956,15 @@ async function _doCloudSave(rosterData){
   }catch(e){
     console.error('Cloud save failed:',e);
     setCloudStatus('✗ '+String(e).slice(0,50));
-    showSaveIndicator('error', '✗ Save failed');
-    toast('✗ Save failed — check connection', {error:true});
+    showSaveIndicator('error', '✗ Not saved — retry in 30s');
+    toast('✗ Roster not saved — retrying in 30s', {error:true});
+    // Auto-retry once after 30 seconds
+    setTimeout(() => {
+      if (!_cloudSaveInProgress) {
+        const rd = buildRosterData();
+        _doCloudSave(rd);
+      }
+    }, 30000);
   }finally{_cloudSaveInProgress=false;}
 }
 
@@ -4035,8 +4059,8 @@ function getDaysBudgetSummary(projId) {
       foremanDays: c.foremanDays||0, laborerDays: c.laborerDays||0,
     };
   });
-  // Add CO man-days on top of base code budgets
-  (proj.cos||[]).forEach(co=>{
+  // Add CO man-days — only Approved COs count toward budget
+  (proj.cos||[]).filter(co=>/approv/i.test(co.status||'')).forEach(co=>{
     if((co.foremanDays||0)+(co.laborerDays||0)>0 && co.code){
       if(!codeMap[co.code]) codeMap[co.code]={code:co.code,name:CODES_MAP[co.code]||co.code,foremanDays:0,laborerDays:0};
       codeMap[co.code].foremanDays += (co.foremanDays||0);
@@ -4094,17 +4118,40 @@ function saveLocal() {
   } catch(e) { console.warn('saveLocal error:', e); }
 }
 
-// Debounced Gantt save — called after any gantt task/cell change
+// Debounced Gantt save — with status indicator in gantt toolbar
 let _ganttSaveTimer = null;
 function ganttSaveToCloud() {
   if (!APPS_SCRIPT_URL) return;
   clearTimeout(_ganttSaveTimer);
+  setGanttSaveStatus('pending');
   _ganttSaveTimer = setTimeout(async () => {
+    setGanttSaveStatus('saving');
     try {
       await jsonpSave('gantt_data', GANTT.tasks);
-      console.log('Gantt saved to cloud');
-    } catch(e) { console.warn('Gantt save error:', e); }
+      setGanttSaveStatus('saved');
+    } catch(e) {
+      console.warn('Gantt save error:', e);
+      setGanttSaveStatus('error');
+      toast('⚠️ Gantt not saved — check connection', {error:true});
+    }
   }, 2000);
+}
+
+function setGanttSaveStatus(state) {
+  const el = document.getElementById('gantt-save-status');
+  if (!el) return;
+  const map = {
+    pending: ['⏳ Unsaved changes', '#854F0B', '#FAEEDA'],
+    saving:  ['⏳ Saving…',         '#185FA5', '#E6F1FB'],
+    saved:   ['✓ Saved',            '#3B6D11', '#EAF3DE'],
+    error:   ['✗ Save failed',      '#791F1F', '#FCEBEB'],
+  };
+  const [txt, color, bg] = map[state] || ['', '', ''];
+  el.textContent = txt;
+  el.style.color = color;
+  el.style.background = bg;
+  el.style.display = txt ? 'inline-block' : 'none';
+  if (state === 'saved') setTimeout(() => { if (el.textContent === '✓ Saved') el.style.display = 'none'; }, 3000);
 }
 
 // Cloud save queue — batches changes and sends automatically
@@ -4151,6 +4198,11 @@ renderAnalytics();
 renderProjTable();
 syncFromSheets();
 
+// Auto-sync from Sheets every 5 minutes in background
+setInterval(() => {
+  syncFromSheets(true); // true = silent mode
+}, 5 * 60 * 1000);
+
 // Show loading screen while cloud data loads
 (async () => {
   const loadEl = document.getElementById('app-loading');
@@ -4170,6 +4222,126 @@ syncFromSheets();
 })();
 
 // Corrected build: removed duplicate CO filter functions and added config fallback support.
+
+// ─── ROSTER CHANGE HISTORY ───────────────────────────────────────────────────
+const _rosterHistory = []; // [{ts, who, key, from, to}]
+const ROSTER_HISTORY_LIMIT = 100;
+
+function rosterHistoryPush(id, key, fromVal, toVal) {
+  const item = getItem(id,'staff')||getItem(id,'extra')||getItem(id,'equip')||getItem(id,'rental');
+  const name = item?.name || id;
+  _rosterHistory.push({
+    ts: new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'}),
+    name, key,
+    from: fromVal || '(empty)',
+    to:   toVal   || '(empty)',
+  });
+  if (_rosterHistory.length > ROSTER_HISTORY_LIMIT) _rosterHistory.shift();
+}
+
+function showRosterHistory() {
+  if (!_rosterHistory.length) { toast('No roster changes this session'); return; }
+  const rows = [..._rosterHistory].reverse().slice(0,30).map(h =>
+    `<tr style="font-size:11px">
+      <td style="padding:5px 8px;color:var(--text3);white-space:nowrap">${h.ts}</td>
+      <td style="padding:5px 8px;font-weight:600">${h.name}</td>
+      <td style="padding:5px 8px;color:var(--text2)">${h.key}</td>
+      <td style="padding:5px 8px;color:var(--red)">${String(h.from).slice(0,20)}</td>
+      <td style="padding:5px 8px;color:var(--green)">${String(h.to).slice(0,20)}</td>
+    </tr>`).join('');
+  showModal(`<div class="modal-title">Roster change history (this session)</div>
+    <div style="font-size:11px;color:var(--text3);margin-bottom:10px">Last ${Math.min(_rosterHistory.length,30)} changes</div>
+    <div class="tbl-wrap" style="max-height:400px;overflow-y:auto">
+      <table style="width:100%;border-collapse:collapse">
+        <thead><tr style="font-size:10px;color:var(--text2)">
+          <th style="padding:5px 8px;text-align:left">Time</th>
+          <th style="padding:5px 8px;text-align:left">Person</th>
+          <th style="padding:5px 8px;text-align:left">Date</th>
+          <th style="padding:5px 8px;text-align:left">From</th>
+          <th style="padding:5px 8px;text-align:left">To</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>
+    <div class="form-actions"><button class="btn btn-primary" onclick="closeModal()">Close</button></div>`, true);
+}
+
+// ─── GLOBAL SEARCH ───────────────────────────────────────────────────────────
+function globalSearch(q) {
+  const box = document.getElementById('global-search-results');
+  if (!box) return;
+  q = q.trim().toLowerCase();
+  if (!q) { box.style.display = 'none'; return; }
+
+  const results = [];
+
+  // Search projects
+  DB.projects.forEach(p => {
+    if (p.id.toLowerCase().includes(q) || p.name.toLowerCase().includes(q) || (p.client||'').toLowerCase().includes(q)) {
+      results.push({ type: 'project', label: `${p.id} — ${p.name}`, sub: p.client||'', action: `goTab('projects',document.querySelectorAll('.nav-item')[1]);selProject('${p.id}')` });
+    }
+  });
+
+  // Search people in roster
+  const today = `${new Date().getFullYear()}-${new Date().getMonth()+1}-${new Date().getDate()}`;
+  [...STAFF, ...EXTRA].forEach(e => {
+    if (e.name.toLowerCase().includes(q)) {
+      const assigned = Object.entries(e.a||{}).filter(([k,v])=>v&&v!=='OFF').sort(([a],[b])=>b.localeCompare(a));
+      const recent = assigned.slice(0,3).map(([k,v])=>`${k}: ${v}`).join(', ');
+      results.push({ type: 'person', label: e.name, sub: recent || 'No recent assignments', action: `goTab('roster',document.querySelectorAll('.nav-item')[2]);` });
+    }
+  });
+
+  // Search COs
+  DB.projects.forEach(p => {
+    (p.cos||[]).forEach(co => {
+      if ((co.num||'').toLowerCase().includes(q) || (co.desc||'').toLowerCase().includes(q)) {
+        results.push({ type: 'co', label: `${co.num} — ${co.desc}`, sub: `${p.id} · ${co.status} · ${fmt(co.value)}`, action: `goTab('projects',document.querySelectorAll('.nav-item')[1]);selProject('${p.id}')` });
+      }
+    });
+  });
+
+  if (!results.length) {
+    box.innerHTML = `<div style="padding:12px;font-size:12px;color:var(--text3);text-align:center">No results for "${q}"</div>`;
+    box.style.display = 'block';
+    return;
+  }
+
+  const icons = { project: '📋', person: '👤', co: '📝' };
+  box.innerHTML = results.slice(0,10).map(r => `
+    <div onclick="${r.action};document.getElementById('global-search-input').value='';document.getElementById('global-search-results').style.display='none'"
+      style="display:flex;align-items:center;gap:8px;padding:8px 12px;cursor:pointer;border-bottom:0.5px solid var(--border)"
+      onmouseenter="this.style.background='var(--bg2)'" onmouseleave="this.style.background=''">
+      <span style="font-size:14px;flex-shrink:0">${icons[r.type]}</span>
+      <div>
+        <div style="font-size:12px;font-weight:600;color:var(--text)">${r.label}</div>
+        <div style="font-size:10px;color:var(--text3)">${r.sub}</div>
+      </div>
+    </div>`).join('');
+  box.style.display = 'block';
+}
+
+// Close search on outside click
+document.addEventListener('click', e => {
+  const box = document.getElementById('global-search-results');
+  const inp = document.getElementById('global-search-input');
+  if (box && inp && !box.contains(e.target) && e.target !== inp) {
+    box.style.display = 'none';
+  }
+});
+
+// ─── CO PENDING BADGE ────────────────────────────────────────────────────────
+function updateCOBadge() {
+  const badge = document.getElementById('co-pending-badge');
+  if (!badge) return;
+  const pendCount = DB.projects.flatMap(p => p.cos||[]).filter(c => /pend/i.test(c.status||'')).length;
+  if (pendCount > 0) {
+    badge.textContent = pendCount;
+    badge.style.display = 'inline-block';
+  } else {
+    badge.style.display = 'none';
+  }
+}
 
 // ─── UNDO ──────────────────────────────────────────────────────────────────────
 const _undoStack = [];
@@ -4528,6 +4700,7 @@ function ganttRender() {
         <span style="font-size:11px;color:var(--text3)">→</span>
         <input type="date" id="gantt-end" value="${GANTT.rangeEnd}" onchange="ganttSetRange()">
         <button class="btn btn-sm" onclick="ganttDownloadPDF()" style="background:var(--red-light);color:var(--red);border-color:var(--red-mid);white-space:nowrap">⬇ PDF</button>
+        <span id="gantt-save-status" style="display:none;font-size:10px;font-weight:600;padding:3px 9px;border-radius:99px;transition:all .2s"></span>
       </div>
     </div>
     <div class="gantt-wrap">
