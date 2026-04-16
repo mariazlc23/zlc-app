@@ -458,7 +458,7 @@
     <button onclick="loadFromCloud()" style="width:100%;margin-top:4px;font-size:11px;font-weight:600;padding:6px 12px;border-radius:var(--radius);border:0.5px solid var(--border2);cursor:pointer;background:var(--bg3);color:var(--text2)">↻ Load from cloud</button>
     <div id="cloud-status" style="font-size:10px;color:var(--text3);text-align:center;margin-top:4px"></div>
     <button onclick="testWrite()" id="debug-test-btn" style="display:none;width:100%;margin-top:6px;font-size:11px;font-weight:600;padding:6px 12px;border-radius:var(--radius);border:0.5px solid var(--border2);cursor:pointer;background:#EAF3DE;color:#27500A">Test Sheet write</button>
-    <div id="write-log" style="font-size:10px;color:var(--text3);margin-top:6px;word-break:break-all;line-height:1.4"></div>
+    <div id="write-log" style="display:none;font-size:10px;color:var(--text3);margin-top:6px;word-break:break-all;line-height:1.4;padding:4px 6px;background:var(--bg3);border-radius:4px"></div>
     <div style="font-size:10px;color:var(--text3);text-align:center;margin-top:6px">ZLC Project Manager v1.1</div>
   </div>
 </div>
@@ -817,12 +817,15 @@ function sheetWrite(action, payload) {
   const body    = JSON.stringify({ action, ...payload });
   const encoded = encodeURIComponent(body);
   const url     = APPS_SCRIPT_URL + '?data=' + encoded + '&callback=' + cbName;
+  console.log('sheetWrite sending:', action, payload);
+  if (log) { log.style.display='block'; log.textContent = '⏳ ' + action + '…'; }
 
   // Define the callback — Apps Script calls it with the result
   window[cbName] = function(result) {
     if(result && result.error) {
       if (log) log.textContent = '✗ ' + action + ': ' + result.error;
       console.error('sheetWrite error:', action, result.error);
+      toast('✗ Sheet error: ' + result.error, {error:true});
     } else {
       if (log) log.textContent = '✓ ' + action + ' ' + new Date().toLocaleTimeString();
       console.log('sheetWrite result:', action, result);
@@ -3804,7 +3807,19 @@ function saveCO(){
     sheetWrite('addApprovedCO',{projectId:pid,projectName:p.name,coNum:num,desc,code,value:val,approvalDate:_coApprJ});
   }
   // Send pm + pmEmail so CO sheet cols A=Email B=Name are filled correctly
-  sheetWrite('addCO',{projectId:pid,projectName:p.name,pm:p.pm||'',pmEmail:p.pmEmail||'',num,desc,code,value:val,status,date:ds,foremanDays:coForemanDays,laborerDays:coLaborerDays});
+  // K=cost code, L=foremanDays, M=laborerDays
+  const coPayload = {
+    projectId: pid, projectName: p.name,
+    pm: p.pm||'', pmEmail: p.pmEmail||'',
+    num, desc,
+    code: code || '',           // K — cost code (3-digit)
+    value: val,
+    status, date: ds,
+    foremanDays: coForemanDays, // L
+    laborerDays: coLaborerDays  // M
+  };
+  console.log('addCO payload:', JSON.stringify(coPayload));
+  sheetWrite('addCO', coPayload);
   saveLocal();
   closeModal();toast(`${num} saved → Sheets`);if(selProj===pid){subTab='cos';renderDetail();}renderOverview();
 }
