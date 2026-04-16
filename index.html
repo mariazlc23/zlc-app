@@ -749,7 +749,7 @@ const CAT_COLORS={staff:'#185FA5',extra:'#BA7517',equip:'#3B6D11',rental:'#88878
 const DEFAULT_CONFIG = {
   SHEET_ID: '1Y35oa2ebgCisj3PzVs2dTMUN5dY2Hhci4RIt55Kn44Y',
   API_KEY: 'AIzaSyCCuKyfurmT2w-L2dn6-XbvupaOmlHufUE',
-  APPS_SCRIPT_URL: 'https://script.google.com/macros/s/AKfycbxAFw-tqfi-FBu88VfvteVOVSYURZ4deoPqMLyNegsUK7g66xLZxJU-l-DJLQRpmmflvg/exec'
+  APPS_SCRIPT_URL: 'https://script.google.com/macros/s/AKfycbyvS_kbXG8ODg1m7RossUpdcw2yGIhFugWdRf1m-NgcXzIPw87v2FP4T1CHPDOSLVt_Mw/exec'
 };
 
 function getRuntimeConfig() {
@@ -3053,6 +3053,27 @@ function clickCell(itemId,dateKey,day,type){
       </label>
       <textarea id="cp-wh" placeholder="e.g. 2x concrete bags, rebar #4, generator..." style="min-height:60px;width:100%;font-size:13px;padding:8px;border-radius:var(--radius);border:0.5px solid #F0C040;background:#FFFEF5;color:var(--text);font-family:inherit;resize:vertical;margin-top:6px">${curWh}</textarea>
     </div>
+    <div class="fg" style="background:rgba(232,240,254,0.5);border:0.5px solid #B5D4F4;border-radius:var(--radius);padding:10px 12px;margin-top:8px">
+      <label style="color:#185FA5;font-weight:600;display:flex;align-items:center;gap:6px;margin-bottom:8px;font-size:12px">
+        <span>✉️</span> Send email request
+        <span style="font-size:10px;font-weight:400;color:var(--text3);margin-left:4px">(optional — opens your email client)</span>
+      </label>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end">
+        <div style="flex:1;min-width:160px">
+          <label style="font-size:11px;color:var(--text2);display:block;margin-bottom:3px">To</label>
+          <select id="cp-email-to" style="width:100%;font-size:12px;padding:5px 8px;border-radius:var(--radius);border:0.5px solid #B5D4F4;background:var(--bg);color:var(--text)"><option value="">— Select recipient —</option><option value="steph@zlccorp.com">Steph — steph@zlccorp.com</option><option value="maria@zlccorp.com">Maria — maria@zlccorp.com</option><option value="diego@zlccorp.com">Diego — diego@zlccorp.com</option><option value="silverio@zlccorp.com">Silverio — silverio@zlccorp.com</option><option value="eddy@zlccorp.com">Eddy — eddy@zlccorp.com</option><option value="zali@zlccorp.com">Zali — zali@zlccorp.com</option><option value="melanie@zlccorp.com">Melanie — melanie@zlccorp.com</option><option value="moises@zlccorp.com">Moises — moises@zlccorp.com</option></select>
+        </div>
+        <div style="flex:2;min-width:180px">
+          <label style="font-size:11px;color:var(--text2);display:block;margin-bottom:3px">Message / request</label>
+          <input id="cp-email-msg" type="text" placeholder="e.g. Need 2 concrete bags by 6am"
+            style="width:100%;font-size:12px;padding:5px 8px;border-radius:var(--radius);border:0.5px solid #B5D4F4;background:var(--bg);color:var(--text)">
+        </div>
+        <button type="button" id="cp-email-send-btn" onclick="sendRosterEmail('${itemId}','${dateKey}')"
+          style="font-size:11px;font-weight:600;padding:6px 12px;border-radius:var(--radius);border:0.5px solid #185FA5;background:#185FA5;color:#fff;cursor:pointer;white-space:nowrap;flex-shrink:0">
+          ✉️ Send
+        </button>
+      </div>
+    </div>
     <div class="form-actions">
       ${cur?`<button class="btn btn-deny btn-sm" onclick="clearCell('${itemId}','${dateKey}','${type}')">Clear</button>`:''}
       <button class="btn" onclick="closeModal()">Cancel</button>
@@ -3094,6 +3115,49 @@ function updateCellExtraFields(itemId, dateKey) {
     </div>`;
   }
   el.innerHTML = html;
+}
+
+function sendRosterEmail(itemId, dateKey) {
+  const to  = document.getElementById('cp-email-to')?.value||'';
+  const msg = (document.getElementById('cp-email-msg')?.value||'').trim();
+  if (!to)  { toast('Select a recipient first'); return; }
+  if (!msg) { toast('Enter a message or request'); return; }
+
+  const proj    = document.getElementById('cp-proj')?.value||'';
+  const projObj = DB.projects.find(p=>p.id===proj);
+  const projName= projObj ? `${proj} — ${projObj.name}` : proj;
+  const item    = getItem(itemId,'staff')||getItem(itemId,'extra')||getItem(itemId,'equip')||getItem(itemId,'rental');
+  const worker  = item?.name || itemId;
+
+  const [yr,mo,dy] = dateKey.split('-').map(Number);
+  const dateObj = new Date(yr, mo-1, dy);
+  const dateStr = dateObj.toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',year:'numeric'});
+
+  const subject = `ZLC Request — ${dateStr}${projName?' · '+projName:''}`;
+  const body    = `Hi,\n\nPlease help with the following before ${dateStr}:\n\n${msg}\n\nWorker: ${worker}\nProject: ${projName||'—'}\nDate: ${dateStr}\n\nThank you,\nZLC Corp`;
+
+  // Send via Apps Script GmailApp — updates button while waiting
+  const btn = document.getElementById('cp-email-send-btn');
+  if (btn) { btn.textContent = '⏳'; btn.disabled = true; }
+
+  sheetWrite('sendEmail', { to, subject, body });
+
+  // Poll write-log for result (sheetWrite is async via JSONP)
+  let checks = 0;
+  const poll = setInterval(() => {
+    checks++;
+    const txt = (document.getElementById('write-log')?.textContent||'');
+    if (txt.includes('✓ sendEmail')) {
+      clearInterval(poll);
+      toast('✉️ Email sent to ' + to);
+      if (btn) { btn.textContent = '✉️ Sent!'; btn.style.background='#3B6D11'; btn.disabled=false; }
+      if (document.getElementById('cp-email-msg')) document.getElementById('cp-email-msg').value='';
+    } else if (txt.includes('✗ sendEmail') || checks > 24) {
+      clearInterval(poll);
+      toast('✗ Email failed — check Apps Script permissions', {error:true});
+      if (btn) { btn.textContent = '✉️ Send'; btn.disabled=false; }
+    }
+  }, 500);
 }
 
 function saveCell(id,key,type){
@@ -5295,6 +5359,9 @@ function ganttForceAssign(taskId, projId) {
   const days   = window._ganttAssignDays || [];
   const people = window._ganttAssignPeople || [];
   if (!sel || !sel.size) { toast('No people selected'); return; }
+  // Get task name to stamp into roster notes
+  const task = ganttFindTask(taskId, projId);
+  const taskLabel = task ? `[${task.name}]` : '';
   let count = 0;
   sel.forEach(pid => {
     const pInfo = people.find(p => p.id === pid);
@@ -5303,9 +5370,18 @@ function ganttForceAssign(taskId, projId) {
     if (!item) { console.warn('Could not find item for', pid, cat); return; }
     if (!item.a)         item.a         = {};
     if (!item.confirmed) item.confirmed = {};
+    if (!item.notes)     item.notes     = {};
     days.forEach(d => {
       item.a[d]         = projId;
       item.confirmed[d] = true;
+      // Append task name to existing note, or set it
+      if (taskLabel) {
+        const existing = item.notes[d] || '';
+        // Only add if not already there
+        if (!existing.includes(taskLabel)) {
+          item.notes[d] = existing ? `${existing} ${taskLabel}` : taskLabel;
+        }
+      }
     });
     count++;
   });
