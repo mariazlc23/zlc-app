@@ -3638,6 +3638,7 @@ function openModal(type,pid,extra){
   } else if(type==='extraW'){
     showModal(`<div class="modal-title">New extra worker</div>
       <div class="fg"><label>Name</label><input id="ew-name" placeholder="Worker name"></div>
+
       <div class="fg"><label>Associated project</label><select id="ew-proj"><option value="">— Unassigned —</option>${pOpts}</select></div>
       <div class="form-actions"><button class="btn" onclick="closeModal()">Cancel</button><button class="btn btn-primary" onclick="saveExtraW()">Save</button></div>`);
   } else if(type==='order'){
@@ -3859,7 +3860,7 @@ function saveEmp(){
 }
 function saveExtraW(){
   const name=document.getElementById('ew-name').value.trim();if(!name){toast('Name required');return;}
-  EXTRA.push({id:'ew'+uid(),name,project:document.getElementById('ew-proj').value,a:{},notes:{}});
+  EXTRA.push({id:'ew'+uid(),name,role:'laborer',project:document.getElementById('ew-proj').value,a:{},notes:{}});
   saveLocal();closeModal();renderRoster();toast(`${name} added`);
 }
 
@@ -4028,6 +4029,8 @@ async function loadFromCloud(){
 
 
 function getItemRole(item) {
+  // Extra workers are always laborers
+  if (item.cat === 'extra' || EXTRA.find(e=>e.id===item.id)) return 'laborer';
   if (item.role) return item.role;
   const n = (item.note||'').toLowerCase();
   if (n.includes('foreman')) return 'foreman';
@@ -4203,7 +4206,7 @@ function applyRosterData(rd) {
   apply(rd.extra,   EXTRA);
   apply(rd.equip,   EQUIP);
   apply(rd.rentals, RENTALS);
-  (rd.extraList||[]).forEach(s=>{ if(!EXTRA.find(e=>e.id===s.id)) EXTRA.push(s); });
+  (rd.extraList||[]).forEach(s=>{ if(!EXTRA.find(e=>e.id===s.id)) EXTRA.push({...s,role:'laborer'}); });
   (rd.staffList||[]).forEach(s=>{ if(!STAFF.find(e=>e.id===s.id)) STAFF.push(s); });
 }
 
