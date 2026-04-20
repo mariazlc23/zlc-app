@@ -453,7 +453,7 @@
     </div>
   </div>
   <div style="padding:12px 16px;border-top:0.5px solid var(--border);margin-top:10px">
-    <button id="sync-badge" onclick="syncFromSheets()" style="width:100%;font-size:11px;font-weight:600;padding:7px 12px;border-radius:var(--radius);border:0.5px solid var(--border2);cursor:pointer;transition:all .15s;background:#f0eeea;color:#9e9c97">↻ Sync from Sheets</button>
+    <button id="sync-badge" onclick="throttledSync()" style="width:100%;font-size:11px;font-weight:600;padding:7px 12px;border-radius:var(--radius);border:0.5px solid var(--border2);cursor:pointer;transition:all .15s;background:#f0eeea;color:#9e9c97">↻ Sync from Sheets</button>
     <button onclick="forceSaveToCloud()" title="Save all data to cloud so any device can access it" style="width:100%;margin-top:6px;font-size:11px;font-weight:600;padding:6px 12px;border-radius:var(--radius);border:0.5px solid #185FA5;cursor:pointer;background:#E8F0FE;color:#185FA5">☁ Save to cloud</button>
     <button onclick="loadFromCloud()" style="width:100%;margin-top:4px;font-size:11px;font-weight:600;padding:6px 12px;border-radius:var(--radius);border:0.5px solid var(--border2);cursor:pointer;background:var(--bg3);color:var(--text2)">↻ Load from cloud</button>
     <div id="cloud-status" style="font-size:10px;color:var(--text3);text-align:center;margin-top:4px"></div>
@@ -473,6 +473,8 @@
     <button class="dtab active" onclick="goDash('analytics',this)">Historical analytics</button>
     <button class="dtab" onclick="goDash('overview',this)">Overview</button>
     <button class="dtab" onclick="goDash('warehouse',this)">Warehouse</button>
+    <button class="dtab" onclick="goDash('weather',this)">🌤️ Weather</button>
+    <button class="dtab" onclick="goDash('crew',this)">👷 Crew</button>
   </div>
   <div id="dash-overview" style="display:none">
     <div class="card" style="margin-bottom:16px">
@@ -538,6 +540,22 @@
       </div>
     </div>
     <div id="wh-dash-content"><div class="empty">Loading…</div></div>
+  </div>
+  <div id="dash-weather" style="display:none">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+      <div><div style="font-size:18px;font-weight:700">🌤️ Weather Forecast</div>
+        <div style="font-size:12px;color:var(--text2);margin-top:2px">Concord, CA — 7-day forecast for job sites</div></div>
+      <button class="btn btn-sm btn-ghost" onclick="loadWeather()">↻ Refresh</button>
+    </div>
+    <div id="weather-content"><div class="empty">Loading weather…</div></div>
+  </div>
+  <div id="dash-crew" style="display:none">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+      <div><div style="font-size:18px;font-weight:700">👷 Crew Optimizer</div>
+        <div style="font-size:12px;color:var(--text2);margin-top:2px">Suggestions based on roster and project needs</div></div>
+      <button class="btn btn-sm btn-ghost" onclick="renderCrewSuggestions()">↻ Refresh</button>
+    </div>
+    <div id="crew-content"><div class="empty">Loading…</div></div>
   </div>
   <div id="dash-analytics">
     <div style="display:flex;justify-content:flex-end;margin-bottom:14px">
@@ -692,6 +710,14 @@
 
 <div id="modal-area"></div>
 <div class="toast" id="toast"></div>
+<div id="error-banner" style="display:none;position:fixed;top:0;left:0;right:0;z-index:9998;padding:10px 20px;background:#E24B4A;color:#fff;font-size:13px;font-weight:600;text-align:center;box-shadow:0 2px 8px rgba(0,0,0,0.2)">
+  <span id="error-banner-text"></span>
+  <button onclick="document.getElementById('error-banner').style.display='none'" style="margin-left:12px;background:rgba(255,255,255,0.3);border:none;color:#fff;padding:2px 8px;border-radius:4px;cursor:pointer;font-size:12px">✕</button>
+</div>
+<div id="undo-banner" style="display:none;position:fixed;bottom:60px;left:50%;transform:translateX(-50%);z-index:9998;padding:10px 20px;background:#333;color:#fff;font-size:13px;border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,0.3);align-items:center;gap:12px">
+  <span id="undo-banner-text">Deleted</span>
+  <button id="undo-btn" style="background:var(--blue);border:none;color:#fff;padding:4px 12px;border-radius:4px;cursor:pointer;font-weight:600;font-size:12px">↩ Undo</button>
+</div>
 
 <script>
 document.addEventListener('keydown', (event) => {
@@ -823,7 +849,8 @@ function sheetWrite(action, payload) {
   // Define the callback — Apps Script calls it with the result
   window[cbName] = function(result) {
     if(result && result.error) {
-      if (log) log.textContent = '✗ ' + action + ': ' + result.error;
+      if (log) { log.textContent = '✗ ' + action + ': ' + result.error; log.style.color='#E24B4A'; }
+      showBanner('⚠️ Sheet write failed: ' + result.error, 'error');
       console.error('sheetWrite error:', action, result.error);
       toast('✗ Sheet error: ' + result.error, {error:true});
     } else {
@@ -1298,7 +1325,6 @@ let STAFF=[
   {id:'e12',role:'laborer',name:'Rigo',team:'Guerreros Z',role:'laborer',certs:[],veh:'',a:{},notes:{}},
   {id:'e13',role:'foreman',name:'Miguel #11',team:'Lobos',role:'foreman',certs:[],veh:'',a:{},notes:{}},
   {id:'e14',role:'laborer',name:'Hugo',team:'Lobos',role:'laborer',certs:[],veh:'Needs attention',a:{},notes:{}},
-  {id:'e15',name:'Joaquin',team:'Joaquin',certs:[],veh:'Needs attention',a:{},notes:{}},
   {id:'e16',role:'laborer',name:'Hernan',team:'Warehouse',certs:[],veh:'',a:{},notes:{}},
   {id:'e17',role:'driver',name:'Francisco #5',team:'Driver',certs:['CPR'],veh:'Good',a:{},notes:{},wh:{},multi:true},
   {id:'e18',role:'driver',name:'Driver 2',team:'Driver',certs:[],veh:'Good',a:{},notes:{},wh:{},multi:true},
@@ -1458,9 +1484,13 @@ function goDash(t,b){
   document.getElementById('dash-overview').style.display=t==='overview'?'block':'none';
   document.getElementById('dash-analytics').style.display=t==='analytics'?'block':'none';
   document.getElementById('dash-warehouse').style.display=t==='warehouse'?'block':'none';
+  document.getElementById('dash-weather').style.display=t==='weather'?'block':'none';
+  document.getElementById('dash-crew').style.display=t==='crew'?'block':'none';
   if(t==='overview')renderOverview();
   else if(t==='analytics')renderAnalytics();
   else if(t==='warehouse')syncWarehouse();
+  else if(t==='weather')loadWeather();
+  else if(t==='crew')renderCrewSuggestions();
 }
 
 // ─── DASHBOARD OVERVIEW ──────────────────────────────────────────────────────
@@ -2241,8 +2271,7 @@ function reopenProject(pid){
 }
 function deleteProject(pid){
   const p=DB.projects.find(x=>x.id===pid);if(!p)return;
-  const ok=confirm(`Are you sure you want to delete project ${pid} — ${p.name}?`);
-  if(!ok)return;
+  const _deleted=JSON.parse(JSON.stringify(p));
 
   DB.projects=DB.projects.filter(x=>x.id!==pid);
 
@@ -2253,7 +2282,12 @@ function deleteProject(pid){
 
   saveLocal();
   sheetWrite('deleteProject',{projectId:pid});
-  toast(`Project ${pid} deleted`);
+  showUndo(`Project ${pid} deleted — Undo?`, () => {
+    DB.projects.push(_deleted);
+    DB.projects.sort((a,b)=>String(a.id).localeCompare(String(b.id)));
+    saveLocal(); renderProjTable(); renderOverview(); renderAnalytics();
+    toast(`Project ${pid} restored`);
+  });
   renderProjTable();
   renderOverview();
   renderAnalytics();
@@ -4290,6 +4324,152 @@ function applyRosterData(rd) {
   apply(rd.rentals, RENTALS);
   (rd.extraList||[]).forEach(s=>{ if(!EXTRA.find(e=>e.id===s.id)) EXTRA.push({...s,role:'laborer'}); });
   (rd.staffList||[]).forEach(s=>{ if(!STAFF.find(e=>e.id===s.id)) STAFF.push(s); });
+}
+
+
+// ─── BANNER · RATE LIMIT · UNDO ──────────────────────────────────────────────
+let _bannerTimer=null;
+function showBanner(msg,type='error'){
+  const b=document.getElementById('error-banner');
+  const t=document.getElementById('error-banner-text');
+  if(!b||!t)return;
+  t.textContent=msg;
+  b.style.background=type==='error'?'#E24B4A':'#3B6D11';
+  b.style.display='block';
+  clearTimeout(_bannerTimer);
+  _bannerTimer=setTimeout(()=>{b.style.display='none';},6000);
+}
+
+let _lastSync=0;
+function throttledSync(){
+  const now=Date.now();
+  if(now-_lastSync<10000){toast('⏳ Wait '+Math.ceil((10000-(now-_lastSync))/1000)+'s before syncing again');return;}
+  _lastSync=now;
+  syncFromSheets();
+}
+
+let _undoTimer=null;
+function showUndo(label,undoFn){
+  clearTimeout(_undoTimer);
+  const b=document.getElementById('undo-banner');
+  const t=document.getElementById('undo-banner-text');
+  const btn=document.getElementById('undo-btn');
+  if(!b||!t||!btn)return;
+  t.textContent=label;
+  b.style.display='flex';
+  btn.onclick=()=>{clearTimeout(_undoTimer);undoFn&&undoFn();b.style.display='none';};
+  _undoTimer=setTimeout(()=>{b.style.display='none';},8000);
+}
+
+// ─── WEATHER · Open-Meteo (free, no key) ────────────────────────────────────
+const SITE_LAT=37.9777,SITE_LON=-122.0308;
+const WX_CODES={
+  0:'☀️ Clear',1:'🌤️ Mostly clear',2:'⛅ Partly cloudy',3:'☁️ Overcast',
+  45:'🌫️ Foggy',48:'🌫️ Icy fog',51:'🌦️ Light drizzle',53:'🌦️ Drizzle',55:'🌧️ Heavy drizzle',
+  61:'🌧️ Light rain',63:'🌧️ Rain',65:'🌧️ Heavy rain',71:'🌨️ Light snow',73:'🌨️ Snow',
+  80:'🌦️ Showers',81:'🌧️ Heavy showers',82:'⛈️ Violent showers',
+  95:'⛈️ Thunderstorm',96:'⛈️ Thunderstorm+hail',99:'⛈️ Heavy thunderstorm',
+};
+const WX_ALERT=new Set([61,63,65,80,81,82,95,96,99,71,73]);
+let _wxCache=null,_wxCacheTime=0;
+
+async function loadWeather(){
+  const el=document.getElementById('weather-content');if(!el)return;
+  if(_wxCache&&Date.now()-_wxCacheTime<30*60*1000){renderWeather(_wxCache);return;}
+  el.innerHTML='<div class="empty">⏳ Loading weather…</div>';
+  try{
+    const url=`https://api.open-meteo.com/v1/forecast?latitude=${SITE_LAT}&longitude=${SITE_LON}&daily=weathercode,temperature_2m_max,temperature_2m_min,precipitation_sum,windspeed_10m_max&temperature_unit=fahrenheit&windspeed_unit=mph&timezone=America%2FLos_Angeles&forecast_days=7`;
+    const res=await fetch(url);const d=await res.json();
+    _wxCache=d;_wxCacheTime=Date.now();renderWeather(d);
+  }catch(e){el.innerHTML=`<div class="empty">⚠️ Weather unavailable: ${e.message}</div>`;}
+}
+
+function renderWeather(d){
+  const el=document.getElementById('weather-content');if(!el)return;
+  const days=d.daily;
+  const DOW=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  const concreteProjs=DB.projects.filter(p=>p.status==='Active'&&p.codes.some(c=>c.code==='004'));
+  let alerts='';
+  const cards=days.time.map((date,i)=>{
+    const code=days.weathercode[i];
+    const wx=WX_CODES[code]||`Code ${code}`;
+    const isAlert=WX_ALERT.has(code);
+    const hi=Math.round(days.temperature_2m_max[i]);
+    const lo=Math.round(days.temperature_2m_min[i]);
+    const rain=(days.precipitation_sum[i]||0).toFixed(1);
+    const wind=Math.round(days.windspeed_10m_max[i]||0);
+    const dt=new Date(date+'T12:00:00');
+    const dow=DOW[dt.getDay()];
+    const mon=dt.toLocaleDateString('en-US',{month:'short',day:'numeric'});
+    if(isAlert&&concreteProjs.length){
+      alerts+=`<div style="padding:8px 12px;background:rgba(226,75,74,0.08);border-left:3px solid #E24B4A;border-radius:4px;margin-bottom:6px;font-size:12px">
+        ⚠️ <strong>${dow} ${mon}</strong>: ${wx} — ${concreteProjs.length} concrete project${concreteProjs.length!==1?'s':''} may be affected (${concreteProjs.map(p=>p.id).join(', ')})</div>`;
+    }
+    return`<div style="flex:1;min-width:100px;padding:14px 12px;background:var(--bg);border-radius:10px;border:${isAlert?'1.5px solid #E24B4A':'0.5px solid var(--border)'};text-align:center">
+      <div style="font-size:11px;font-weight:700;color:var(--text2);margin-bottom:4px">${dow}<br>${mon}</div>
+      <div style="font-size:22px;margin:6px 0">${wx.split(' ')[0]}</div>
+      <div style="font-size:11px;color:var(--text2);margin-bottom:4px">${wx.slice(wx.indexOf(' ')+1)}</div>
+      <div style="font-size:13px;font-weight:700">${hi}° / ${lo}°F</div>
+      <div style="font-size:10px;color:var(--text3);margin-top:4px">${rain}" rain · ${wind}mph</div>
+    </div>`;
+  }).join('');
+  el.innerHTML=(alerts?`<div style="margin-bottom:16px"><div style="font-size:12px;font-weight:700;color:#E24B4A;margin-bottom:8px">🚨 Rain/Storm Alerts — Concrete Projects</div>${alerts}</div>`:'')
+    +`<div style="display:flex;gap:8px;flex-wrap:wrap">${cards}</div>`;
+}
+
+// ─── CREW OPTIMIZER ──────────────────────────────────────────────────────────
+function renderCrewSuggestions(){
+  const el=document.getElementById('crew-content');if(!el)return;
+  const today=new Date();
+  const workDays=[];
+  let d=new Date(today);
+  while(workDays.length<5){d.setDate(d.getDate()+1);if(d.getDay()!==0&&d.getDay()!==6)workDays.push(new Date(d));}
+  const activeProjs=DB.projects.filter(p=>p.status==='Active');
+  const suggestions=[];
+  STAFF.forEach(item=>{
+    const role=getItemRole(item);
+    const freeDays=workDays.filter(wd=>{
+      const key=`${wd.getFullYear()}-${wd.getMonth()+1}-${wd.getDate()}`;
+      return !item.a?.[key];
+    });
+    if(!freeDays.length)return;
+    const matchingProjs=activeProjs.filter(p=>{
+      const summary=getDaysBudgetSummary(p.id);
+      return summary.some(s=>role==='foreman'?(s.foremanDays-s.usedForeman)>0:(s.laborerDays-s.usedLaborer)>0);
+    });
+    if(!matchingProjs.length)return;
+    const certStr=item.certs?.join(', ')||'none';
+    matchingProjs.slice(0,2).forEach(proj=>{
+      suggestions.push({person:item.name,role,certs:certStr,freeDays:freeDays.length,project:proj.id,projName:proj.name,firstFree:freeDays[0]});
+    });
+  });
+  if(!suggestions.length){
+    el.innerHTML='<div class="empty">No suggestions — all crew assigned or no day budgets set on active projects.</div>';return;
+  }
+  suggestions.sort((a,b)=>b.freeDays-a.freeDays);
+  el.innerHTML=suggestions.slice(0,15).map(s=>{
+    const dStr=s.firstFree.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'});
+    const rc=s.role==='foreman'?'#185FA5':'#3B6D11';
+    const pc2=pc(s.project)||'#888';
+    return`<div style="padding:12px 14px;border:0.5px solid var(--border);border-radius:8px;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
+      <div style="display:flex;align-items:center;gap:10px;flex:1;min-width:200px">
+        <div style="width:10px;height:10px;border-radius:50%;background:${rc};flex-shrink:0"></div>
+        <div>
+          <div style="font-size:13px;font-weight:700">${s.person}</div>
+          <div style="font-size:11px;color:var(--text2)">${s.role} · certs: ${s.certs} · <strong>${s.freeDays} free day${s.freeDays!==1?'s':''}</strong> next week</div>
+          <div style="font-size:11px;color:var(--text3)">First available: ${dStr}</div>
+        </div>
+      </div>
+      <div style="text-align:right">
+        <div style="font-size:11px;font-weight:600;color:var(--text2)">Needs ${s.role}</div>
+        <div style="display:flex;align-items:center;gap:5px;margin-top:2px">
+          <span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:${pc2}"></span>
+          <span style="font-size:12px;font-weight:700">${s.project}</span>
+          <span style="font-size:11px;color:var(--text2)">${s.projName}</span>
+        </div>
+      </div>
+    </div>`;
+  }).join('');
 }
 
 // ─── INIT ─────────────────────────────────────────────────────────────────────
