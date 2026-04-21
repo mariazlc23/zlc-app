@@ -4198,6 +4198,12 @@ async function _doCloudSave(rosterData){
 
     // ── Save manually-added projects ──────────────────────────────────────
     await jsonpSave('manualProjects', DB.projects.filter(p=>p._manual)||[]);
+    await delay(200);
+
+    // ── Save Gantt tasks ──────────────────────────────────────────────────
+    if(typeof GANTT !== 'undefined' && GANTT.tasks){
+      await jsonpSave('gantt_data', GANTT.tasks);
+    }
 
     if(failedChunks.length === 0){
       const t = new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'});
@@ -4360,14 +4366,24 @@ async function loadFromCloud(){
       return;
     }
     const d = json.data;
+    console.log('☁️ Cloud keys:', Object.keys(d));
     const meta = d.scMeta||{};
     const chunkCount = Number(meta.chunkCount)||0;
 
-    // Reassemble staff from chunks
+    // Reassemble staff from chunks (current format)
     let allStaff = [];
     for(let i=0; i<chunkCount; i++) allStaff = allStaff.concat(d['sc'+i]||[]);
 
-    if(allStaff.length > 0){
+    // Fallback: old format with staff1/staff2 keys
+    if(!allStaff.length && d.staff1){
+      const s2 = d.staff2||{};
+      allStaff = [...(d.staff1||[]), ...(s2.staff||[])];
+      if(!meta.extra){ meta.extra=s2.extra||[]; meta.equip=s2.equip||[]; meta.rentals=s2.rentals||[]; }
+    }
+    // Fallback: very old format with single roster key
+    if(!allStaff.length && d.roster){
+      applyRosterData(d.roster);
+    } else if(allStaff.length > 0){
       applyRosterData({
         staff:     allStaff,
         extra:     meta.extra||[],
@@ -4387,9 +4403,12 @@ async function loadFromCloud(){
       });
     }
 
+    if(d.historical) DB.historical = d.historical;
+
     if(d.gantt_data && typeof d.gantt_data==='object' && typeof GANTT!=='undefined'){
       Object.assign(GANTT.tasks, d.gantt_data);
       if(GANTT.projId && document.getElementById('gantt-body')) ganttRender();
+      console.log('☁️ Gantt data loaded from cloud');
     }
 
     const t = new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'});
@@ -4426,7 +4445,13 @@ function jsonpSave(key, value){
     const script   = document.createElement('script');
     script.id      = scriptId;
     script.src     = APPS_SCRIPT_URL+'?data='+encoded+'&callback='+cbName;
-    script.onerror = ()=>{ cleanup(); reject('Network error saving key='+key+'. Check internet connection.'); };
+    script.onerror = ()=>{
+      // JSONP failed — try POST fallback (no-cors, fire-and-forget)
+      cleanup();
+      fetch(APPS_SCRIPT_URL, {method:'POST', mode:'no-cors', headers:{'Content-Type':'text/plain;charset=utf-8'}, body})
+        .then(()=>{ console.log('☁️ POST fallback OK for key='+key); resolve({ok:true, fallback:true}); })
+        .catch(e2=>reject('Both JSONP and POST failed for key='+key+': '+e2));
+    };
     document.head.appendChild(script);
     setTimeout(()=>{ if(!done){ cleanup(); reject('Timeout (20s) saving key='+key+'. Apps Script may be slow.'); }}, 20000);
   });
