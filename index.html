@@ -763,7 +763,7 @@ const DUMP_TYPE_COLORS = {
   'Dirt':'#8B6914','Metal':'#5A5A6A','Baserock':'#4A3F7A','Class 2 Permeable':'#0F6E56'
 };
 
-const TEAM_COLORS={Xolos:'#3bccb7',Chingones:'#4a86e8',Poblanos:'#cc00cc',Lobos:'#9900ff','Guerreros Z':'#c9a200',Warehouse:'#888780',Driver:'#D85A30',Joaquin:'#a61c00'};
+const TEAM_COLORS={Xolos:'#3bccb7',Chingones:'#4a86e8',Poblanos:'#cc00cc',Lobos:'#9900ff','Guerreros Z':'#c9a200',Warehouse:'#888780',Driver:'#D85A30'};
 const PROJ_COLORS={'25-006':'#cc00cc','26-002':'#009999','25-064':'#3bccb7','25-087':'#4a86e8','24-102':'#9999bb','25-061':'#9900ff','26-006':'#c9a200','25-103':'#7bafd4','25-105':'#a64d79','26-003':'#999999','26-004':'#E33F91','25-036':'#134f5c','25-076':'#f6b26b','25-075':'#A64B3C','24-112':'#00cc00','24-126':'#ead1dc','23-134':'#a61c00','26-001':'#D6D60F','26-005':'#6E2C7B','25-063':'#674ea7','25-081':'#45818e','25-085':'#fff2cc','25-089':'#d0e0e3','25-094':'#4DA44D','25-102':'#d9ead3','OFF':'#cc3333','Warehouse':'#666666'};
 const MONTHS=['January','February','March','April','May','June','July','August','September','October','November','December'];
 const MO=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
@@ -1325,7 +1325,6 @@ let STAFF=[
   {id:'e12',role:'laborer',name:'Rigo',team:'Guerreros Z',role:'laborer',certs:[],veh:'',a:{},notes:{}},
   {id:'e13',role:'foreman',name:'Miguel #11',team:'Lobos',role:'foreman',certs:[],veh:'',a:{},notes:{}},
   {id:'e14',role:'laborer',name:'Hugo',team:'Lobos',role:'laborer',certs:[],veh:'Needs attention',a:{},notes:{}},
-  {id:'e16',role:'laborer',name:'Hernan',team:'Warehouse',certs:[],veh:'',a:{},notes:{}},
   {id:'e17',role:'driver',name:'Francisco #5',team:'Driver',certs:['CPR'],veh:'Good',a:{},notes:{},wh:{},multi:true},
   {id:'e18',role:'driver',name:'Driver 2',team:'Driver',certs:[],veh:'Good',a:{},notes:{},wh:{},multi:true},
 ];
@@ -1333,7 +1332,7 @@ let EXTRA=[
   {id:'ew1',name:'Lazaro',project:'25-061',a:{},notes:{}},{id:'ew2',name:'Jose Ines',project:'25-103',a:{},notes:{}},
   {id:'ew3',name:'Alberto',project:'',a:{},notes:{}},{id:'ew4',name:'Catarino',project:'',a:{},notes:{}},
   {id:'ew5',name:'Dennis',project:'',a:{},notes:{}},{id:'ew6',name:'Concrete laborer 1',project:'',a:{},notes:{}},
-  {id:'ew7',name:'Concrete laborer 2',project:'',a:{},notes:{}},{id:'ew8',name:'Miguel & Joaquin',project:'',a:{},notes:{}},
+  {id:'ew7',name:'Concrete laborer 2',project:'',a:{},notes:{}},{id:'ew8',name:'Miguel',project:'',a:{},notes:{}},
 ];
 const EQUIP=[
   {id:'ss1',cat:'Skid steer',name:'SS1',status:'Good',note:'#5 or #16',a:{},notes:{}},
@@ -3749,7 +3748,7 @@ function openModal(type,pid,extra){
       <div class="fg" style="margin-bottom:0"><label>Team</label><select id="n-team" onchange="document.getElementById('nt-w').style.display=this.value==='__new__'?'block':'none'">${teams.map(t=>`<option>${t}</option>`).join('')}<option value="__new__">+ New team</option></select></div></div>
       <div id="nt-w" style="display:none" class="fg"><label>New team name</label><input id="n-newt" placeholder="Team name"></div>
       <div class="fg"><label>Certifications</label><div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:5px">${['H','RFT','EO','SSO','CPR'].map(c=>`<label style="display:flex;align-items:center;gap:4px;font-size:12px;color:var(--text);font-weight:400"><input type="checkbox" id="c-${c.toLowerCase()}" style="width:auto;accent-color:var(--blue)"> ${c}</label>`).join('')}</div></div>
-      <div class="fg"><label>Vehicle status</label><select id="n-veh"><option value="">N/A</option><option value="Good">Good</option><option value="Needs attention">Needs attention</option></select></div>
+      <div class="fg"><label>Vehicle status</label><select id="n-veh"><option value="">— Select —</option><option value="Good">Good</option><option value="Needs attention">Needs attention</option></select></div>
       <div class="form-actions"><button class="btn" onclick="closeModal()">Cancel</button><button class="btn btn-primary" onclick="saveEmp()">Save</button></div>`);
   } else if(type==='extraW'){
     showModal(`<div class="modal-title">New extra worker</div>
@@ -4076,7 +4075,8 @@ async function _doCloudSave(rosterData){
       await jsonpSave('sc'+i,chunks[i]);
       if(i<chunks.length-1)await new Promise(r=>setTimeout(r,400));
     }
-    await jsonpSave('scMeta',{staff:c.staff.slice(Math.ceil(c.staff.length/2)*CHUNK/CHUNK),extra:c.extra,equip:c.equip,rentals:c.rentals,extraList:c.extraList,staffList:c.staffList,chunkCount:chunks.length});
+    // scMeta: NO staff here (staff is in sc0, sc1...) — only extra/equip/rentals + chunk count
+    await jsonpSave('scMeta',{extra:c.extra,equip:c.equip,rentals:c.rentals,extraList:c.extraList,staffList:c.staffList,chunkCount:chunks.length});
     await new Promise(r=>setTimeout(r,400));
     await jsonpSave('orders',DB.openOrders||[]);
     await new Promise(r=>setTimeout(r,300));
@@ -4090,7 +4090,6 @@ async function _doCloudSave(rosterData){
     setCloudStatus('✗ '+String(e).slice(0,50));
     showSaveIndicator('error', '✗ Not saved — retry in 30s');
     toast('✗ Roster not saved — retrying in 30s', {error:true});
-    // Auto-retry once after 30 seconds
     setTimeout(() => {
       if (!_cloudSaveInProgress) {
         const rd = buildRosterData();
@@ -4247,7 +4246,12 @@ function buildRosterData() {
 function saveLocal() {
   try {
     const rosterData = buildRosterData();
-    // Only save to cloud — no localStorage
+    // Save to localStorage immediately (fast, works offline)
+    localStorage.setItem('zlc_roster', JSON.stringify(rosterData));
+    localStorage.setItem('zlc_orders', JSON.stringify(DB.openOrders||[]));
+    localStorage.setItem('zlc_manual_projects', JSON.stringify(DB.projects.filter(p=>p._manual)));
+    localStorage.setItem('zlc_historical', JSON.stringify(DB.historical||[]));
+    // Also save to cloud (syncs across devices)
     saveToCloud(rosterData);
   } catch(e) { console.warn('saveLocal error:', e); }
 }
@@ -4293,14 +4297,20 @@ function setGanttSaveStatus(state) {
 
 
 function loadLocal() {
-  // Data is loaded exclusively from cloud (Google Sheets).
-  // Clear any stale localStorage so it never overrides cloud data.
+  // Load from localStorage as fast fallback while cloud loads
   try {
-    localStorage.removeItem('zlc_roster');
-    localStorage.removeItem('zlc_orders');
-    localStorage.removeItem('zlc_manual_projects');
-    localStorage.removeItem('zlc_historical');
-  } catch(e) {}
+    const rosterRaw = localStorage.getItem('zlc_roster');
+    if(rosterRaw) applyRosterData(JSON.parse(rosterRaw));
+    const ordersRaw = localStorage.getItem('zlc_orders');
+    if(ordersRaw) DB.openOrders = JSON.parse(ordersRaw);
+    const manualRaw = localStorage.getItem('zlc_manual_projects');
+    if(manualRaw) {
+      const manual = JSON.parse(manualRaw);
+      manual.forEach(p => { if(!DB.projects.find(x=>x.id===p.id)) DB.projects.push(p); });
+    }
+    const histRaw = localStorage.getItem('zlc_historical');
+    if(histRaw) DB.historical = JSON.parse(histRaw);
+  } catch(e) { console.warn('loadLocal error:', e); }
 }
 
 function applyRosterData(rd) {
