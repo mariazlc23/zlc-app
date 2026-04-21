@@ -738,14 +738,7 @@ const DUMP_TYPE_COLORS = {
 };
 
 const TEAM_COLORS={Xolos:'#3bccb7',Chingones:'#4a86e8',Poblanos:'#cc00cc',Lobos:'#9900ff','Guerreros Z':'#c9a200',Warehouse:'#888780',Driver:'#D85A30',Joaquin:'#a61c00'};
-const PROJ_COLORS={'25-006':'#cc00cc','26-002':'#009999','25-064':'#3bccb7','25-087':'#4a86e8','24-102':'#9999bb','25-061':'#9900ff','26-006':'#c9a200','25-103':'#7bafd4','25-105':'#a64d79','26-003':'#999999','26-004':'#E33F91','25-036':'#134f5c','25-076':'#f6b26b','25-075':'#A64B3C','24-112':'#00cc00','24-126':'#ead1dc','23-134':'#a61c00','26-001':'#D6D60F','26-005':'#6E2C7B','25-063':'#674ea7','25-081':'#45818e','25-085':'#fff2cc','25-089':'#d0e0e3','25-094':'#4DA44D','25-102':'#d9ead3',
-  // 2026 new projects
-  '26-007':'#E8523A','26-008':'#2E86AB','26-009':'#F18F01','26-010':'#5C6BC0','26-011':'#26A69A','26-012':'#EF5350','26-013':'#8D6E63','26-014':'#42A5F5','26-015':'#66BB6A',
-  // 2024 additional
-  '24-092':'#FF7043','24-093':'#AB47BC','24-094':'#29B6F6',
-  // Warehouse projects
-  '20-000':'#607D8B',
-  'OFF':'#cc3333','Warehouse':'#666666'};
+const PROJ_COLORS={'25-006':'#cc00cc','26-002':'#009999','25-064':'#3bccb7','25-087':'#4a86e8','24-102':'#9999bb','25-061':'#9900ff','26-006':'#c9a200','25-103':'#7bafd4','25-105':'#a64d79','26-003':'#999999','26-004':'#E33F91','25-036':'#134f5c','25-076':'#f6b26b','25-075':'#A64B3C','24-112':'#00cc00','24-126':'#ead1dc','23-134':'#a61c00','26-001':'#D6D60F','26-005':'#6E2C7B','25-063':'#674ea7','25-081':'#45818e','25-085':'#fff2cc','25-089':'#d0e0e3','25-094':'#4DA44D','25-102':'#d9ead3','OFF':'#cc3333','Warehouse':'#666666'};
 const MONTHS=['January','February','March','April','May','June','July','August','September','October','November','December'];
 const MO=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 const DLBL=['Su','Mo','Tu','We','Th','Fr','Sa'];
@@ -1398,25 +1391,7 @@ function toast(m, opts={}) {
   clearTimeout(t._timer);
   t._timer = setTimeout(() => t.classList.remove('show'), dur);
 }
-// Palette of visually distinct colors for dynamically-assigned projects
-const _DYN_PALETTE = [
-  '#E53935','#D81B60','#8E24AA','#5E35B1','#3949AB','#1E88E5','#039BE5',
-  '#00ACC1','#00897B','#43A047','#7CB342','#F4511E','#FB8C00','#FFB300',
-  '#6D4C41','#546E7A','#00695C','#1565C0','#AD1457','#6A1B9A'
-];
-const _dynColorCache = {};
-function pc(id){
-  if(!id) return '';
-  if(id==='OFF') return '#FCEBEB';
-  if(PROJ_COLORS[id]) return PROJ_COLORS[id];
-  // Return cached dynamic color if already assigned
-  if(_dynColorCache[id]) return _dynColorCache[id];
-  // Assign next available palette color (cycle through palette)
-  const usedCount = Object.keys(_dynColorCache).length;
-  const color = _DYN_PALETTE[usedCount % _DYN_PALETTE.length];
-  _dynColorCache[id] = color;
-  return color;
-}
+function pc(id){if(!id)return '';if(id==='OFF')return '#FCEBEB';return PROJ_COLORS[id]||(()=>{const h=Math.abs([...id].reduce((a,c)=>a*31+c.charCodeAt(0),0)%0xFFFFFF);return '#'+h.toString(16).padStart(6,'0');})();}
 function ptc(bg){if(!bg||bg==='')return '#666';const h=bg.replace('#','');const r=parseInt(h.slice(0,2),16),g=parseInt(h.slice(2,4),16),b=parseInt(h.slice(4,6),16);return(r*299+g*587+b*114)/1000>145?'#2C2C2A':'#F7F7F5';}
 
 function getRosterFilterDateParts(){
@@ -3034,13 +3009,7 @@ function clickCell(itemId,dateKey,day,type){
 
   const extraFields = buildExtraFields(cur, curCc, curCo);
   const curProjId = getAsgnFirstPid(cur) || cur;
-  // Include the currently-assigned project even if it's not Active
-  const projsForSelect = [...allProjs];
-  if(curProjId && !projsForSelect.find(p=>p.id===curProjId) && curProjId!=='OFF' && curProjId!=='Warehouse' && curProjId!=='NEW'){
-    const found = DB.projects.find(p=>p.id===curProjId);
-    projsForSelect.push({id:curProjId, name:(found?found.name:curProjId)+' ⚠️ non-active'});
-  }
-  const pOpts = projsForSelect.map(p=>{
+  const pOpts = allProjs.map(p=>{
     const lbl2 = p.id==='OFF'?'OFF / Holiday':p.id==='Warehouse'?'Warehouse':p.id==='NEW'?'🆕 New':p.id+' — '+p.name;
     return '<option value="'+p.id+'"'+(curProjId===p.id?' selected':'')+'>'+lbl2+'</option>';
   }).join('');
@@ -3170,21 +3139,43 @@ function sendRosterEmail(itemId, dateKey) {
   const btn = document.getElementById('cp-email-send-btn');
   if (btn) { btn.textContent = '⏳'; btn.disabled = true; }
 
-  // Open Gmail compose directly — no Apps Script needed
-  const gmailUrl = 'https://mail.google.com/mail/?view=cm&fs=1'
-    + '&to='      + encodeURIComponent(to)
-    + '&su='      + encodeURIComponent(subject)
-    + '&body='    + encodeURIComponent(body);
+  // JSONP call with real callback — same pattern as sheetWrite but reads the result
+  if (!APPS_SCRIPT_URL) { toast('No Apps Script URL configured', {error:true}); if(btn){btn.textContent='✉️ Send';btn.disabled=false;} return; }
+  const _cbName = '_zlcEmail_' + Date.now();
+  const _payload = JSON.stringify({ action: 'sendEmail', to, subject, body });
+  const _encoded = encodeURIComponent(_payload);
+  const _url = APPS_SCRIPT_URL + '?data=' + _encoded + '&callback=' + _cbName;
+  let _done = false;
+  const _cleanup = () => { _done=true; delete window[_cbName]; const s=document.getElementById('_zlcEmailScript'); if(s) s.remove(); };
 
-  window.open(gmailUrl, '_blank');
-  toast('✉️ Gmail opened — review and send');
-  if (document.getElementById('cp-email-msg')) document.getElementById('cp-email-msg').value='';
-  if (btn) {
-    btn.textContent = '✉️ Opened!';
-    btn.style.background = '#3B6D11';
-    btn.disabled = false;
-    setTimeout(() => { btn.textContent='✉️ Send'; btn.style.background='#185FA5'; }, 3000);
-  }
+  window[_cbName] = (result) => {
+    _cleanup();
+    if (result && result.ok) {
+      toast('✉️ Email sent to ' + to);
+      if (btn) { btn.textContent='✉️ Sent!'; btn.style.background='#3B6D11'; btn.disabled=false; }
+      if (document.getElementById('cp-email-msg')) document.getElementById('cp-email-msg').value='';
+      setTimeout(() => { if(btn){ btn.textContent='✉️ Send'; btn.style.background='#185FA5'; btn.disabled=false; }}, 3000);
+    } else {
+      const err = result?.error || 'Unknown error';
+      console.error('Email failed:', err);
+      toast('✗ Email failed: ' + String(err).slice(0,80), {error:true});
+      if (btn) { btn.textContent='✉️ Send'; btn.style.background='#185FA5'; btn.disabled=false; }
+    }
+  };
+
+  const _script = document.createElement('script');
+  _script.id = '_zlcEmailScript';
+  const _old = document.getElementById('_zlcEmailScript'); if(_old) _old.remove();
+  _script.src = _url;
+  _script.onerror = () => {
+    _cleanup();
+    toast('✗ Could not reach Apps Script', {error:true});
+    if (btn) { btn.textContent='✉️ Send'; btn.style.background='#185FA5'; btn.disabled=false; }
+  };
+  document.head.appendChild(_script);
+
+  // Timeout after 15s
+  setTimeout(() => { if(!_done){ _cleanup(); toast('✗ Email timed out', {error:true}); if(btn){btn.textContent='✉️ Send';btn.style.background='#185FA5';btn.disabled=false;} } }, 15000);
 }
 
 function saveCell(id,key,type){
@@ -4044,25 +4035,14 @@ async function _doCloudSave(rosterData){
   showSaveIndicator('saving', '⏳ Saving…');
   try{
     const c=compressRoster(rosterData);
-
-    // Dynamic chunk sizing — auto-split if any chunk exceeds URL limit
-    const LIMIT=12000;
-    function makeChunks(arr,size){const out=[];for(let i=0;i<arr.length;i+=size)out.push(arr.slice(i,i+size));return out;}
-    let chunks=makeChunks(c.staff,3);
-    const safeChunks=[];
-    for(const ch of chunks){
-      const enc=encodeURIComponent(JSON.stringify({action:'saveAppData',key:'_test',value:ch}));
-      if(enc.length>LIMIT&&ch.length>1){ for(const s of ch)safeChunks.push([s]); }
-      else safeChunks.push(ch);
-    }
-    chunks=safeChunks;
-
+    const CHUNK=3;
+    const chunks=[];
+    for(let i=0;i<c.staff.length;i+=CHUNK)chunks.push(c.staff.slice(i,i+CHUNK));
     for(let i=0;i<chunks.length;i++){
       await jsonpSave('sc'+i,chunks[i]);
       if(i<chunks.length-1)await new Promise(r=>setTimeout(r,400));
     }
-    // scMeta: ONLY chunkCount + extra/equip/rentals — NO staff array here
-    await jsonpSave('scMeta',{chunkCount:chunks.length,extra:c.extra,equip:c.equip,rentals:c.rentals,extraList:c.extraList,staffList:c.staffList});
+    await jsonpSave('scMeta',{staff:c.staff.slice(Math.ceil(c.staff.length/2)*CHUNK/CHUNK),extra:c.extra,equip:c.equip,rentals:c.rentals,extraList:c.extraList,staffList:c.staffList,chunkCount:chunks.length});
     await new Promise(r=>setTimeout(r,400));
     await jsonpSave('orders',DB.openOrders||[]);
     await new Promise(r=>setTimeout(r,300));
@@ -4074,9 +4054,15 @@ async function _doCloudSave(rosterData){
   }catch(e){
     console.error('Cloud save failed:',e);
     setCloudStatus('✗ '+String(e).slice(0,50));
-    showSaveIndicator('error', '✗ Not saved — retrying in 15s');
-    toast('✗ Roster not saved — retrying in 15s', {error:true});
-    setTimeout(()=>{ if(!_cloudSaveInProgress) _doCloudSave(buildRosterData()); }, 15000);
+    showSaveIndicator('error', '✗ Not saved — retry in 30s');
+    toast('✗ Roster not saved — retrying in 30s', {error:true});
+    // Auto-retry once after 30 seconds
+    setTimeout(() => {
+      if (!_cloudSaveInProgress) {
+        const rd = buildRosterData();
+        _doCloudSave(rd);
+      }
+    }, 30000);
   }finally{_cloudSaveInProgress=false;}
 }
 
