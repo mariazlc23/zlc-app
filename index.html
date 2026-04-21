@@ -454,12 +454,18 @@
   </div>
   <div style="padding:12px 16px;border-top:0.5px solid var(--border);margin-top:10px">
     <button id="sync-badge" onclick="throttledSync()" style="width:100%;font-size:11px;font-weight:600;padding:7px 12px;border-radius:var(--radius);border:0.5px solid var(--border2);cursor:pointer;transition:all .15s;background:#f0eeea;color:#9e9c97">↻ Sync from Sheets</button>
-    <button onclick="forceSaveToCloud()" title="Save all data to cloud so any device can access it" style="width:100%;margin-top:6px;font-size:11px;font-weight:600;padding:6px 12px;border-radius:var(--radius);border:0.5px solid #185FA5;cursor:pointer;background:#E8F0FE;color:#185FA5">☁ Save to cloud</button>
+    <button onclick="forceSaveToCloud()" id="cloud-save-btn" title="Save roster to cloud" style="width:100%;margin-top:6px;font-size:11px;font-weight:600;padding:6px 12px;border-radius:var(--radius);border:0.5px solid #185FA5;cursor:pointer;background:#E8F0FE;color:#185FA5">☁ Save to cloud</button>
     <button onclick="loadFromCloud()" style="width:100%;margin-top:4px;font-size:11px;font-weight:600;padding:6px 12px;border-radius:var(--radius);border:0.5px solid var(--border2);cursor:pointer;background:var(--bg3);color:var(--text2)">↻ Load from cloud</button>
     <div id="cloud-status" style="font-size:10px;color:var(--text3);text-align:center;margin-top:4px"></div>
+    <!-- Save diagnostics panel — shows on save errors -->
+    <div id="save-diag" style="display:none;margin-top:6px;font-size:10px;background:#FAEEDA;border:0.5px solid #F0C879;border-radius:4px;padding:6px 8px;color:#854F0B;line-height:1.5">
+      <div style="font-weight:700;margin-bottom:3px">⚠️ Save diagnostics</div>
+      <div id="save-diag-text"></div>
+      <button onclick="runSaveDiag()" style="margin-top:4px;font-size:10px;padding:2px 8px;border-radius:4px;border:0.5px solid #F0C879;background:#fff;color:#854F0B;cursor:pointer;font-weight:600">🔍 Run full check</button>
+    </div>
     <button onclick="testWrite()" id="debug-test-btn" style="display:none;width:100%;margin-top:6px;font-size:11px;font-weight:600;padding:6px 12px;border-radius:var(--radius);border:0.5px solid var(--border2);cursor:pointer;background:#EAF3DE;color:#27500A">Test Sheet write</button>
     <div id="write-log" style="display:none;font-size:10px;color:var(--text3);margin-top:6px;word-break:break-all;line-height:1.4;padding:4px 6px;background:var(--bg3);border-radius:4px"></div>
-    <div style="font-size:10px;color:var(--text3);text-align:center;margin-top:6px">ZLC Project Manager v1.1</div>
+    <div style="font-size:10px;color:var(--text3);text-align:center;margin-top:6px">ZLC Project Manager v1.2</div>
   </div>
 </div>
 
@@ -4093,17 +4099,24 @@ function saveToCloud(rosterData){
   _cloudTimer = setTimeout(()=>flushPendingCloudSave(), 2000);
 }
 
-async function flushPendingCloudSave(force=false){
+async function flushPendingCloudSave(force=false, _retryCount=0){
   if(!APPS_SCRIPT_URL) return;
   if(!_cloudPendingSnapshot && !force) return;
   if(_cloudSaveInProgress){
-    clearTimeout(_cloudTimer);
-    _cloudTimer = setTimeout(()=>flushPendingCloudSave(force), 800);
-    return;
+    if(_retryCount > 10){
+      // Stuck for >8 seconds — force-release the lock and try anyway
+      console.warn('☁️ Cloud save lock stuck — force-releasing');
+      _cloudSaveInProgress = false;
+    } else {
+      clearTimeout(_cloudTimer);
+      _cloudTimer = setTimeout(()=>flushPendingCloudSave(force, _retryCount+1), 800);
+      return;
+    }
   }
   const snapshot = _cloudPendingSnapshot || buildRosterData();
   _cloudPendingSnapshot = null;
   await _doCloudSave(snapshot);
+  // If new changes came in while we were saving, flush those too
   if(_cloudPendingSnapshot){
     clearTimeout(_cloudTimer);
     _cloudTimer = setTimeout(()=>flushPendingCloudSave(), 300);
@@ -4118,18 +4131,57 @@ async function _doCloudSave(rosterData){
   try{
     const c = compressRoster(rosterData);
 
-    // Split staff into chunks of 4 to stay under URL limits
-    const CHUNK = 2;
-    const chunks = [];
-    for(let i=0; i<c.staff.length; i+=CHUNK) chunks.push(c.staff.slice(i,i+CHUNK));
+    // ── Dynamic chunk sizing ──────────────────────────────────────────────
+    // Start with chunks of 2 staff. If any chunk exceeds the URL limit,
+    // split down to 1 per chunk automatically. This handles employees with
+    // many assigned days whose serialized data grows large.
+    const LIMIT = 12000; // stay safely under Apps Script's 14KB URL cap
+    function makeChunks(arr, size){
+      const out = [];
+      for(let i=0;i<arr.length;i+=size) out.push(arr.slice(i,i+size));
+      return out;
+    }
+    let chunks = makeChunks(c.staff, 2);
+    // Re-split any chunk that's too large into size-1
+    const safeChunks = [];
+    for(const ch of chunks){
+      const encoded = encodeURIComponent(JSON.stringify({action:'saveAppData',key:'_test',value:ch}));
+      if(encoded.length > LIMIT && ch.length > 1){
+        // Split this chunk further — one staff per chunk
+        for(const s of ch) safeChunks.push([s]);
+      } else {
+        safeChunks.push(ch);
+      }
+    }
+    chunks = safeChunks;
 
-    // Save each staff chunk
+    // ── Save each staff chunk with per-chunk error reporting ──────────────
+    const failedChunks = [];
     for(let i=0; i<chunks.length; i++){
-      await jsonpSave('sc'+i, chunks[i]);
-      if(i < chunks.length-1) await delay(300);
+      try{
+        await jsonpSave('sc'+i, chunks[i]);
+        if(i < chunks.length-1) await delay(300);
+      } catch(chunkErr){
+        failedChunks.push({i, err: String(chunkErr)});
+        console.error('☁️ Chunk sc'+i+' failed:', chunkErr);
+      }
     }
 
-    // Save metadata: chunk count + extra/equip/rentals
+    if(failedChunks.length > 0){
+      // Some chunks failed — let the user know which ones and why
+      const msg = `⚠️ ${failedChunks.length} of ${chunks.length} save chunk(s) failed. Data may be incomplete. Check console for details.`;
+      console.error('Failed chunks:', failedChunks);
+      showBanner(msg, 'error', 0); // 0 = don't auto-hide, stays until dismissed
+      setCloudStatus('✗ Partial save — click "Run full check"');
+      showSaveIndicator && showSaveIndicator('error','✗ Not fully saved');
+      // Show the diagnostics panel automatically with a summary
+      const diagLines = failedChunks.map(f => `❌ Chunk ${f.i}: ${f.err}`);
+      diagLines.push('👆 Click "Run full check" for full analysis and fix instructions.');
+      showSaveDiag(diagLines.join('<br>'));
+      // Still try to save metadata with what we have
+    }
+
+    // ── Save metadata: chunk count + extra/equip/rentals ─────────────────
     await jsonpSave('scMeta', {
       chunkCount: chunks.length,
       extra:      c.extra,
@@ -4140,22 +4192,25 @@ async function _doCloudSave(rosterData){
     });
     await delay(300);
 
-    // Save orders
+    // ── Save orders ───────────────────────────────────────────────────────
     await jsonpSave('orders', DB.openOrders||[]);
     await delay(200);
 
-    // Save manually-added projects (created from app, not from sheet)
+    // ── Save manually-added projects ──────────────────────────────────────
     await jsonpSave('manualProjects', DB.projects.filter(p=>p._manual)||[]);
 
-    const t = new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'});
-    setCloudStatus('✓ Saved '+t);
-    showSaveIndicator && showSaveIndicator('saved','✓ Saved');
-    console.log('☁️ Saved to cloud at', t);
+    if(failedChunks.length === 0){
+      const t = new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'});
+      setCloudStatus('✓ Saved '+t);
+      showSaveIndicator && showSaveIndicator('saved','✓ Saved');
+      console.log('☁️ Saved to cloud at', t, '·', chunks.length, 'chunks ·', c.staff.length, 'staff');
+    }
   }catch(e){
     console.error('☁️ Save failed:',e);
     setCloudStatus('✗ Save failed — retrying…');
-    showBanner('⚠️ Changes not saved to cloud. Retrying in 15s…','error');
-    // Auto-retry
+    showBanner('⚠️ Roster not saved to cloud. Retrying in 15s…', 'error', 0);
+    showSaveDiag('❌ Save error: '+String(e).slice(0,120)+'<br>👆 Click "Run full check" for diagnosis.<br>🔄 Auto-retrying in 15s…');
+    // Auto-retry once after 15 seconds
     setTimeout(()=>{ saveToCloud(buildRosterData()); }, 15000);
   }finally{
     _cloudSaveInProgress = false;
@@ -4169,7 +4224,130 @@ async function forceSaveToCloud(){
   clearTimeout(_cloudTimer);
   if(_cloudSaveInProgress){ toast('☁️ Save queued…'); return; }
   toast('☁️ Saving to cloud…');
+  hideSaveDiag();
   await flushPendingCloudSave(true);
+}
+
+function hideSaveDiag(){
+  const el = document.getElementById('save-diag');
+  if(el) el.style.display = 'none';
+}
+
+function showSaveDiag(html){
+  const el  = document.getElementById('save-diag');
+  const txt = document.getElementById('save-diag-text');
+  if(!el||!txt) return;
+  txt.innerHTML = html;
+  el.style.display = 'block';
+}
+
+// ─── SAVE DIAGNOSTICS ─────────────────────────────────────────────────────────
+// Called from sidebar "Run full check" button. Analyzes roster data sizes,
+// detects which chunks would exceed the 14KB URL limit, and tests connectivity.
+async function runSaveDiag(){
+  const diagEl = document.getElementById('save-diag-text');
+  if(diagEl) diagEl.innerHTML = '🔍 Analyzing…';
+
+  const LIMIT  = 14000;
+  const c      = compressRoster(buildRosterData());
+  const lines  = [];
+
+  // ── 1. Apps Script URL ──────────────────────────────────────────────────
+  if(!APPS_SCRIPT_URL){
+    lines.push('❌ No Apps Script URL configured');
+  } else {
+    lines.push('✓ Apps Script URL set');
+  }
+
+  // ── 2. Staff payload sizes ───────────────────────────────────────────────
+  const CHUNK = 2;
+  function makeChunks(arr, size){
+    const out=[];
+    for(let i=0;i<arr.length;i+=size) out.push(arr.slice(i,i+size));
+    return out;
+  }
+  const chunks = makeChunks(c.staff, CHUNK);
+  let bigChunks = 0;
+  let maxChunkKB = 0;
+  chunks.forEach((ch, i) => {
+    const encoded = encodeURIComponent(JSON.stringify({action:'saveAppData',key:'sc'+i,value:ch}));
+    const kb = Math.round(encoded.length/1024*10)/10;
+    if(kb > maxChunkKB) maxChunkKB = kb;
+    if(encoded.length > LIMIT){
+      bigChunks++;
+      // Find the culprit — which staff in this chunk has the most data
+      ch.forEach(s => {
+        const days = Object.keys(s.a||{}).length;
+        lines.push(`❌ Chunk sc${i} too large (${kb}KB > 14KB): "${s.name||s.id}" has ${days} assigned days`);
+      });
+    }
+  });
+
+  if(bigChunks === 0){
+    lines.push(`✓ All ${chunks.length} staff chunks OK (largest: ${maxChunkKB}KB)`);
+  } else {
+    lines.push(`⚠️ ${bigChunks}/${chunks.length} chunk(s) exceed limit — save will fail for those`);
+    lines.push(`💡 Fix: old assignments are accumulating. Clear days before ${getPrevMonthLabel()} from the roster.`);
+  }
+
+  // ── 3. Meta payload ──────────────────────────────────────────────────────
+  const metaEncoded = encodeURIComponent(JSON.stringify({
+    action:'saveAppData', key:'scMeta',
+    value:{ chunkCount:chunks.length, extra:c.extra, equip:c.equip,
+            rentals:c.rentals, extraList:c.extraList, staffList:c.staffList }
+  }));
+  const metaKB = Math.round(metaEncoded.length/1024*10)/10;
+  if(metaEncoded.length > LIMIT){
+    lines.push(`❌ scMeta too large (${metaKB}KB). Extra workers or equipment have too many assigned days.`);
+  } else {
+    lines.push(`✓ scMeta OK (${metaKB}KB)`);
+  }
+
+  // ── 4. Total staff / assignments ─────────────────────────────────────────
+  const totalStaff = STAFF.length + EXTRA.length;
+  let totalDays = 0;
+  [...STAFF,...EXTRA,...EQUIP,...RENTALS].forEach(e => totalDays += Object.keys(e.a||{}).length);
+  lines.push(`ℹ️ ${totalStaff} staff/extra · ${totalDays} total assigned day-slots across all people`);
+
+  // ── 5. Quick connectivity test ───────────────────────────────────────────
+  if(APPS_SCRIPT_URL){
+    lines.push('🔄 Testing connection to Apps Script…');
+    showSaveDiag(lines.join('<br>'));
+    try{
+      await new Promise((res,rej)=>{
+        const cb = '_zlcDiag_'+Date.now();
+        const sc = document.createElement('script');
+        let done=false;
+        window[cb] = (r)=>{ done=true; delete window[cb]; sc.remove(); res(r); };
+        sc.onerror = ()=>{ done=true; delete window[cb]; sc.remove(); rej(new Error('Network error')); };
+        sc.src = APPS_SCRIPT_URL+'?callback='+cb+'&data='+encodeURIComponent(JSON.stringify({action:'ping'}));
+        document.head.appendChild(sc);
+        setTimeout(()=>{ if(!done){ done=true; delete window[cb]; sc.remove(); rej(new Error('Timeout after 10s')); } }, 10000);
+      });
+      lines.pop();
+      lines.push('✓ Apps Script reachable — connection OK');
+    } catch(connErr){
+      lines.pop();
+      lines.push(`❌ Cannot reach Apps Script: ${connErr.message}`);
+      lines.push('💡 Check: Are you connected to the internet? Is the Apps Script URL still valid?');
+    }
+  }
+
+  // ── 6. Recommendation summary ────────────────────────────────────────────
+  lines.push('─────────────────');
+  if(bigChunks > 0){
+    lines.push('🔧 Recommended fix: Go to Roster → select previous months → right-click cells → Clear. Removing old months reduces payload size.');
+  } else {
+    lines.push('✅ No payload issues detected. If save still fails, check the Apps Script logs in Google Drive.');
+  }
+
+  showSaveDiag(lines.join('<br>'));
+}
+
+function getPrevMonthLabel(){
+  const d = new Date();
+  d.setMonth(d.getMonth() - 2);
+  return d.toLocaleString('en-US',{month:'long',year:'numeric'});
 }
 
 async function loadFromCloud(){
@@ -4228,22 +4406,29 @@ async function loadFromCloud(){
 // jsonpSave — write one key/value to App Data sheet
 function jsonpSave(key, value){
   return new Promise((resolve,reject)=>{
-    if(!APPS_SCRIPT_URL){ reject('No URL'); return; }
+    if(!APPS_SCRIPT_URL){ reject('No Apps Script URL configured'); return; }
     const body    = JSON.stringify({action:'saveAppData', key, value});
     const encoded = encodeURIComponent(body);
-    if(encoded.length > 14000){ reject('Payload too large for key='+key+' ('+Math.round(encoded.length/1024)+'KB)'); return; }
+    const kb      = Math.round(encoded.length / 1024 * 10) / 10;
+    if(encoded.length > 14000){
+      const err = `Payload too large for key="${key}": ${kb}KB (limit ~14KB). Try fewer assignments per person.`;
+      console.error('☁️', err);
+      reject(err);
+      return;
+    }
+    console.log(`☁️ jsonpSave key=${key} size=${kb}KB`);
     const cbName  = '_zlcSave_'+Date.now()+'_'+Math.random().toString(36).slice(2,5);
     const scriptId= '_zlcScript_'+key.replace(/[^a-zA-Z0-9]/g,'_');
     const old     = document.getElementById(scriptId); if(old) old.remove();
     let done = false;
     const cleanup = ()=>{ done=true; delete window[cbName]; const el=document.getElementById(scriptId); if(el)el.remove(); };
-    window[cbName] = (r)=>{ cleanup(); if(r&&r.ok) resolve(r); else reject('Apps Script returned error: '+JSON.stringify(r)); };
+    window[cbName] = (r)=>{ cleanup(); if(r&&r.ok) resolve(r); else reject('Apps Script error for key='+key+': '+JSON.stringify(r)); };
     const script   = document.createElement('script');
     script.id      = scriptId;
     script.src     = APPS_SCRIPT_URL+'?data='+encoded+'&callback='+cbName;
-    script.onerror = ()=>{ cleanup(); reject('Network error saving key='+key); };
+    script.onerror = ()=>{ cleanup(); reject('Network error saving key='+key+'. Check internet connection.'); };
     document.head.appendChild(script);
-    setTimeout(()=>{ if(!done){ cleanup(); reject('Timeout saving key='+key); }}, 15000);
+    setTimeout(()=>{ if(!done){ cleanup(); reject('Timeout (20s) saving key='+key+'. Apps Script may be slow.'); }}, 20000);
   });
 }
 
@@ -4293,14 +4478,15 @@ function applyRosterData(rd) {
 
 
 // Safe wrappers for UI functions that may not be defined yet at call time
-function showBanner(msg, type='error'){
+function showBanner(msg, type='error', duration=6000){
   const b=document.getElementById('error-banner');
   const t=document.getElementById('error-banner-text');
   if(!b||!t)return;
   t.textContent=msg;
   b.style.background=type==='error'?'#E24B4A':'#3B6D11';
   b.style.display='block';
-  setTimeout(()=>{b.style.display='none';},6000);
+  if(duration > 0) setTimeout(()=>{b.style.display='none';}, duration);
+  // duration=0 means sticky — stays until user clicks ✕
 }
 
 function showSaveIndicator(state, msg){
