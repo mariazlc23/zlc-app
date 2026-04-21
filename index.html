@@ -3275,8 +3275,8 @@ function saveCell(id,key,type){
   saveLocal();closeModal();renderRoster();
   // Update clipboard snapshot with saved values so next paste is current
   if(_newItem) _rosterClipboard = {
-    a:_si.a?.[key], notes:_si.notes?.[key], wh:_si.wh?.[key],
-    cc:_si.cc?.[key], co:_si.co?.[key], confirmed:_si.confirmed?.[key], pour:_si.pour?.[key],
+    a:_newItem.a?.[key], notes:_newItem.notes?.[key], wh:_newItem.wh?.[key],
+    cc:_newItem.cc?.[key], co:_newItem.co?.[key], confirmed:_newItem.confirmed?.[key], pour:_newItem.pour?.[key],
   };
 }
 
@@ -3995,6 +3995,62 @@ function setCloudStatus(msg) {
   });
 }
 
+
+const DEFAULT_STAFF_IDS = new Set(['e1','e2','e3','e4','e5','e6','e7','e8','e9','e10','e11','e12','e13','e14','e15','e16','e17','e18']);
+const DEFAULT_EXTRA_IDS = new Set(['ew1','ew2','ew3','ew4','ew5','ew6','ew7','ew8']);
+
+function buildRosterData(){
+  const mapItem = e => ({
+    id: e.id,
+    a: e.a||{},
+    notes: e.notes||{},
+    wh: e.wh||{},
+    cc: e.cc||{},
+    co: e.co||{},
+    confirmed: e.confirmed||{},
+    pour: e.pour||{},
+    name: e.name,
+  });
+  const mapItemExtra = e => ({...mapItem(e), project: e.project});
+  const mapStaffRecord = e => ({
+    id: e.id,
+    name: e.name||'',
+    team: e.team||'',
+    role: e.role||'',
+    certs: e.certs||[],
+    veh: e.veh||'',
+    a: e.a||{},
+    notes: e.notes||{},
+    wh: e.wh||{},
+    cc: e.cc||{},
+    co: e.co||{},
+    confirmed: e.confirmed||{},
+    pour: e.pour||{},
+  });
+  const mapExtraRecord = e => ({
+    id: e.id,
+    name: e.name||'',
+    team: e.team||'',
+    role: e.role||'laborer',
+    project: e.project||'',
+    a: e.a||{},
+    notes: e.notes||{},
+    wh: e.wh||{},
+    cc: e.cc||{},
+    co: e.co||{},
+    confirmed: e.confirmed||{},
+    pour: e.pour||{},
+  });
+  return {
+    staff:     STAFF.map(mapItem),
+    extra:     EXTRA.map(mapItemExtra),
+    equip:     EQUIP.map(mapItemExtra),
+    rentals:   RENTALS.map(mapItemExtra),
+    extraList: EXTRA.filter(e=>!DEFAULT_EXTRA_IDS.has(e.id)).map(mapExtraRecord),
+    staffList: STAFF.filter(e=>!DEFAULT_STAFF_IDS.has(e.id)).map(mapStaffRecord),
+  };
+}
+
 function compressRoster(rd){
   const c=arr=>(arr||[]).map(e=>{
     const o={id:e.id};
@@ -4027,11 +4083,31 @@ function compressRoster(rd){
 let _cloudTimer = null;
 let _cloudSaveInProgress = false;
 
-// Called by saveLocal() — debounce 2s then save
+let _cloudPendingSnapshot = null;
+
+// Called by saveLocal() — debounce 2s then save the latest snapshot
 function saveToCloud(rosterData){
   if(!APPS_SCRIPT_URL) return;
+  _cloudPendingSnapshot = rosterData;
   clearTimeout(_cloudTimer);
-  _cloudTimer = setTimeout(()=>_doCloudSave(rosterData), 2000);
+  _cloudTimer = setTimeout(()=>flushPendingCloudSave(), 2000);
+}
+
+async function flushPendingCloudSave(force=false){
+  if(!APPS_SCRIPT_URL) return;
+  if(!_cloudPendingSnapshot && !force) return;
+  if(_cloudSaveInProgress){
+    clearTimeout(_cloudTimer);
+    _cloudTimer = setTimeout(()=>flushPendingCloudSave(force), 800);
+    return;
+  }
+  const snapshot = _cloudPendingSnapshot || buildRosterData();
+  _cloudPendingSnapshot = null;
+  await _doCloudSave(snapshot);
+  if(_cloudPendingSnapshot){
+    clearTimeout(_cloudTimer);
+    _cloudTimer = setTimeout(()=>flushPendingCloudSave(), 300);
+  }
 }
 
 async function _doCloudSave(rosterData){
@@ -4043,7 +4119,7 @@ async function _doCloudSave(rosterData){
     const c = compressRoster(rosterData);
 
     // Split staff into chunks of 4 to stay under URL limits
-    const CHUNK = 4;
+    const CHUNK = 2;
     const chunks = [];
     for(let i=0; i<c.staff.length; i+=CHUNK) chunks.push(c.staff.slice(i,i+CHUNK));
 
@@ -4080,7 +4156,7 @@ async function _doCloudSave(rosterData){
     setCloudStatus('✗ Save failed — retrying…');
     showBanner('⚠️ Changes not saved to cloud. Retrying in 15s…','error');
     // Auto-retry
-    setTimeout(()=>{ if(!_cloudSaveInProgress) _doCloudSave(buildRosterData()); }, 15000);
+    setTimeout(()=>{ saveToCloud(buildRosterData()); }, 15000);
   }finally{
     _cloudSaveInProgress = false;
   }
@@ -4089,9 +4165,11 @@ async function _doCloudSave(rosterData){
 function delay(ms){ return new Promise(r=>setTimeout(r,ms)); }
 
 async function forceSaveToCloud(){
-  if(_cloudSaveInProgress){ toast('Save in progress…'); return; }
+  _cloudPendingSnapshot = buildRosterData();
+  clearTimeout(_cloudTimer);
+  if(_cloudSaveInProgress){ toast('☁️ Save queued…'); return; }
   toast('☁️ Saving to cloud…');
-  await _doCloudSave(buildRosterData());
+  await flushPendingCloudSave(true);
 }
 
 async function loadFromCloud(){
@@ -4190,8 +4268,27 @@ function applyRosterData(rd) {
   apply(rd.extra,   EXTRA);
   apply(rd.equip,   EQUIP);
   apply(rd.rentals, RENTALS);
-  (rd.extraList||[]).forEach(s=>{ if(!EXTRA.find(e=>e.id===s.id)) EXTRA.push({...s,role:'laborer'}); });
-  (rd.staffList||[]).forEach(s=>{ if(!STAFF.find(e=>e.id===s.id)) STAFF.push(s); });
+  (rd.extraList||[]).forEach(s=>{
+    if(!EXTRA.find(e=>e.id===s.id)) EXTRA.push({
+      id:s.id,
+      name:s.name||'Unnamed',
+      team:s.team||'',
+      role:s.role||'laborer',
+      project:s.project||'',
+      a:s.a||{}, notes:s.notes||{}, wh:s.wh||{}, cc:s.cc||{}, co:s.co||{}, confirmed:s.confirmed||{}, pour:s.pour||{},
+    });
+  });
+  (rd.staffList||[]).forEach(s=>{
+    if(!STAFF.find(e=>e.id===s.id)) STAFF.push({
+      id:s.id,
+      name:s.name||'Unnamed',
+      team:s.team||'New team',
+      role:s.role||'',
+      certs:s.certs||[],
+      veh:s.veh||'',
+      a:s.a||{}, notes:s.notes||{}, wh:s.wh||{}, cc:s.cc||{}, co:s.co||{}, confirmed:s.confirmed||{}, pour:s.pour||{},
+    });
+  });
 }
 
 
