@@ -775,7 +775,7 @@ const CAT_COLORS={staff:'#185FA5',extra:'#BA7517',equip:'#3B6D11',rental:'#88878
 const DEFAULT_CONFIG = {
   SHEET_ID: '1Y35oa2ebgCisj3PzVs2dTMUN5dY2Hhci4RIt55Kn44Y',
   API_KEY: 'AIzaSyCCuKyfurmT2w-L2dn6-XbvupaOmlHufUE',
-  APPS_SCRIPT_URL: 'https://script.google.com/macros/s/AKfycbzZLk4HWtr6crZdkV4WetlGqo7ne3oomMzn5qHlPoIUtCNY4LjymbevAPv4qQ6jf8EbcA/exec'
+  APPS_SCRIPT_URL: 'https://script.google.com/macros/s/AKfycbzpuCL9IgU50ryvVqJp1Bx5SCzXyUWyWLKZtWgAZdQDbVfexVO-PSGsEVxsXmVqF6UFDQ/exec'
 };
 
 function getRuntimeConfig() {
@@ -4065,39 +4065,47 @@ async function _doCloudSave(rosterData){
   if(_cloudSaveInProgress)return;
   _cloudSaveInProgress=true;
   setCloudStatus('⏳ Saving...');
-  showSaveIndicator('saving', '⏳ Saving…');
+  showSaveIndicator('saving','⏳ Saving…');
   try{
     const c=compressRoster(rosterData);
-    const CHUNK=3;
+    // Save staff in chunks of 5 (to stay under URL size limits)
+    const CHUNK=5;
     const chunks=[];
     for(let i=0;i<c.staff.length;i+=CHUNK)chunks.push(c.staff.slice(i,i+CHUNK));
+    // Save each chunk
     for(let i=0;i<chunks.length;i++){
-      await jsonpSave('sc'+i,chunks[i]);
-      if(i<chunks.length-1)await new Promise(r=>setTimeout(r,400));
+      await jsonpSave('sc'+i, chunks[i]);
+      if(i<chunks.length-1) await new Promise(r=>setTimeout(r,300));
     }
-    // scMeta: NO staff here (staff is in sc0, sc1...) — only extra/equip/rentals + chunk count
-    await jsonpSave('scMeta',{extra:c.extra,equip:c.equip,rentals:c.rentals,extraList:c.extraList,staffList:c.staffList,chunkCount:chunks.length});
-    await new Promise(r=>setTimeout(r,400));
-    await jsonpSave('orders',DB.openOrders||[]);
+    // Save metadata (extra workers, equip, rentals) + chunk count
+    await jsonpSave('scMeta',{
+      chunkCount: chunks.length,
+      extra:      c.extra,
+      equip:      c.equip,
+      rentals:    c.rentals,
+      extraList:  c.extraList,
+      staffList:  c.staffList,
+    });
     await new Promise(r=>setTimeout(r,300));
-    await jsonpSave('gantt_data', GANTT.tasks);
+    // Save orders and manual projects
+    await jsonpSave('orders', DB.openOrders||[]);
+    await new Promise(r=>setTimeout(r,200));
+    await jsonpSave('manualProjects', DB.projects.filter(p=>p._manual)||[]);
     const t=new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'});
     setCloudStatus('✓ Saved '+t);
-    showSaveIndicator('saved', '✓ Saved');
-    toast('✓ Saved to cloud');
+    showSaveIndicator('saved','✓ Saved');
   }catch(e){
     console.error('Cloud save failed:',e);
-    setCloudStatus('✗ '+String(e).slice(0,50));
-    showSaveIndicator('error', '✗ Not saved — retry in 30s');
-    toast('✗ Roster not saved — retrying in 30s', {error:true});
-    setTimeout(() => {
-      if (!_cloudSaveInProgress) {
-        const rd = buildRosterData();
-        _doCloudSave(rd);
-      }
-    }, 30000);
+    setCloudStatus('✗ Save failed');
+    showSaveIndicator('error','✗ Not saved');
+    showBanner('⚠️ Cloud save failed — changes saved locally only. Retrying…','error');
+    // Retry once after 15s
+    setTimeout(()=>{
+      if(!_cloudSaveInProgress){ _doCloudSave(buildRosterData()); }
+    },15000);
   }finally{_cloudSaveInProgress=false;}
 }
+
 
 async function forceSaveToCloud(){
   if(_cloudSaveInProgress){toast('Save in progress...');return;}
@@ -4113,33 +4121,69 @@ async function loadFromCloud(){
   setCloudStatus('⏳ Loading...');
   try{
     const json=await jsonpLoad();
-    if(!json||!json.ok||!json.data){setCloudStatus('☁️ No data — press Save first');return;}
-    const d=json.data;
-    console.log('Cloud keys:',Object.keys(d));
-    let changed=false;
-    const meta=d.scMeta||{};
-    const chunkCount=meta.chunkCount||0;
-    let allStaff=[];
-    if(chunkCount>0){for(let i=0;i<chunkCount;i++)allStaff=allStaff.concat(d['sc'+i]||[]);}
-    if(!allStaff.length&&d.staff1){const s2=d.staff2||{};allStaff=[...(d.staff1||[]),...(s2.staff||[])];if(!meta.extra){meta.extra=s2.extra||[];meta.equip=s2.equip||[];meta.rentals=s2.rentals||[];}}
-    if(!allStaff.length&&d.roster){applyRosterData(d.roster);changed=true;}
-    else if(allStaff.length){
-      const mr={staff:allStaff,extra:meta.extra||[],equip:meta.equip||[],rentals:meta.rentals||[],extraList:meta.extraList||[],staffList:meta.staffList||[]};
-      applyRosterData(mr);changed=true;
-      console.log('Loaded '+allStaff.length+' staff from cloud');
+    if(!json||!json.ok||!json.data){
+      setCloudStatus('☁️ No cloud data yet — press Save');
+      return;
     }
-    if(d.orders){DB.openOrders=d.orders;changed=true;}
-    if(d.historical){DB.historical=d.historical;changed=true;}
+    const d=json.data;
+    const meta=d.scMeta||{};
+    const chunkCount=Number(meta.chunkCount)||0;
+    let changed=false;
+
+    // ── Reconstruct staff from chunks ────────────────────────────────────────
+    let allStaff=[];
+    if(chunkCount>0){
+      for(let i=0;i<chunkCount;i++) allStaff=allStaff.concat(d['sc'+i]||[]);
+    }
+
+    if(allStaff.length>0){
+      const rd={
+        staff:    allStaff,
+        extra:    meta.extra||[],
+        equip:    meta.equip||[],
+        rentals:  meta.rentals||[],
+        extraList:meta.extraList||[],
+        staffList:meta.staffList||[],
+      };
+      applyRosterData(rd);
+      // Also update localStorage so next load is instant
+      localStorage.setItem('zlc_roster', JSON.stringify(rd));
+      changed=true;
+      console.log('☁️ Loaded '+allStaff.length+' staff from cloud');
+    }
+
+    // ── Orders ───────────────────────────────────────────────────────────────
+    if(d.orders && Array.isArray(d.orders)){
+      DB.openOrders=d.orders;
+      localStorage.setItem('zlc_orders', JSON.stringify(d.orders));
+      changed=true;
+    }
+
+    // ── Manual projects (created from app) ───────────────────────────────────
+    if(d.manualProjects && Array.isArray(d.manualProjects)){
+      d.manualProjects.forEach(p=>{
+        if(!DB.projects.find(x=>x.id===p.id)) DB.projects.push(p);
+      });
+      localStorage.setItem('zlc_manual_projects', JSON.stringify(d.manualProjects));
+      changed=true;
+    }
+
+    // ── Gantt ────────────────────────────────────────────────────────────────
     if(d.gantt_data && typeof d.gantt_data==='object'){
       Object.assign(GANTT.tasks, d.gantt_data);
-      // Refresh gantt view if open
       if(GANTT.projId && document.getElementById('gantt-body')) ganttRender();
-      console.log('Gantt data loaded from cloud');
     }
+
     const t=new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'});
     setCloudStatus(changed?'✓ Synced '+t:'☁️ Up to date');
-    if(changed){renderRoster();renderAnalytics();renderProjTable();renderOverview();toast('☁️ Data loaded from cloud');}
-  }catch(e){console.error('Cloud load error:',e);setCloudStatus('✗ Load error');}
+    if(changed){
+      renderRoster();renderProjTable();renderOverview();renderAnalytics();
+      toast('☁️ Loaded from cloud');
+    }
+  }catch(e){
+    console.error('Cloud load error:',e);
+    setCloudStatus('✗ Load error — using local data');
+  }
 }
 
 
