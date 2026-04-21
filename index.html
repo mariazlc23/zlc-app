@@ -4867,6 +4867,143 @@ function bulkDeleteSelected() {
   });
 }
 
+
+// ─── WEATHER (Open-Meteo — free, no API key) ─────────────────────────────────
+const SITE_LAT=37.9777, SITE_LON=-122.0308; // Concord CA
+const WX_CODES={
+  0:'☀️ Clear',1:'🌤️ Mostly clear',2:'⛅ Partly cloudy',3:'☁️ Overcast',
+  45:'🌫️ Foggy',48:'🌫️ Icy fog',51:'🌦️ Light drizzle',53:'🌦️ Drizzle',55:'🌧️ Heavy drizzle',
+  61:'🌧️ Light rain',63:'🌧️ Rain',65:'🌧️ Heavy rain',71:'🌨️ Light snow',73:'🌨️ Snow',
+  80:'🌦️ Showers',81:'🌧️ Heavy showers',82:'⛈️ Violent showers',
+  95:'⛈️ Thunderstorm',96:'⛈️ Thunderstorm+hail',99:'⛈️ Heavy thunderstorm',
+};
+const WX_ALERT=new Set([61,63,65,80,81,82,95,96,99,71,73]);
+let _wxCache=null, _wxCacheTime=0;
+
+async function loadWeather(){
+  const el=document.getElementById('weather-content');
+  if(!el)return;
+  // Show cached data instantly if available
+  if(_wxCache){ renderWeather(_wxCache); }
+  // If cache is fresh (< 30 min) don't re-fetch
+  if(_wxCache && Date.now()-_wxCacheTime < 30*60*1000) return;
+  // Fetch in background
+  if(!_wxCache) el.innerHTML='<div class="empty" style="font-size:12px;color:var(--text3)">⏳ Fetching weather for Concord, CA…</div>';
+  try{
+    const url=`https://api.open-meteo.com/v1/forecast?latitude=${SITE_LAT}&longitude=${SITE_LON}&daily=weathercode,temperature_2m_max,temperature_2m_min,precipitation_sum,windspeed_10m_max&temperature_unit=fahrenheit&windspeed_unit=mph&timezone=America%2FLos_Angeles&forecast_days=7`;
+    const res=await fetch(url);
+    const d=await res.json();
+    _wxCache=d; _wxCacheTime=Date.now();
+    renderWeather(d);
+  }catch(e){
+    if(!_wxCache) el.innerHTML=`<div class="empty">⚠️ Weather unavailable: ${e.message}</div>`;
+  }
+}
+
+function renderWeather(d){
+  const el=document.getElementById('weather-content');if(!el)return;
+  const days=d.daily;
+  const DOW=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  const concreteProjs=DB.projects.filter(p=>p.status==='Active'&&(p.codes||[]).some(c=>c.code==='004'));
+  let alerts='';
+  const cards=days.time.map((date,i)=>{
+    const code=days.weathercode[i];
+    const wx=WX_CODES[code]||`Code ${code}`;
+    const isAlert=WX_ALERT.has(code);
+    const hi=Math.round(days.temperature_2m_max[i]);
+    const lo=Math.round(days.temperature_2m_min[i]);
+    const rain=(days.precipitation_sum[i]||0).toFixed(1);
+    const wind=Math.round(days.windspeed_10m_max[i]||0);
+    const dt=new Date(date+'T12:00:00');
+    const dow=DOW[dt.getDay()];
+    const mon=dt.toLocaleDateString('en-US',{month:'short',day:'numeric'});
+    if(isAlert&&concreteProjs.length){
+      alerts+=`<div style="padding:8px 12px;background:rgba(226,75,74,0.08);border-left:3px solid #E24B4A;border-radius:4px;margin-bottom:6px;font-size:12px">
+        ⚠️ <strong>${dow} ${mon}</strong>: ${wx} — ${concreteProjs.length} concrete project${concreteProjs.length!==1?'s':''} may be affected (${concreteProjs.map(p=>p.id).join(', ')})</div>`;
+    }
+    return`<div style="flex:1;min-width:100px;padding:14px 12px;background:var(--bg);border-radius:10px;border:${isAlert?'1.5px solid #E24B4A':'0.5px solid var(--border)'};text-align:center">
+      <div style="font-size:11px;font-weight:700;color:var(--text2);margin-bottom:4px">${dow}<br>${mon}</div>
+      <div style="font-size:22px;margin:6px 0">${wx.split(' ')[0]}</div>
+      <div style="font-size:11px;color:var(--text2);margin-bottom:4px">${wx.slice(wx.indexOf(' ')+1)}</div>
+      <div style="font-size:13px;font-weight:700">${hi}° / ${lo}°F</div>
+      <div style="font-size:10px;color:var(--text3);margin-top:4px">${rain}" rain · ${wind}mph</div>
+    </div>`;
+  }).join('');
+  el.innerHTML=(alerts?`<div style="margin-bottom:16px"><div style="font-size:12px;font-weight:700;color:#E24B4A;margin-bottom:8px">🚨 Rain/Storm Alerts — Concrete Projects</div>${alerts}</div>`:'')
+    +`<div style="display:flex;gap:8px;flex-wrap:wrap">${cards}</div>`;
+}
+
+// ─── CREW OPTIMIZER ──────────────────────────────────────────────────────────
+let _crewCache=null, _crewCacheMonth=-1;
+
+function renderCrewSuggestions(){
+  const el=document.getElementById('crew-content');if(!el)return;
+  // Show cached result instantly if same month
+  if(_crewCache && _crewCacheMonth===calMonth){
+    el.innerHTML=_crewCache; return;
+  }
+  // Calculate (fast — all local data, no network)
+  const today=new Date();
+  const workDays=[];
+  let d=new Date(today);
+  while(workDays.length<5){
+    d.setDate(d.getDate()+1);
+    if(d.getDay()!==0&&d.getDay()!==6) workDays.push(new Date(d));
+  }
+  const activeProjs=DB.projects.filter(p=>p.status==='Active');
+  const suggestions=[];
+  STAFF.forEach(item=>{
+    const role=getItemRole(item);
+    const freeDays=workDays.filter(wd=>{
+      const key=`${wd.getFullYear()}-${wd.getMonth()+1}-${wd.getDate()}`;
+      return !item.a?.[key];
+    });
+    if(!freeDays.length)return;
+    const matchingProjs=activeProjs.filter(p=>{
+      const summary=getDaysBudgetSummary(p.id);
+      return summary.some(s=>role==='foreman'?(s.foremanDays-s.usedForeman)>0:(s.laborerDays-s.usedLaborer)>0);
+    });
+    if(!matchingProjs.length)return;
+    const certStr=item.certs?.join(', ')||'none';
+    matchingProjs.slice(0,2).forEach(proj=>{
+      suggestions.push({person:item.name,role,certs:certStr,freeDays:freeDays.length,project:proj.id,projName:proj.name,firstFree:freeDays[0]});
+    });
+  });
+
+  let result='';
+  if(!suggestions.length){
+    result='<div class="empty">No suggestions — all crew assigned or no day budgets set on active projects.</div>';
+  } else {
+    suggestions.sort((a,b)=>b.freeDays-a.freeDays);
+    result=suggestions.slice(0,15).map(s=>{
+      const dStr=s.firstFree.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'});
+      const rc=s.role==='foreman'?'#185FA5':'#3B6D11';
+      const pc2=pc(s.project)||'#888';
+      return`<div style="padding:12px 14px;border:0.5px solid var(--border);border-radius:8px;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
+        <div style="display:flex;align-items:center;gap:10px;flex:1;min-width:200px">
+          <div style="width:10px;height:10px;border-radius:50%;background:${rc};flex-shrink:0"></div>
+          <div>
+            <div style="font-size:13px;font-weight:700">${s.person}</div>
+            <div style="font-size:11px;color:var(--text2)">${s.role} · certs: ${s.certs} · <strong>${s.freeDays} free day${s.freeDays!==1?'s':''}</strong> next week</div>
+            <div style="font-size:11px;color:var(--text3)">First available: ${dStr}</div>
+          </div>
+        </div>
+        <div style="text-align:right">
+          <div style="font-size:11px;font-weight:600;color:var(--text2)">Needs ${s.role}</div>
+          <div style="display:flex;align-items:center;gap:5px;margin-top:2px">
+            <span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:${pc2}"></span>
+            <span style="font-size:12px;font-weight:700">${s.project}</span>
+            <span style="font-size:11px;color:var(--text2)">${s.projName}</span>
+          </div>
+        </div>
+      </div>`;
+    }).join('');
+  }
+  _crewCache=result;
+  _crewCacheMonth=calMonth;
+  el.innerHTML=result;
+}
+
 // ─── INIT ─────────────────────────────────────────────────────────────────────
 loadLocal();
 renderAnalytics();
