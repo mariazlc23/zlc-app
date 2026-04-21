@@ -4255,7 +4255,7 @@ async function _doCloudSave(rosterData){
       for(let i=0;i<arr.length;i+=size) out.push(arr.slice(i,i+size));
       return out;
     }
-    let chunks = makeChunks(c.staff, 2);
+    let chunks = makeChunks(c.staff, 1); // 1 person per chunk = smaller, faster saves
     // Re-split any chunk that's too large into size-1
     const safeChunks = [];
     for(const ch of chunks){
@@ -4274,7 +4274,7 @@ async function _doCloudSave(rosterData){
     for(let i=0; i<chunks.length; i++){
       try{
         await jsonpSave('sc'+i, chunks[i]);
-        if(i < chunks.length-1) await delay(300);
+        if(i < chunks.length-1) await delay(600);
       } catch(chunkErr){
         failedChunks.push({i, err: String(chunkErr)});
         console.error('☁️ Chunk sc'+i+' failed:', chunkErr);
@@ -4542,7 +4542,7 @@ function jsonpSave(key, value){
     script.src     = APPS_SCRIPT_URL+'?data='+encoded+'&callback='+cbName;
     script.onerror = ()=>{ cleanup(); reject('Network error saving key='+key+'. Check internet connection.'); };
     document.head.appendChild(script);
-    setTimeout(()=>{ if(!done){ cleanup(); reject('Timeout (20s) saving key='+key+'. Apps Script may be slow.'); }}, 20000);
+    setTimeout(()=>{ if(!done){ cleanup(); reject('Timeout (30s) saving key='+key+'. Apps Script may be slow — try again.'); }}, 30000);
   });
 }
 
@@ -4626,7 +4626,7 @@ function jsonpLoad(){
     script.src     = APPS_SCRIPT_URL+'?callback='+cbName+'&data='+encodeURIComponent(JSON.stringify({action:'loadAppData'}));
     script.onerror = ()=>{ cleanup(); reject('Network error loading from cloud'); };
     document.head.appendChild(script);
-    setTimeout(()=>{ if(!done){ cleanup(); reject('Load timeout'); }}, 20000);
+    setTimeout(()=>{ if(!done){ cleanup(); reject('Load timeout'); }}, 30000);
   });
 }
 
