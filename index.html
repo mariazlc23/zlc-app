@@ -3048,19 +3048,13 @@ function clickCell(itemId,dateKey,day,type){
 
   const extraFields = buildExtraFields(cur, curCc, curCo);
   const curProjId = getAsgnFirstPid(cur) || cur;
-
-  // Build project list: Active + OFF + Warehouse + NEW
-  // Also include the currently-assigned project even if it's not Active
-  // (so the popup can open and let you edit/clear it)
-  const alreadyInList = allProjs.find(p => p.id === curProjId);
-  const allProjsWithCurrent = [...allProjs];
-  if (curProjId && !alreadyInList && curProjId !== 'OFF' && curProjId !== 'Warehouse' && curProjId !== 'NEW') {
-    const projObj = DB.projects.find(p => p.id === curProjId);
-    const projName = projObj ? projObj.name : curProjId;
-    allProjsWithCurrent.push({ id: curProjId, name: projName + ' (non-active)' });
+  // If the current project is not in the active list, add it so the popup can open
+  const projsForSelect = [...allProjs];
+  if(curProjId && !projsForSelect.find(p=>p.id===curProjId) && curProjId!=='OFF' && curProjId!=='Warehouse' && curProjId!=='NEW'){
+    const found = DB.projects.find(p=>p.id===curProjId);
+    projsForSelect.push({id:curProjId, name:(found?found.name:curProjId)+' ⚠️ non-active'});
   }
-
-  const pOpts = allProjsWithCurrent.map(p=>{
+  const pOpts = projsForSelect.map(p=>{
     const lbl2 = p.id==='OFF'?'OFF / Holiday':p.id==='Warehouse'?'Warehouse':p.id==='NEW'?'🆕 New':p.id+' — '+p.name;
     return '<option value="'+p.id+'"'+(curProjId===p.id?' selected':'')+'>'+lbl2+'</option>';
   }).join('');
@@ -3107,7 +3101,7 @@ function clickCell(itemId,dateKey,day,type){
     <div class="fg" style="background:rgba(232,240,254,0.5);border:0.5px solid #B5D4F4;border-radius:var(--radius);padding:10px 12px;margin-top:8px">
       <label style="color:#185FA5;font-weight:600;display:flex;align-items:center;gap:6px;margin-bottom:8px;font-size:12px">
         <span>✉️</span> Send email request
-        <span style="font-size:10px;font-weight:400;color:var(--text3);margin-left:4px">(abre tu cliente de correo)</span>
+        <span style="font-size:10px;font-weight:400;color:var(--text3);margin-left:4px">(optional — opens your email client)</span>
       </label>
       <div style="display:flex;gap:8px;flex-wrap:wrap;align-items:flex-end">
         <div style="flex:1;min-width:160px">
@@ -3207,10 +3201,9 @@ function sendRosterEmail(itemId, dateKey) {
       if (document.getElementById('cp-email-msg')) document.getElementById('cp-email-msg').value='';
       setTimeout(() => { if(btn){ btn.textContent='✉️ Send'; btn.style.background='#185FA5'; btn.disabled=false; }}, 3000);
     } else {
-      const err = result?.error || 'Unknown error';
-      console.error('Email failed via Apps Script:', err);
-      // Fallback — open mailto: in the browser
-      _openMailtoFallback(to, subject, body, btn);
+      // Apps Script returned error — fallback to mailto:
+      console.error('Email Apps Script error:', result?.error);
+      _openMailto(to, subject, body, btn);
     }
   };
 
@@ -3220,23 +3213,21 @@ function sendRosterEmail(itemId, dateKey) {
   _script.src = _url;
   _script.onerror = () => {
     _cleanup();
-    // Apps Script unreachable — use mailto: fallback
-    _openMailtoFallback(to, subject, body, btn);
+    // Network error — fallback to mailto:
+    _openMailto(to, subject, body, btn);
   };
   document.head.appendChild(_script);
 
   // Timeout after 15s — fallback to mailto:
   setTimeout(() => {
-    if(!_done){
-      _cleanup();
-      _openMailtoFallback(to, subject, body, btn);
-    }
+    if(!_done){ _cleanup(); _openMailto(to, subject, body, btn); }
   }, 15000);
 }
 
-function _openMailtoFallback(to, subject, body, btn) {
-  // Opens the system email client as a reliable fallback
-  const mailto = `mailto:${encodeURIComponent(to)}?subject=${encodeURIComponent(subject)}&body=${encodeURIComponent(body)}`;
+function _openMailto(to, subject, body, btn) {
+  const mailto = 'mailto:' + encodeURIComponent(to)
+    + '?subject=' + encodeURIComponent(subject)
+    + '&body='    + encodeURIComponent(body);
   window.open(mailto, '_blank');
   toast('✉️ Opening your email client…');
   if (btn) { btn.textContent='✉️ Send'; btn.style.background='#185FA5'; btn.disabled=false; }
@@ -4225,7 +4216,7 @@ async function _doCloudSave(rosterData){
     await jsonpSave('manualProjects', DB.projects.filter(p=>p._manual)||[]);
     await delay(200);
 
-    // ── Save Gantt tasks ──────────────────────────────────────────────────
+    // Save Gantt tasks
     if(typeof GANTT !== 'undefined' && GANTT.tasks){
       await jsonpSave('gantt_data', GANTT.tasks);
     }
@@ -4405,7 +4396,7 @@ async function loadFromCloud(){
       allStaff = [...(d.staff1||[]), ...(s2.staff||[])];
       if(!meta.extra){ meta.extra=s2.extra||[]; meta.equip=s2.equip||[]; meta.rentals=s2.rentals||[]; }
     }
-    // Fallback: very old format with single roster key
+    // Fallback: very old single roster key
     if(!allStaff.length && d.roster){
       applyRosterData(d.roster);
     } else if(allStaff.length > 0){
