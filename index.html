@@ -4131,7 +4131,7 @@ async function loadFromCloud(){
       });
     }
 
-    if(d.gantt_data && typeof d.gantt_data==='object'){
+    if(d.gantt_data && typeof d.gantt_data==='object' && typeof GANTT!=='undefined'){
       Object.assign(GANTT.tasks, d.gantt_data);
       if(GANTT.projId && document.getElementById('gantt-body')) ganttRender();
     }
@@ -4167,6 +4167,51 @@ function jsonpSave(key, value){
     document.head.appendChild(script);
     setTimeout(()=>{ if(!done){ cleanup(); reject('Timeout saving key='+key); }}, 15000);
   });
+}
+
+
+// applyRosterData — apply cloud-loaded data back to in-memory STAFF/EXTRA/EQUIP/RENTALS
+function applyRosterData(rd) {
+  const apply = (arr, source) => (arr||[]).forEach(saved => {
+    const item = source.find(e => e.id === saved.id);
+    if (item) {
+      if(saved.a)         item.a         = saved.a;
+      if(saved.notes)     item.notes     = saved.notes;
+      if(saved.wh)        item.wh        = saved.wh;
+      if(saved.cc)        item.cc        = saved.cc;
+      if(saved.co)        item.co        = saved.co;
+      if(saved.confirmed) item.confirmed = saved.confirmed;
+      if(saved.pour)      item.pour      = saved.pour;
+      if(saved.name)      item.name      = saved.name;
+      if(saved.project !== undefined) item.project = saved.project;
+    }
+  });
+  apply(rd.staff,   STAFF);
+  apply(rd.extra,   EXTRA);
+  apply(rd.equip,   EQUIP);
+  apply(rd.rentals, RENTALS);
+  (rd.extraList||[]).forEach(s=>{ if(!EXTRA.find(e=>e.id===s.id)) EXTRA.push({...s,role:'laborer'}); });
+  (rd.staffList||[]).forEach(s=>{ if(!STAFF.find(e=>e.id===s.id)) STAFF.push(s); });
+}
+
+
+// Safe wrappers for UI functions that may not be defined yet at call time
+function showBanner(msg, type='error'){
+  const b=document.getElementById('error-banner');
+  const t=document.getElementById('error-banner-text');
+  if(!b||!t)return;
+  t.textContent=msg;
+  b.style.background=type==='error'?'#E24B4A':'#3B6D11';
+  b.style.display='block';
+  setTimeout(()=>{b.style.display='none';},6000);
+}
+
+function showSaveIndicator(state, msg){
+  // Optional UI indicator — safe no-op if element not present
+  const el = document.getElementById('save-indicator');
+  if(!el) return;
+  el.textContent = msg;
+  el.style.display = msg ? 'block' : 'none';
 }
 
 // jsonpLoad — read all keys from App Data sheet
