@@ -408,6 +408,40 @@
   .gantt-color-dot { width:9px; height:9px; border-radius:50%; flex-shrink:0; }
   .gantt-progress-bar { height:6px; border-radius:3px; background:var(--bg3); overflow:hidden; margin-top:3px; }
   .gantt-progress-fill { height:100%; border-radius:3px; background:var(--blue); }
+
+/* ── Bulk select mode ──────────────────────────────────────────── */
+body.select-mode .day-cell { cursor: crosshair !important; }
+body.select-mode .day-cell:hover { filter: brightness(1.15) !important; }
+.day-cell.cell-selected {
+  outline: 2.5px solid #185FA5 !important;
+  outline-offset: -2px;
+}
+.day-cell.cell-selected::after {
+  content: '✓';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  font-size: 11px;
+  font-weight: 900;
+  color: #fff;
+  background: #185FA5;
+  border-radius: 50%;
+  width: 14px;
+  height: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  line-height: 14px;
+  text-align: center;
+  z-index: 10;
+  pointer-events: none;
+}
+#select-mode-btn.active {
+  background: var(--blue) !important;
+  color: #fff !important;
+  border-color: var(--blue) !important;
+}
 </style>
 </head>
 <body>
@@ -623,6 +657,7 @@
       <button class="btn btn-ghost btn-sm" onclick="openModal('extraW')">+ Extra worker</button>
       <button class="btn btn-primary btn-sm" onclick="openModal('assign')">Assign project</button>
       <button class="btn btn-ghost btn-sm" onclick="showRosterHistory()" title="View roster change history this session">📋 History</button>
+      <button id="select-mode-btn" class="btn btn-ghost btn-sm" onclick="toggleSelectMode()" title="Select multiple cells to delete">☑ Select</button>
     </div>
   </div>
   <div class="roster-controls toolbar">
@@ -716,6 +751,18 @@
 
 <div id="modal-area"></div>
 <div class="toast" id="toast"></div>
+<div id="bulk-delete-bar" style="display:none;position:fixed;bottom:0;left:0;right:0;z-index:9997;background:#1a1a18;color:#fff;padding:12px 24px;display:none;align-items:center;justify-content:space-between;box-shadow:0 -4px 20px rgba(0,0,0,0.3)">
+  <div style="display:flex;align-items:center;gap:12px">
+    <span style="font-size:13px;font-weight:600" id="bulk-delete-count">0 cells selected</span>
+    <span style="font-size:11px;color:rgba(255,255,255,0.5)">Click filled cells to select · click again to deselect</span>
+  </div>
+  <div style="display:flex;gap:8px">
+    <button onclick="bulkSelectAll()" style="font-size:12px;padding:6px 14px;border-radius:6px;border:1px solid rgba(255,255,255,0.3);background:none;color:#fff;cursor:pointer">Select all visible</button>
+    <button onclick="bulkClearSelection()" style="font-size:12px;padding:6px 14px;border-radius:6px;border:1px solid rgba(255,255,255,0.3);background:none;color:#fff;cursor:pointer">Clear selection</button>
+    <button onclick="bulkDeleteSelected()" style="font-size:12px;padding:6px 16px;border-radius:6px;border:none;background:#E24B4A;color:#fff;cursor:pointer;font-weight:700">🗑 Delete selected</button>
+    <button onclick="toggleSelectMode()" style="font-size:12px;padding:6px 14px;border-radius:6px;border:1px solid rgba(255,255,255,0.3);background:none;color:#fff;cursor:pointer">✕ Cancel</button>
+  </div>
+</div>
 <div id="error-banner" style="display:none;position:fixed;top:0;left:0;right:0;z-index:9998;padding:10px 20px;background:#E24B4A;color:#fff;font-size:13px;font-weight:600;text-align:center;box-shadow:0 2px 8px rgba(0,0,0,0.2)">
   <span id="error-banner-text"></span>
   <button onclick="document.getElementById('error-banner').style.display='none'" style="margin-left:12px;background:rgba(255,255,255,0.3);border:none;color:#fff;padding:2px 8px;border-radius:4px;cursor:pointer;font-size:12px">✕</button>
@@ -2871,7 +2918,7 @@ function renderRoster(){
       // Build title from project names only
       const titlePids = getAsgnPids(asgn);
       const titleTxt = titlePids.map(pid=>{ const p=DB.projects.find(x=>x.id===pid); return p?`${pid} — ${p.name}`:pid; }).join(', ');
-      return`<td class="day-cell${isT?' today-col':''}${wk?' cell-weekend':''}${!conf&&asgn?' cell-conflict':''}" style="position:relative;background:${bg0||'var(--bg3)'};${wk?'filter:brightness(0.97)':''}" draggable="${asgn?'true':'false'}" onclick="clickCell('${item.id}','${key}','${d}','${type}')" ondragstart="rosterDragStart('${item.id}','${key}','${type}',this)" ondragend="rosterDragEnd(this)" ondragover="rosterDragOver(event,this)" ondrop="rosterDrop(event,'${item.id}','${key}','${type}',this)" title="${(titleTxt+(note?' — '+note:'')).replace(/"/g,'&quot;')}${!conf?' ⚠️ NOT CONFIRMED':''}"><div style="display:flex;flex-direction:column;gap:1px;align-items:center">${inner}</div>${noteDot}${warnIcon}</td>`;
+      return`<td class="day-cell${isT?' today-col':''}${wk?' cell-weekend':''}${!conf&&asgn?' cell-conflict':''}" style="position:relative;background:${bg0||'var(--bg3)'};${wk?'filter:brightness(0.97)':''}" draggable="${asgn?'true':'false'}" data-sel-key="${item.id}|${key}|${type}" onclick="_selectMode?bulkToggleCell('${item.id}','${key}','${type}',this):clickCell('${item.id}','${key}','${d}','${type}')" ondragstart="!_selectMode&&rosterDragStart('${item.id}','${key}','${type}',this)" ondragend="rosterDragEnd(this)" ondragover="rosterDragOver(event,this)" ondrop="rosterDrop(event,'${item.id}','${key}','${type}',this)" title="${(titleTxt+(note?' — '+note:'')).replace(/"/g,'&quot;')}${!conf?' ⚠️ NOT CONFIRMED':''}"><div style="display:flex;flex-direction:column;gap:1px;align-items:center">${inner}</div>${noteDot}${warnIcon}</td>`;
     }
     const bg=asgn==='NEW'?'#FFEBEE':asgn?(()=>{ const pid=getAsgnFirstPid(asgn); return pc(pid||asgn); })():'';
     const tc=bg?ptc(bg):'';
@@ -2886,7 +2933,7 @@ function renderRoster(){
       return asgn.split('-')[1]||asgn.slice(0,4);
     })();
     const cellBorder=!conf&&asgn?'outline:2px solid #E24B4A;':'';
-    return`<td class="day-cell${isT?' today-col':''}${wk?' cell-weekend':''}${!conf&&asgn?' cell-conflict':''}" style="position:relative;${bg?`background:${bg};`:''}${wk&&!bg?'background:rgba(0,0,0,0.02);':''}" draggable="${asgn?'true':'false'}" onclick="clickCell('${item.id}','${key}','${d}','${type}')" ondragstart="rosterDragStart('${item.id}','${key}','${type}',this)" ondragend="rosterDragEnd(this)" ondragover="rosterDragOver(event,this)" ondrop="rosterDrop(event,'${item.id}','${key}','${type}',this)" title="${titleText.replace(/"/g,'&quot;')}${!conf?' ⚠️ NOT CONFIRMED':''}">${asgn?`<div class="day-block" style="color:${asgn==='NEW'?'#C62828':tc}">${dispLabel}</div>`:''}${noteDot}${warnIcon}${pourIcon}</td>`;
+    return`<td class="day-cell${isT?' today-col':''}${wk?' cell-weekend':''}${!conf&&asgn?' cell-conflict':''}" style="position:relative;${bg?`background:${bg};`:''}${wk&&!bg?'background:rgba(0,0,0,0.02);':''}" draggable="${asgn?'true':'false'}" data-sel-key="${item.id}|${key}|${type}" onclick="_selectMode?bulkToggleCell('${item.id}','${key}','${type}',this):clickCell('${item.id}','${key}','${d}','${type}')" ondragstart="!_selectMode&&rosterDragStart('${item.id}','${key}','${type}',this)" ondragend="rosterDragEnd(this)" ondragover="rosterDragOver(event,this)" ondrop="rosterDrop(event,'${item.id}','${key}','${type}',this)" title="${titleText.replace(/"/g,'&quot;')}${!conf?' ⚠️ NOT CONFIRMED':''}">${asgn?`<div class="day-block" style="color:${asgn==='NEW'?'#C62828':tc}">${dispLabel}</div>`:''}${noteDot}${warnIcon}${pourIcon}</td>`;
   }).join('');
 
   // Render a row — returns '' if day mode and no assignment/note
@@ -4677,6 +4724,147 @@ function getProjectCompletion(projId) {
   const totalUsed   = summary.reduce((a, s) => a + s.usedDays,   0);
   if(!totalBudget) return null;
   return Math.min(100, Math.round((totalUsed / totalBudget) * 100));
+}
+
+
+// ─── BULK SELECT & DELETE ────────────────────────────────────────────────────
+let _selectMode = false;
+let _selectedCells = new Map(); // key: "itemId|dateKey|type" → {itemId, dateKey, type}
+
+function toggleSelectMode() {
+  _selectMode = !_selectMode;
+  const btn = document.getElementById('select-mode-btn');
+  const bar = document.getElementById('bulk-delete-bar');
+
+  if (_selectMode) {
+    document.body.classList.add('select-mode');
+    if (btn) { btn.classList.add('active'); btn.textContent = '☑ Selecting…'; }
+    if (bar) bar.style.display = 'flex';
+    _selectedCells.clear();
+    updateBulkBar();
+  } else {
+    document.body.classList.remove('select-mode');
+    if (btn) { btn.classList.remove('active'); btn.textContent = '☑ Select'; }
+    if (bar) bar.style.display = 'none';
+    // Clear all visual selections
+    document.querySelectorAll('.day-cell.cell-selected').forEach(el => el.classList.remove('cell-selected'));
+    _selectedCells.clear();
+  }
+}
+
+function bulkToggleCell(itemId, dateKey, type, el) {
+  const key = `${itemId}|${dateKey}|${type}`;
+  if (_selectedCells.has(key)) {
+    _selectedCells.delete(key);
+    el.classList.remove('cell-selected');
+  } else {
+    _selectedCells.set(key, { itemId, dateKey, type });
+    el.classList.add('cell-selected');
+  }
+  updateBulkBar();
+}
+
+function updateBulkBar() {
+  const countEl = document.getElementById('bulk-delete-count');
+  const n = _selectedCells.size;
+  if (countEl) countEl.textContent = n === 0 ? 'No cells selected' : `${n} cell${n !== 1 ? 's' : ''} selected`;
+}
+
+function bulkClearSelection() {
+  document.querySelectorAll('.day-cell.cell-selected').forEach(el => el.classList.remove('cell-selected'));
+  _selectedCells.clear();
+  updateBulkBar();
+}
+
+function bulkSelectAll() {
+  // Select all visible filled cells
+  _selectedCells.clear();
+  document.querySelectorAll('.day-cell.cell-selected').forEach(el => el.classList.remove('cell-selected'));
+
+  // Walk through all visible items and select their filled days
+  const allItems = [
+    ...STAFF.map(e => ({item: e, type: 'staff'})),
+    ...EXTRA.map(e => ({item: e, type: 'extra'})),
+    ...EQUIP.map(e => ({item: e, type: 'equip'})),
+    ...RENTALS.map(e => ({item: e, type: 'rental'})),
+  ];
+
+  const days = getVisDays();
+  allItems.forEach(({item, type}) => {
+    days.forEach(d => {
+      const dateKey = `${calYear}-${calMonth+1}-${d}`;
+      if (item.a?.[dateKey]) {
+        const key = `${item.id}|${dateKey}|${type}`;
+        _selectedCells.set(key, { itemId: item.id, dateKey, type });
+      }
+    });
+  });
+
+  // Update DOM
+  document.querySelectorAll('.day-cell[data-sel-key]').forEach(el => {
+    const k = el.getAttribute('data-sel-key');
+    if (_selectedCells.has(k)) el.classList.add('cell-selected');
+  });
+  updateBulkBar();
+  toast(`Selected ${_selectedCells.size} cells`);
+}
+
+function bulkDeleteSelected() {
+  if (_selectedCells.size === 0) { toast('No cells selected'); return; }
+  const n = _selectedCells.size;
+
+  // Snapshot for undo
+  const snapshots = [];
+  _selectedCells.forEach(({ itemId, dateKey, type }) => {
+    const item = getItem(itemId, type);
+    if (!item) return;
+    snapshots.push({
+      itemId, dateKey, type,
+      a:         item.a?.[dateKey],
+      notes:     item.notes?.[dateKey],
+      wh:        item.wh?.[dateKey],
+      cc:        item.cc?.[dateKey],
+      co:        item.co?.[dateKey],
+      confirmed: item.confirmed?.[dateKey],
+      pour:      item.pour?.[dateKey],
+    });
+    // Clear the cell
+    if (item.a)         delete item.a[dateKey];
+    if (item.notes)     delete item.notes[dateKey];
+    if (item.wh)        delete item.wh[dateKey];
+    if (item.cc)        delete item.cc[dateKey];
+    if (item.co)        delete item.co[dateKey];
+    if (item.confirmed) delete item.confirmed[dateKey];
+    if (item.pour)      delete item.pour[dateKey];
+  });
+
+  saveLocal();
+  toggleSelectMode(); // exit select mode
+  renderRoster();
+
+  // Undo support
+  showUndo(`Deleted ${n} assignment${n !== 1 ? 's' : ''} — Undo?`, () => {
+    snapshots.forEach(s => {
+      const item = getItem(s.itemId, s.type);
+      if (!item) return;
+      if (!item.a) item.a = {};
+      if (!item.notes) item.notes = {};
+      if (!item.wh) item.wh = {};
+      if (!item.cc) item.cc = {};
+      if (!item.co) item.co = {};
+      if (!item.confirmed) item.confirmed = {};
+      if (!item.pour) item.pour = {};
+      if (s.a)         item.a[s.dateKey]         = s.a;
+      if (s.notes)     item.notes[s.dateKey]     = s.notes;
+      if (s.wh)        item.wh[s.dateKey]        = s.wh;
+      if (s.cc)        item.cc[s.dateKey]        = s.cc;
+      if (s.co)        item.co[s.dateKey]        = s.co;
+      if (s.pour)      item.pour[s.dateKey]      = s.pour;
+      item.confirmed[s.dateKey] = s.confirmed !== undefined ? s.confirmed : true;
+    });
+    saveLocal(); renderRoster();
+    toast(`↩ Restored ${n} assignment${n !== 1 ? 's' : ''}`);
+  });
 }
 
 // ─── INIT ─────────────────────────────────────────────────────────────────────
