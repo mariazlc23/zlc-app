@@ -1395,8 +1395,8 @@ const fmt=v=>'$'+Math.round(v).toLocaleString();
 const fmtS=v=>v>=1e6?'$'+(v/1e6).toFixed(1)+'M':v>=1e3?'$'+(v/1e3).toFixed(0)+'K':'$'+Math.round(v);
 const todate=()=>new Date().toLocaleDateString('en-US',{month:'short',day:'numeric'});
 const uid=()=>'x'+Math.random().toString(36).slice(2,7);
-const bv=p=>p.codes.reduce((a,c)=>a+c.value,0);
-const coAppr=p=>p.cos.filter(c=>c.status==='Approved').reduce((a,c)=>a+c.value,0);
+const bv=p=>(p.codes||[]).reduce((a,c)=>a+(c.value||0),0);
+const coAppr=p=>(p.cos||[]).filter(c=>c.status==='Approved').reduce((a,c)=>a+(c.value||0),0);
 const tv=p=>bv(p)+coAppr(p);
 function bc(s){
   if(!s) return 'b-gray';
@@ -2233,9 +2233,12 @@ function renderDetail(){
 function renderSub(p,tab){
   if(tab==='codes'){
     const base=bv(p); const byCode={};
-    p.cos.filter(c=>c.status==='Approved').forEach(c=>{byCode[c.code]=(byCode[c.code]||0)+c.value;});
+    (p.cos||[]).filter(c=>c.status==='Approved').forEach(c=>{byCode[c.code]=(byCode[c.code]||0)+c.value;});
     let out='';
-    p.codes.forEach(c=>{
+    if(!(p.codes||[]).length){
+      return '<div class="empty">No cost codes — edit this project to add codes.</div>';
+    }
+    (p.codes||[]).forEach(c=>{
       const extra=byCode[c.code]||0,tot=c.value+extra,pct=base>0?Math.round((c.value/base)*100):0,col=CODE_COLORS[c.code]||'#888';
       // Include CO man-days for this cost code
       const coCOs=(p.cos||[]).filter(co=>co.code===c.code&&/approv/i.test(co.status||'')&&((co.foremanDays||0)+(co.laborerDays||0)>0));
@@ -2968,16 +2971,7 @@ function renderRoster(){
   buildRosterSummary(visibleItems, conflictCount, assignedCount, dayMode);
   document.getElementById('roster-tbl').innerHTML=h;
   setRosterDensity(rosterDensity, document.getElementById('density-'+rosterDensity));
-  const usedAll=[...STAFF,...EXTRA,...EQUIP,...RENTALS].flatMap(e=>Object.values(e.a||{})).filter(Boolean);
-  // Extract only project IDs (handle JSON multi-assign format)
-  const allPids = usedAll.flatMap(v => getAsgnPids(v)).filter(p=>p&&p!=='OFF'&&p!=='NEW');
-  const uniq=[...new Set(allPids)];
-  document.getElementById('roster-legend').innerHTML=uniq.map(p=>{
-    const proj=DB.projects.find(x=>x.id===p);
-    const lbl=proj?`${p} — ${proj.name}`:p;
-    return`<span class="li"><span class="lsq" style="background:${pc(p)}"></span>${lbl}</span>`;
-  }).join('')+(uniq.length?'<span class="li"><span class="lsq" style="background:#FCEBEB;border:0.5px solid #F09595"></span>OFF</span>':'')+
-    (dayMode?`<span style="font-size:11px;color:var(--text2);margin-left:8px">Showing: ${formatRosterFilterLabel()}</span>`:'');
+  document.getElementById('roster-legend').innerHTML='';
 }
 
 
@@ -4603,6 +4597,87 @@ function loadLocal(){
   // Manual projects and orders are loaded from cloud via loadFromCloud()
 }
 
+
+
+// ─── MAN-DAYS & PROJECT COMPLETION ──────────────────────────────────────────
+
+// Returns 'foreman' or 'laborer' based on item role field or name
+function getItemRole(item) {
+  if(!item) return 'laborer';
+  const role = (item.role||'').toLowerCase();
+  if(role === 'foreman') return 'foreman';
+  // Check note/name for foreman keywords
+  const name = (item.name||'').toLowerCase();
+  if(name.includes('foreman')) return 'foreman';
+  return 'laborer';
+}
+
+// Count how many days a person is assigned to a project+code combination
+// role: 'foreman', 'laborer', or undefined (count all)
+function countAssignedDays(projId, code, role) {
+  let count = 0;
+  const allItems = [...STAFF, ...EXTRA, ...EQUIP, ...RENTALS];
+  allItems.forEach(item => {
+    // If role filter specified, check item role
+    if(role) {
+      const itemRole = getItemRole(item);
+      if(itemRole !== role) return;
+    }
+    Object.entries(item.a||{}).forEach(([key, asgn]) => {
+      if(!asgn) return;
+      const pids = getAsgnPids(asgn);
+      if(!pids.includes(projId)) return;
+      // Check cost code if specified
+      if(code) {
+        const cc = item.cc?.[key];
+        if(cc !== code) return;
+      }
+      count++;
+    });
+  });
+  return count;
+}
+
+// Returns summary of man-days budget vs used for a project
+function getDaysBudgetSummary(projId) {
+  const proj = DB.projects.find(p => p.id === projId);
+  if(!proj) return [];
+  const codeMap = {};
+  (proj.codes||[]).forEach(c => {
+    codeMap[c.code] = {
+      code: c.code,
+      foremanDays: c.foremanDays||0,
+      laborerDays: c.laborerDays||0,
+    };
+  });
+  // Add approved CO days
+  (proj.cos||[]).filter(co => /approv/i.test(co.status||'')).forEach(co => {
+    if((co.foremanDays||0)+(co.laborerDays||0) > 0 && co.code) {
+      if(!codeMap[co.code]) codeMap[co.code] = {code:co.code, foremanDays:0, laborerDays:0};
+      codeMap[co.code].foremanDays += (co.foremanDays||0);
+      codeMap[co.code].laborerDays += (co.laborerDays||0);
+    }
+  });
+  return Object.values(codeMap)
+    .filter(c => c.foremanDays + c.laborerDays > 0)
+    .map(c => ({
+      ...c,
+      totalDays:   c.foremanDays + c.laborerDays,
+      usedForeman: countAssignedDays(projId, c.code, 'foreman'),
+      usedLaborer: countAssignedDays(projId, c.code, 'laborer'),
+      usedDays:    countAssignedDays(projId, c.code),
+    }));
+}
+
+// Returns 0-100 schedule completion % or null if no budget set
+function getProjectCompletion(projId) {
+  const summary = getDaysBudgetSummary(projId);
+  if(!summary.length) return null;
+  const totalBudget = summary.reduce((a, s) => a + s.totalDays, 0);
+  const totalUsed   = summary.reduce((a, s) => a + s.usedDays,   0);
+  if(!totalBudget) return null;
+  return Math.min(100, Math.round((totalUsed / totalBudget) * 100));
+}
 
 // ─── INIT ─────────────────────────────────────────────────────────────────────
 loadLocal();
