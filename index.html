@@ -453,13 +453,19 @@
     </div>
   </div>
   <div style="padding:12px 16px;border-top:0.5px solid var(--border);margin-top:10px">
-    <button id="sync-badge" onclick="syncFromSheets()" style="width:100%;font-size:11px;font-weight:600;padding:7px 12px;border-radius:var(--radius);border:0.5px solid var(--border2);cursor:pointer;transition:all .15s;background:#f0eeea;color:#9e9c97">↻ Sync from Sheets</button>
-    <button onclick="forceSaveToCloud()" title="Save all data to cloud so any device can access it" style="width:100%;margin-top:6px;font-size:11px;font-weight:600;padding:6px 12px;border-radius:var(--radius);border:0.5px solid #185FA5;cursor:pointer;background:#E8F0FE;color:#185FA5">☁ Save to cloud</button>
+    <button id="sync-badge" onclick="throttledSync()" style="width:100%;font-size:11px;font-weight:600;padding:7px 12px;border-radius:var(--radius);border:0.5px solid var(--border2);cursor:pointer;transition:all .15s;background:#f0eeea;color:#9e9c97">↻ Sync from Sheets</button>
+    <button onclick="forceSaveToCloud()" id="cloud-save-btn" title="Save roster to cloud" style="width:100%;margin-top:6px;font-size:11px;font-weight:600;padding:6px 12px;border-radius:var(--radius);border:0.5px solid #185FA5;cursor:pointer;background:#E8F0FE;color:#185FA5">☁ Save to cloud</button>
     <button onclick="loadFromCloud()" style="width:100%;margin-top:4px;font-size:11px;font-weight:600;padding:6px 12px;border-radius:var(--radius);border:0.5px solid var(--border2);cursor:pointer;background:var(--bg3);color:var(--text2)">↻ Load from cloud</button>
     <div id="cloud-status" style="font-size:10px;color:var(--text3);text-align:center;margin-top:4px"></div>
+    <!-- Save diagnostics panel — shows on save errors -->
+    <div id="save-diag" style="display:none;margin-top:6px;font-size:10px;background:#FAEEDA;border:0.5px solid #F0C879;border-radius:4px;padding:6px 8px;color:#854F0B;line-height:1.5">
+      <div style="font-weight:700;margin-bottom:3px">⚠️ Save diagnostics</div>
+      <div id="save-diag-text"></div>
+      <button onclick="runSaveDiag()" style="margin-top:4px;font-size:10px;padding:2px 8px;border-radius:4px;border:0.5px solid #F0C879;background:#fff;color:#854F0B;cursor:pointer;font-weight:600">🔍 Run full check</button>
+    </div>
     <button onclick="testWrite()" id="debug-test-btn" style="display:none;width:100%;margin-top:6px;font-size:11px;font-weight:600;padding:6px 12px;border-radius:var(--radius);border:0.5px solid var(--border2);cursor:pointer;background:#EAF3DE;color:#27500A">Test Sheet write</button>
     <div id="write-log" style="display:none;font-size:10px;color:var(--text3);margin-top:6px;word-break:break-all;line-height:1.4;padding:4px 6px;background:var(--bg3);border-radius:4px"></div>
-    <div style="font-size:10px;color:var(--text3);text-align:center;margin-top:6px">ZLC Project Manager v1.1</div>
+    <div style="font-size:10px;color:var(--text3);text-align:center;margin-top:6px">ZLC Project Manager v1.2</div>
   </div>
 </div>
 
@@ -473,6 +479,8 @@
     <button class="dtab active" onclick="goDash('analytics',this)">Historical analytics</button>
     <button class="dtab" onclick="goDash('overview',this)">Overview</button>
     <button class="dtab" onclick="goDash('warehouse',this)">Warehouse</button>
+    <button class="dtab" onclick="goDash('weather',this)">🌤️ Weather</button>
+    <button class="dtab" onclick="goDash('crew',this)">👷 Crew</button>
   </div>
   <div id="dash-overview" style="display:none">
     <div class="card" style="margin-bottom:16px">
@@ -538,6 +546,22 @@
       </div>
     </div>
     <div id="wh-dash-content"><div class="empty">Loading…</div></div>
+  </div>
+  <div id="dash-weather" style="display:none">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+      <div><div style="font-size:18px;font-weight:700">🌤️ Weather Forecast</div>
+        <div style="font-size:12px;color:var(--text2);margin-top:2px">Concord, CA — 7-day forecast for job sites</div></div>
+      <button class="btn btn-sm btn-ghost" onclick="loadWeather()">↻ Refresh</button>
+    </div>
+    <div id="weather-content"><div class="empty">Loading weather…</div></div>
+  </div>
+  <div id="dash-crew" style="display:none">
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
+      <div><div style="font-size:18px;font-weight:700">👷 Crew Optimizer</div>
+        <div style="font-size:12px;color:var(--text2);margin-top:2px">Suggestions based on roster and project needs</div></div>
+      <button class="btn btn-sm btn-ghost" onclick="renderCrewSuggestions()">↻ Refresh</button>
+    </div>
+    <div id="crew-content"><div class="empty">Loading…</div></div>
   </div>
   <div id="dash-analytics">
     <div style="display:flex;justify-content:flex-end;margin-bottom:14px">
@@ -692,6 +716,14 @@
 
 <div id="modal-area"></div>
 <div class="toast" id="toast"></div>
+<div id="error-banner" style="display:none;position:fixed;top:0;left:0;right:0;z-index:9998;padding:10px 20px;background:#E24B4A;color:#fff;font-size:13px;font-weight:600;text-align:center;box-shadow:0 2px 8px rgba(0,0,0,0.2)">
+  <span id="error-banner-text"></span>
+  <button onclick="document.getElementById('error-banner').style.display='none'" style="margin-left:12px;background:rgba(255,255,255,0.3);border:none;color:#fff;padding:2px 8px;border-radius:4px;cursor:pointer;font-size:12px">✕</button>
+</div>
+<div id="undo-banner" style="display:none;position:fixed;bottom:60px;left:50%;transform:translateX(-50%);z-index:9998;padding:10px 20px;background:#333;color:#fff;font-size:13px;border-radius:8px;box-shadow:0 4px 16px rgba(0,0,0,0.3);align-items:center;gap:12px">
+  <span id="undo-banner-text">Deleted</span>
+  <button id="undo-btn" style="background:var(--blue);border:none;color:#fff;padding:4px 12px;border-radius:4px;cursor:pointer;font-weight:600;font-size:12px">↩ Undo</button>
+</div>
 
 <script>
 document.addEventListener('keydown', (event) => {
@@ -737,8 +769,8 @@ const DUMP_TYPE_COLORS = {
   'Dirt':'#8B6914','Metal':'#5A5A6A','Baserock':'#4A3F7A','Class 2 Permeable':'#0F6E56'
 };
 
-const TEAM_COLORS={Xolos:'#3bccb7',Chingones:'#4a86e8',Poblanos:'#cc00cc',Lobos:'#9900ff','Guerreros Z':'#c9a200',Warehouse:'#888780',Driver:'#D85A30',Joaquin:'#a61c00'};
-const PROJ_COLORS={'25-006':'#cc00cc','26-002':'#009999','25-064':'#3bccb7','25-087':'#4a86e8','24-102':'#9999bb','25-061':'#9900ff','26-006':'#c9a200','25-103':'#7bafd4','25-105':'#a64d79','26-003':'#999999','26-004':'#E33F91','25-036':'#134f5c','25-076':'#f6b26b','25-075':'#A64B3C','24-112':'#00cc00','24-126':'#ead1dc','23-134':'#a61c00','26-001':'#D6D60F','26-005':'#6E2C7B','25-063':'#674ea7','25-081':'#45818e','25-085':'#fff2cc','25-089':'#d0e0e3','25-094':'#4DA44D','25-102':'#d9ead3','OFF':'#cc3333','Warehouse':'#666666'};
+const TEAM_COLORS={Xolos:'#3bccb7',Chingones:'#4a86e8',Poblanos:'#cc00cc',Lobos:'#9900ff','Guerreros Z':'#c9a200',Warehouse:'#888780',Driver:'#D85A30'};
+const PROJ_COLORS={'25-006':'#C2185B','26-002':'#00838F','25-064':'#2E7D32','25-087':'#1565C0','24-102':'#6A1B9A','25-061':'#AD1457','26-006':'#F57F17','25-103':'#0277BD','25-105':'#558B2F','26-003':'#4E342E','26-004':'#D81B60','25-036':'#00695C','25-076':'#E65100','25-075':'#B71C1C','24-112':'#1B5E20','24-126':'#880E4F','23-134':'#BF360C','26-001':'#827717','26-005':'#4A148C','25-063':'#283593','25-081':'#006064','25-085':'#33691E','25-089':'#01579B','25-094':'#1A237E','25-102':'#3E2723','OFF':'#cc3333','Warehouse':'#555555'};
 const MONTHS=['January','February','March','April','May','June','July','August','September','October','November','December'];
 const MO=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 const DLBL=['Su','Mo','Tu','We','Th','Fr','Sa'];
@@ -749,7 +781,7 @@ const CAT_COLORS={staff:'#185FA5',extra:'#BA7517',equip:'#3B6D11',rental:'#88878
 const DEFAULT_CONFIG = {
   SHEET_ID: '1Y35oa2ebgCisj3PzVs2dTMUN5dY2Hhci4RIt55Kn44Y',
   API_KEY: 'AIzaSyCCuKyfurmT2w-L2dn6-XbvupaOmlHufUE',
-  APPS_SCRIPT_URL: 'https://script.google.com/macros/s/AKfycbzZLk4HWtr6crZdkV4WetlGqo7ne3oomMzn5qHlPoIUtCNY4LjymbevAPv4qQ6jf8EbcA/exec'
+  APPS_SCRIPT_URL: 'https://script.google.com/macros/s/AKfycbzpuCL9IgU50ryvVqJp1Bx5SCzXyUWyWLKZtWgAZdQDbVfexVO-PSGsEVxsXmVqF6UFDQ/exec'
 };
 
 function getRuntimeConfig() {
@@ -823,7 +855,8 @@ function sheetWrite(action, payload) {
   // Define the callback — Apps Script calls it with the result
   window[cbName] = function(result) {
     if(result && result.error) {
-      if (log) log.textContent = '✗ ' + action + ': ' + result.error;
+      if (log) { log.textContent = '✗ ' + action + ': ' + result.error; log.style.color='#E24B4A'; }
+      showBanner('⚠️ Sheet write failed: ' + result.error, 'error');
       console.error('sheetWrite error:', action, result.error);
       toast('✗ Sheet error: ' + result.error, {error:true});
     } else {
@@ -1298,8 +1331,6 @@ let STAFF=[
   {id:'e12',role:'laborer',name:'Rigo',team:'Guerreros Z',role:'laborer',certs:[],veh:'',a:{},notes:{}},
   {id:'e13',role:'foreman',name:'Miguel #11',team:'Lobos',role:'foreman',certs:[],veh:'',a:{},notes:{}},
   {id:'e14',role:'laborer',name:'Hugo',team:'Lobos',role:'laborer',certs:[],veh:'Needs attention',a:{},notes:{}},
-  {id:'e15',name:'Joaquin',team:'Joaquin',certs:[],veh:'Needs attention',a:{},notes:{}},
-  {id:'e16',role:'laborer',name:'Hernan',team:'Warehouse',certs:[],veh:'',a:{},notes:{}},
   {id:'e17',role:'driver',name:'Francisco #5',team:'Driver',certs:['CPR'],veh:'Good',a:{},notes:{},wh:{},multi:true},
   {id:'e18',role:'driver',name:'Driver 2',team:'Driver',certs:[],veh:'Good',a:{},notes:{},wh:{},multi:true},
 ];
@@ -1307,7 +1338,7 @@ let EXTRA=[
   {id:'ew1',name:'Lazaro',project:'25-061',a:{},notes:{}},{id:'ew2',name:'Jose Ines',project:'25-103',a:{},notes:{}},
   {id:'ew3',name:'Alberto',project:'',a:{},notes:{}},{id:'ew4',name:'Catarino',project:'',a:{},notes:{}},
   {id:'ew5',name:'Dennis',project:'',a:{},notes:{}},{id:'ew6',name:'Concrete laborer 1',project:'',a:{},notes:{}},
-  {id:'ew7',name:'Concrete laborer 2',project:'',a:{},notes:{}},{id:'ew8',name:'Miguel & Joaquin',project:'',a:{},notes:{}},
+  {id:'ew7',name:'Concrete laborer 2',project:'',a:{},notes:{}},{id:'ew8',name:'Miguel',project:'',a:{},notes:{}},
 ];
 const EQUIP=[
   {id:'ss1',cat:'Skid steer',name:'SS1',status:'Good',note:'#5 or #16',a:{},notes:{}},
@@ -1391,7 +1422,21 @@ function toast(m, opts={}) {
   clearTimeout(t._timer);
   t._timer = setTimeout(() => t.classList.remove('show'), dur);
 }
-function pc(id){if(!id)return '';if(id==='OFF')return '#FCEBEB';return PROJ_COLORS[id]||(()=>{const h=Math.abs([...id].reduce((a,c)=>a*31+c.charCodeAt(0),0)%0xFFFFFF);return '#'+h.toString(16).padStart(6,'0');})();}
+function pc(id){
+  if(!id) return '';
+  if(id==='OFF') return '#FCEBEB';
+  if(id==='NEW') return '#FFEBEE';
+  if(id==='Warehouse') return '#F5F0E8';
+  if(PROJ_COLORS[id]) return PROJ_COLORS[id];
+  // Generate a distinct dark color from ID hash
+  const AUTO_PALETTE=['#B71C1C','#880E4F','#4A148C','#1A237E','#006064',
+    '#1B5E20','#E65100','#BF360C','#827717','#33691E',
+    '#01579B','#0D47A1','#00695C','#2E7D32','#558B2F',
+    '#F57F17','#FF6F00','#4E342E','#37474F','#263238',
+    '#C62828','#6A1B9A','#283593','#00838F','#2E7D32'];
+  const idx=Math.abs([...id].reduce((a,c)=>a*31+c.charCodeAt(0),0))%AUTO_PALETTE.length;
+  return AUTO_PALETTE[idx];
+}
 function ptc(bg){if(!bg||bg==='')return '#666';const h=bg.replace('#','');const r=parseInt(h.slice(0,2),16),g=parseInt(h.slice(2,4),16),b=parseInt(h.slice(4,6),16);return(r*299+g*587+b*114)/1000>145?'#2C2C2A':'#F7F7F5';}
 
 function getRosterFilterDateParts(){
@@ -1428,18 +1473,77 @@ function buildRosterSummary(itemsVisible, conflictCount, assignedCount, dayMode)
   const summary = document.getElementById('roster-summary');
   const meta = document.getElementById('roster-meta-tag');
   if(meta){
-    meta.textContent = dayMode ? `Day view · ${formatRosterFilterLabel()||'selected day'}` : `${calView==='week'?'2-week':'Month'} view · ${MONTHS[calMonth]} ${calYear}`;
+    meta.textContent = dayMode
+      ? `Day view · ${formatRosterFilterLabel()||'selected day'}`
+      : `${calView==='week'?'2-week':'Month'} view · ${MONTHS[calMonth]} ${calYear}`;
   }
   if(!summary) return;
-  const activeProjects = new Set();
-  itemsVisible.forEach(item=>{
-    Object.values(item.a||{}).forEach(v=>getAsgnPids(v).forEach(pid=>{ if(pid && pid!=='OFF' && pid!=='NEW') activeProjects.add(pid); }));
+
+  // ── Count projects active in the CURRENT calendar month ──────────────────
+  const monthProjs = {}; // pid → { count, name }
+  const allItems = [...STAFF,...EXTRA,...EQUIP,...RENTALS];
+
+  // Days in current month
+  const daysInMonth = new Date(calYear, calMonth+1, 0).getDate();
+
+  allItems.forEach(item=>{
+    for(let d=1; d<=daysInMonth; d++){
+      const key = `${calYear}-${calMonth+1}-${d}`;
+      const asgn = item.a?.[key];
+      if(!asgn) continue;
+      getAsgnPids(asgn).forEach(pid=>{
+        if(!pid || pid==='OFF' || pid==='NEW' || pid==='Warehouse') return;
+        if(!monthProjs[pid]){
+          const proj = DB.projects.find(p=>p.id===pid);
+          monthProjs[pid] = { count:0, name: proj?proj.name:pid };
+        }
+        monthProjs[pid].count++;
+      });
+    }
   });
+
+  const projList = Object.entries(monthProjs)
+    .sort((a,b)=>b[1].count - a[1].count);
+
+  // Build project pills grouped by month
+  let projHtml = '';
+  if(projList.length){
+    projHtml = projList.map(([pid, info])=>{
+      const color = pc(pid)||'#888';
+      const tc = ptc(color);
+      return `<span style="display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:99px;background:${color};color:${tc};font-size:11px;font-weight:700;cursor:pointer;margin:2px"
+        onclick="setRosterProjFilter('${pid}',true)" title="${pid} — ${info.name} · ${info.count} assignments">
+        <span>${pid}</span>
+        <span style="opacity:.7;font-size:10px">${info.count}</span>
+      </span>`;
+    }).join('');
+  } else {
+    projHtml = `<span style="font-size:12px;color:var(--text3)">No assignments this month</span>`;
+  }
+
   summary.innerHTML = `
-    <div class="summary-card"><div class="summary-label">Visible rows</div><div class="summary-value">${itemsVisible.length}</div><div class="summary-sub">Filtered by section, project and date</div></div>
-    <div class="summary-card"><div class="summary-label">Assigned cells</div><div class="summary-value">${assignedCount}</div><div class="summary-sub">Cells with schedule data in current view</div></div>
-    <div class="summary-card"><div class="summary-label">Conflicts / warnings</div><div class="summary-value">${conflictCount}</div><div class="summary-sub">Unconfirmed assignments highlighted in red</div></div>
-    <div class="summary-card"><div class="summary-label">Projects in view</div><div class="summary-value">${activeProjects.size}</div><div class="summary-sub">Unique projects represented in the table</div></div>`;
+    <div class="summary-card">
+      <div class="summary-label">Visible rows</div>
+      <div class="summary-value">${itemsVisible.length}</div>
+      <div class="summary-sub">People · equipment · rentals</div>
+    </div>
+    <div class="summary-card">
+      <div class="summary-label">Assigned cells</div>
+      <div class="summary-value">${assignedCount}</div>
+      <div class="summary-sub">Cells with schedule data</div>
+    </div>
+    <div class="summary-card">
+      <div class="summary-label">Unconfirmed</div>
+      <div class="summary-value">${conflictCount}</div>
+      <div class="summary-sub">Highlighted in red ⚠️</div>
+    </div>
+    <div class="summary-card" style="grid-column:1/-1">
+      <div class="summary-label" style="margin-bottom:8px">
+        Projects active in <strong>${MONTHS[calMonth]} ${calYear}</strong>
+        <span style="font-size:10px;color:var(--text3);margin-left:8px">(click to filter)</span>
+      </div>
+      <div style="display:flex;flex-wrap:wrap;gap:2px;align-items:center">${projHtml}</div>
+    </div>`;
 }
 
 // ─── NAV ────────────────────────────────────────────────────────────────────
@@ -1458,9 +1562,13 @@ function goDash(t,b){
   document.getElementById('dash-overview').style.display=t==='overview'?'block':'none';
   document.getElementById('dash-analytics').style.display=t==='analytics'?'block':'none';
   document.getElementById('dash-warehouse').style.display=t==='warehouse'?'block':'none';
+  document.getElementById('dash-weather').style.display=t==='weather'?'block':'none';
+  document.getElementById('dash-crew').style.display=t==='crew'?'block':'none';
   if(t==='overview')renderOverview();
   else if(t==='analytics')renderAnalytics();
   else if(t==='warehouse')syncWarehouse();
+  else if(t==='weather')loadWeather();
+  else if(t==='crew')renderCrewSuggestions();
 }
 
 // ─── DASHBOARD OVERVIEW ──────────────────────────────────────────────────────
@@ -2241,8 +2349,7 @@ function reopenProject(pid){
 }
 function deleteProject(pid){
   const p=DB.projects.find(x=>x.id===pid);if(!p)return;
-  const ok=confirm(`Are you sure you want to delete project ${pid} — ${p.name}?`);
-  if(!ok)return;
+  const _deleted=JSON.parse(JSON.stringify(p));
 
   DB.projects=DB.projects.filter(x=>x.id!==pid);
 
@@ -2253,7 +2360,12 @@ function deleteProject(pid){
 
   saveLocal();
   sheetWrite('deleteProject',{projectId:pid});
-  toast(`Project ${pid} deleted`);
+  showUndo(`Project ${pid} deleted — Undo?`, () => {
+    DB.projects.push(_deleted);
+    DB.projects.sort((a,b)=>String(a.id).localeCompare(String(b.id)));
+    saveLocal(); renderProjTable(); renderOverview(); renderAnalytics();
+    toast(`Project ${pid} restored`);
+  });
   renderProjTable();
   renderOverview();
   renderAnalytics();
@@ -3242,8 +3354,8 @@ function saveCell(id,key,type){
   saveLocal();closeModal();renderRoster();
   // Update clipboard snapshot with saved values so next paste is current
   if(_newItem) _rosterClipboard = {
-    a:_si.a?.[key], notes:_si.notes?.[key], wh:_si.wh?.[key],
-    cc:_si.cc?.[key], co:_si.co?.[key], confirmed:_si.confirmed?.[key], pour:_si.pour?.[key],
+    a:_newItem.a?.[key], notes:_newItem.notes?.[key], wh:_newItem.wh?.[key],
+    cc:_newItem.cc?.[key], co:_newItem.co?.[key], confirmed:_newItem.confirmed?.[key], pour:_newItem.pour?.[key],
   };
 }
 
@@ -3715,7 +3827,7 @@ function openModal(type,pid,extra){
       <div class="fg" style="margin-bottom:0"><label>Team</label><select id="n-team" onchange="document.getElementById('nt-w').style.display=this.value==='__new__'?'block':'none'">${teams.map(t=>`<option>${t}</option>`).join('')}<option value="__new__">+ New team</option></select></div></div>
       <div id="nt-w" style="display:none" class="fg"><label>New team name</label><input id="n-newt" placeholder="Team name"></div>
       <div class="fg"><label>Certifications</label><div style="display:flex;gap:12px;flex-wrap:wrap;margin-top:5px">${['H','RFT','EO','SSO','CPR'].map(c=>`<label style="display:flex;align-items:center;gap:4px;font-size:12px;color:var(--text);font-weight:400"><input type="checkbox" id="c-${c.toLowerCase()}" style="width:auto;accent-color:var(--blue)"> ${c}</label>`).join('')}</div></div>
-      <div class="fg"><label>Vehicle status</label><select id="n-veh"><option value="">N/A</option><option value="Good">Good</option><option value="Needs attention">Needs attention</option></select></div>
+      <div class="fg"><label>Vehicle status</label><select id="n-veh"><option value="">— Select —</option><option value="Good">Good</option><option value="Needs attention">Needs attention</option></select></div>
       <div class="form-actions"><button class="btn" onclick="closeModal()">Cancel</button><button class="btn btn-primary" onclick="saveEmp()">Save</button></div>`);
   } else if(type==='extraW'){
     showModal(`<div class="modal-title">New extra worker</div>
@@ -3950,8 +4062,6 @@ function saveExtraW(){
 // Saves roster assignments, notes, extra staff, and manually added projects
 // so data survives page refresh
 // ─── CLOUD PERSISTENCE ───────────────────────────────────────────────────────
-let _cloudTimer = null;
-let _cloudSaveInProgress = false;
 
 function setCloudStatus(msg) {
   ['cloud-status','cloud-status-2'].forEach(id=>{
@@ -3964,229 +4074,11 @@ function setCloudStatus(msg) {
   });
 }
 
-function compressRoster(rd){
-  const c=arr=>(arr||[]).map(e=>{
-    const o={id:e.id};
-    if(e.name)o.name=e.name;if(e.project)o.project=e.project;
-    if(e.a&&Object.keys(e.a).length)o.a=e.a;
-    if(e.notes&&Object.keys(e.notes).length)o.notes=e.notes;
-    if(e.wh&&Object.keys(e.wh).length)o.wh=e.wh;
-    if(e.cc&&Object.keys(e.cc).length)o.cc=e.cc;
-    if(e.co&&Object.keys(e.co).length)o.co=e.co;
-    if(e.confirmed&&Object.keys(e.confirmed).length)o.confirmed=e.confirmed;
-    if(e.pour&&Object.keys(e.pour).length)o.pour=e.pour;
-    return o;
-  }).filter(e=>Object.keys(e).length>1);
-  return{staff:c(rd.staff),extra:c(rd.extra),equip:c(rd.equip),rentals:c(rd.rentals),extraList:rd.extraList||[],staffList:rd.staffList||[]};
-}
 
-function jsonpSave(key,value){
-  return new Promise((resolve,reject)=>{
-    if(!APPS_SCRIPT_URL){reject('No URL');return;}
-    const body=JSON.stringify({action:'saveAppData',key,value});
-    const encoded=encodeURIComponent(body);
-    if(encoded.length>14000){reject('Payload too large: '+Math.round(encoded.length/1024)+'KB for key='+key);return;}
-    const cbName='_zlcSave_'+Date.now()+'_'+Math.random().toString(36).slice(2,5);
-    const scriptId='_zlcScript_'+key.replace(/[^a-zA-Z0-9]/g,'_');
-    const old=document.getElementById(scriptId);if(old)old.remove();
-    let done=false;
-    const cleanup=()=>{done=true;delete window[cbName];const el=document.getElementById(scriptId);if(el)el.remove();};
-    window[cbName]=(r)=>{cleanup();if(r&&r.ok)resolve(r);else reject('Apps Script error: '+JSON.stringify(r));};
-    const script=document.createElement('script');
-    script.id=scriptId;
-    script.src=APPS_SCRIPT_URL+'?data='+encoded+'&callback='+cbName;
-    script.onerror=()=>{
-      cleanup();
-      fetch(APPS_SCRIPT_URL,{method:'POST',mode:'no-cors',headers:{'Content-Type':'text/plain;charset=utf-8'},body}).then(()=>{console.log('POST fallback for key='+key);resolve({ok:true,fallback:true});}).catch(e2=>reject('Both failed: '+e2));
-    };
-    document.head.appendChild(script);
-    setTimeout(()=>{if(!done){cleanup();reject('Timeout for key='+key);}},15000);
-  });
-}
+const DEFAULT_STAFF_IDS = new Set(['e1','e2','e3','e4','e5','e6','e7','e8','e9','e10','e11','e12','e13','e14','e15','e16','e17','e18']);
+const DEFAULT_EXTRA_IDS = new Set(['ew1','ew2','ew3','ew4','ew5','ew6','ew7','ew8']);
 
-function jsonpLoad(){
-  return new Promise((resolve,reject)=>{
-    if(!APPS_SCRIPT_URL){reject('No URL');return;}
-    const cbName='_zlcLoad_'+Date.now();
-    const scriptId='_zlcLoadScript';
-    const old=document.getElementById(scriptId);if(old)old.remove();
-    let done=false;
-    const cleanup=()=>{done=true;delete window[cbName];const el=document.getElementById(scriptId);if(el)el.remove();};
-    window[cbName]=(json)=>{cleanup();resolve(json);};
-    const script=document.createElement('script');
-    script.id=scriptId;
-    script.src=APPS_SCRIPT_URL+'?callback='+cbName+'&data='+encodeURIComponent(JSON.stringify({action:'loadAppData'}));
-    script.onerror=()=>{cleanup();reject('Load script error');};
-    document.head.appendChild(script);
-    setTimeout(()=>{if(!done){cleanup();reject('Load timeout');}},15000);
-  });
-}
-
-function saveToCloud(rosterData){
-  if(!APPS_SCRIPT_URL)return;
-  clearTimeout(_cloudTimer);
-  _cloudTimer=setTimeout(()=>_doCloudSave(rosterData),2500);
-}
-
-async function _doCloudSave(rosterData){
-  if(_cloudSaveInProgress)return;
-  _cloudSaveInProgress=true;
-  setCloudStatus('⏳ Saving...');
-  showSaveIndicator('saving', '⏳ Saving…');
-  try{
-    const c=compressRoster(rosterData);
-    const CHUNK=3;
-    const chunks=[];
-    for(let i=0;i<c.staff.length;i+=CHUNK)chunks.push(c.staff.slice(i,i+CHUNK));
-    for(let i=0;i<chunks.length;i++){
-      await jsonpSave('sc'+i,chunks[i]);
-      if(i<chunks.length-1)await new Promise(r=>setTimeout(r,400));
-    }
-    await jsonpSave('scMeta',{staff:c.staff.slice(Math.ceil(c.staff.length/2)*CHUNK/CHUNK),extra:c.extra,equip:c.equip,rentals:c.rentals,extraList:c.extraList,staffList:c.staffList,chunkCount:chunks.length});
-    await new Promise(r=>setTimeout(r,400));
-    await jsonpSave('orders',DB.openOrders||[]);
-    await new Promise(r=>setTimeout(r,300));
-    await jsonpSave('gantt_data', GANTT.tasks);
-    const t=new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'});
-    setCloudStatus('✓ Saved '+t);
-    showSaveIndicator('saved', '✓ Saved');
-    toast('✓ Saved to cloud');
-  }catch(e){
-    console.error('Cloud save failed:',e);
-    setCloudStatus('✗ '+String(e).slice(0,50));
-    showSaveIndicator('error', '✗ Not saved — retry in 30s');
-    toast('✗ Roster not saved — retrying in 30s', {error:true});
-    // Auto-retry once after 30 seconds
-    setTimeout(() => {
-      if (!_cloudSaveInProgress) {
-        const rd = buildRosterData();
-        _doCloudSave(rd);
-      }
-    }, 30000);
-  }finally{_cloudSaveInProgress=false;}
-}
-
-async function forceSaveToCloud(){
-  if(_cloudSaveInProgress){toast('Save in progress...');return;}
-  const rosterData=buildRosterData();
-  const staffCount=rosterData.staff.filter(e=>Object.keys(e.a||{}).length>0).length;
-  toast('Saving '+staffCount+' people to cloud...');
-  await _doCloudSave(rosterData);
-  setTimeout(()=>loadFromCloud(),2000);
-}
-
-async function loadFromCloud(){
-  if(!APPS_SCRIPT_URL)return;
-  setCloudStatus('⏳ Loading...');
-  try{
-    const json=await jsonpLoad();
-    if(!json||!json.ok||!json.data){setCloudStatus('☁️ No data — press Save first');return;}
-    const d=json.data;
-    console.log('Cloud keys:',Object.keys(d));
-    let changed=false;
-    const meta=d.scMeta||{};
-    const chunkCount=meta.chunkCount||0;
-    let allStaff=[];
-    if(chunkCount>0){for(let i=0;i<chunkCount;i++)allStaff=allStaff.concat(d['sc'+i]||[]);}
-    if(!allStaff.length&&d.staff1){const s2=d.staff2||{};allStaff=[...(d.staff1||[]),...(s2.staff||[])];if(!meta.extra){meta.extra=s2.extra||[];meta.equip=s2.equip||[];meta.rentals=s2.rentals||[];}}
-    if(!allStaff.length&&d.roster){applyRosterData(d.roster);changed=true;}
-    else if(allStaff.length){
-      const mr={staff:allStaff,extra:meta.extra||[],equip:meta.equip||[],rentals:meta.rentals||[],extraList:meta.extraList||[],staffList:meta.staffList||[]};
-      applyRosterData(mr);changed=true;
-      console.log('Loaded '+allStaff.length+' staff from cloud');
-    }
-    if(d.orders){DB.openOrders=d.orders;changed=true;}
-    if(d.historical){DB.historical=d.historical;changed=true;}
-    if(d.gantt_data && typeof d.gantt_data==='object'){
-      Object.assign(GANTT.tasks, d.gantt_data);
-      // Refresh gantt view if open
-      if(GANTT.projId && document.getElementById('gantt-body')) ganttRender();
-      console.log('Gantt data loaded from cloud');
-    }
-    const t=new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'});
-    setCloudStatus(changed?'✓ Synced '+t:'☁️ Up to date');
-    if(changed){renderRoster();renderAnalytics();renderProjTable();renderOverview();toast('☁️ Data loaded from cloud');}
-  }catch(e){console.error('Cloud load error:',e);setCloudStatus('✗ Load error');}
-}
-
-
-function getItemRole(item) {
-  // Extra workers are always laborers
-  if (item.cat === 'extra' || EXTRA.find(e=>e.id===item.id)) return 'laborer';
-  if (item.role) return item.role;
-  const n = (item.note||'').toLowerCase();
-  if (n.includes('foreman')) return 'foreman';
-  if (n.includes('laborer') || n.includes('labor')) return 'laborer';
-  return 'laborer';
-}
-
-function countAssignedDays(projId, code, role) {
-  let count = 0;
-  const allItems = [...STAFF, ...EXTRA, ...EQUIP, ...RENTALS];
-  allItems.forEach(item => {
-    if (role) {
-      const itemRole = getItemRole(item);
-      if (itemRole !== role) return;
-    }
-    Object.entries(item.a || {}).forEach(([key, asgn]) => {
-      if (!asgn) return;
-      try {
-        const sels = JSON.parse(asgn);
-        if (Array.isArray(sels)) {
-          sels.filter(s=>s.type==='job'&&s.id===projId).forEach(s=>{
-            if(!code || s.cc===code) count++;
-          });
-          return;
-        }
-      } catch(e){}
-      if (asgn === projId) {
-        const cc = item.cc?.[key]||'';
-        if (!code || cc === code) count++;
-      }
-    });
-  });
-  return count;
-}
-
-function getDaysBudgetSummary(projId) {
-  const proj = DB.projects.find(p => p.id === projId);
-  if (!proj) return [];
-  // Base codes from project
-  const codeMap = {};
-  (proj.codes||[]).forEach(c=>{
-    codeMap[c.code] = {
-      code: c.code, name: CODES_MAP[c.code]||c.code,
-      foremanDays: c.foremanDays||0, laborerDays: c.laborerDays||0,
-    };
-  });
-  // Add CO man-days — only Approved COs count toward budget
-  (proj.cos||[]).filter(co=>/approv/i.test(co.status||'')).forEach(co=>{
-    if((co.foremanDays||0)+(co.laborerDays||0)>0 && co.code){
-      if(!codeMap[co.code]) codeMap[co.code]={code:co.code,name:CODES_MAP[co.code]||co.code,foremanDays:0,laborerDays:0};
-      codeMap[co.code].foremanDays += (co.foremanDays||0);
-      codeMap[co.code].laborerDays += (co.laborerDays||0);
-    }
-  });
-  return Object.values(codeMap).filter(c=>c.foremanDays+c.laborerDays>0).map(c=>({
-    ...c,
-    totalDays: c.foremanDays + c.laborerDays,
-    usedForeman: countAssignedDays(projId, c.code, 'foreman'),
-    usedLaborer: countAssignedDays(projId, c.code, 'laborer'),
-    usedDays:    countAssignedDays(projId, c.code),
-  }));
-}
-
-
-function getProjectCompletion(projId) {
-  const summary = getDaysBudgetSummary(projId);
-  if (!summary.length) return null;
-  const total = summary.reduce((a,c)=>a+c.totalDays,0);
-  const used  = summary.reduce((a,c)=>a+Math.min(c.usedDays,c.totalDays),0);
-  return total > 0 ? Math.round((used/total)*100) : 0;
-}
-
-
-function buildRosterData() {
+function buildRosterData(){
   const mapItem = e => ({
     id: e.id,
     a: e.a||{},
@@ -4199,76 +4091,422 @@ function buildRosterData() {
     name: e.name,
   });
   const mapItemExtra = e => ({...mapItem(e), project: e.project});
+  const mapStaffRecord = e => ({
+    id: e.id,
+    name: e.name||'',
+    team: e.team||'',
+    role: e.role||'',
+    certs: e.certs||[],
+    veh: e.veh||'',
+    a: e.a||{},
+    notes: e.notes||{},
+    wh: e.wh||{},
+    cc: e.cc||{},
+    co: e.co||{},
+    confirmed: e.confirmed||{},
+    pour: e.pour||{},
+  });
+  const mapExtraRecord = e => ({
+    id: e.id,
+    name: e.name||'',
+    team: e.team||'',
+    role: e.role||'laborer',
+    project: e.project||'',
+    a: e.a||{},
+    notes: e.notes||{},
+    wh: e.wh||{},
+    cc: e.cc||{},
+    co: e.co||{},
+    confirmed: e.confirmed||{},
+    pour: e.pour||{},
+  });
   return {
     staff:     STAFF.map(mapItem),
     extra:     EXTRA.map(mapItemExtra),
     equip:     EQUIP.map(mapItemExtra),
     rentals:   RENTALS.map(mapItemExtra),
-    extraList: EXTRA.filter(e=>!['x1','x2','x3','x4','x5'].includes(e.id)).map(e=>({id:e.id,name:e.name,team:e.team,role:e.role||'laborer'})),
-    staffList: [],
+    extraList: EXTRA.filter(e=>!DEFAULT_EXTRA_IDS.has(e.id)).map(mapExtraRecord),
+    staffList: STAFF.filter(e=>!DEFAULT_STAFF_IDS.has(e.id)).map(mapStaffRecord),
   };
 }
 
-
-function saveLocal() {
-  try {
-    const rosterData = buildRosterData();
-    // Only save to cloud — no localStorage
-    saveToCloud(rosterData);
-  } catch(e) { console.warn('saveLocal error:', e); }
+function compressRoster(rd){
+  const c=arr=>(arr||[]).map(e=>{
+    const o={id:e.id};
+    if(e.name)     o.name=e.name;
+    if(e.project)  o.project=e.project;
+    if(e.a         && Object.keys(e.a).length)         o.a=e.a;
+    if(e.notes     && Object.keys(e.notes).length)     o.notes=e.notes;
+    if(e.wh        && Object.keys(e.wh).length)        o.wh=e.wh;
+    if(e.cc        && Object.keys(e.cc).length)        o.cc=e.cc;
+    if(e.co        && Object.keys(e.co).length)        o.co=e.co;
+    if(e.confirmed && Object.keys(e.confirmed).length) o.confirmed=e.confirmed;
+    if(e.pour      && Object.keys(e.pour).length)      o.pour=e.pour;
+    return o;
+  }).filter(e=>Object.keys(e).length>1);
+  return{
+    staff:     c(rd.staff),
+    extra:     c(rd.extra),
+    equip:     c(rd.equip),
+    rentals:   c(rd.rentals),
+    extraList: rd.extraList||[],
+    staffList: rd.staffList||[],
+  };
 }
 
-// Debounced Gantt save — with status indicator in gantt toolbar
-let _ganttSaveTimer = null;
-function ganttSaveToCloud() {
-  if (!APPS_SCRIPT_URL) return;
-  clearTimeout(_ganttSaveTimer);
-  setGanttSaveStatus('pending');
-  _ganttSaveTimer = setTimeout(async () => {
-    setGanttSaveStatus('saving');
-    try {
-      await jsonpSave('gantt_data', GANTT.tasks);
-      setGanttSaveStatus('saved');
-    } catch(e) {
-      console.warn('Gantt save error:', e);
-      setGanttSaveStatus('error');
-      toast('⚠️ Gantt not saved — check connection', {error:true});
+// ─── CLOUD PERSISTENCE (100% cloud — Google Sheets App Data tab) ──────────────
+// Every change → jsonpSave → Apps Script → Google Sheet
+// Every page load → jsonpLoad → Apps Script → Google Sheet → app
+// No localStorage is used for roster data.
+
+let _cloudTimer = null;
+let _cloudSaveInProgress = false;
+
+let _cloudPendingSnapshot = null;
+
+// Called by saveLocal() — debounce 2s then save the latest snapshot
+function saveToCloud(rosterData){
+  if(!APPS_SCRIPT_URL) return;
+  _cloudPendingSnapshot = rosterData;
+  clearTimeout(_cloudTimer);
+  _cloudTimer = setTimeout(()=>flushPendingCloudSave(), 2000);
+}
+
+async function flushPendingCloudSave(force=false, _retryCount=0){
+  if(!APPS_SCRIPT_URL) return;
+  if(!_cloudPendingSnapshot && !force) return;
+  if(_cloudSaveInProgress){
+    if(_retryCount > 10){
+      // Stuck for >8 seconds — force-release the lock and try anyway
+      console.warn('☁️ Cloud save lock stuck — force-releasing');
+      _cloudSaveInProgress = false;
+    } else {
+      clearTimeout(_cloudTimer);
+      _cloudTimer = setTimeout(()=>flushPendingCloudSave(force, _retryCount+1), 800);
+      return;
     }
-  }, 2000);
+  }
+  const snapshot = _cloudPendingSnapshot || buildRosterData();
+  _cloudPendingSnapshot = null;
+  await _doCloudSave(snapshot);
+  // If new changes came in while we were saving, flush those too
+  if(_cloudPendingSnapshot){
+    clearTimeout(_cloudTimer);
+    _cloudTimer = setTimeout(()=>flushPendingCloudSave(), 300);
+  }
 }
 
-function setGanttSaveStatus(state) {
-  const el = document.getElementById('gantt-save-status');
-  if (!el) return;
-  const map = {
-    pending: ['⏳ Unsaved changes', '#854F0B', '#FAEEDA'],
-    saving:  ['⏳ Saving…',         '#185FA5', '#E6F1FB'],
-    saved:   ['✓ Saved',            '#3B6D11', '#EAF3DE'],
-    error:   ['✗ Save failed',      '#791F1F', '#FCEBEB'],
-  };
-  const [txt, color, bg] = map[state] || ['', '', ''];
-  el.textContent = txt;
-  el.style.color = color;
-  el.style.background = bg;
-  el.style.display = txt ? 'inline-block' : 'none';
-  if (state === 'saved') setTimeout(() => { if (el.textContent === '✓ Saved') el.style.display = 'none'; }, 3000);
+async function _doCloudSave(rosterData){
+  if(_cloudSaveInProgress) return;
+  _cloudSaveInProgress = true;
+  setCloudStatus('⏳ Saving…');
+  showSaveIndicator && showSaveIndicator('saving','⏳ Saving…');
+  try{
+    const c = compressRoster(rosterData);
+
+    // ── Dynamic chunk sizing ──────────────────────────────────────────────
+    // Start with chunks of 2 staff. If any chunk exceeds the URL limit,
+    // split down to 1 per chunk automatically. This handles employees with
+    // many assigned days whose serialized data grows large.
+    const LIMIT = 12000; // stay safely under Apps Script's 14KB URL cap
+    function makeChunks(arr, size){
+      const out = [];
+      for(let i=0;i<arr.length;i+=size) out.push(arr.slice(i,i+size));
+      return out;
+    }
+    let chunks = makeChunks(c.staff, 2);
+    // Re-split any chunk that's too large into size-1
+    const safeChunks = [];
+    for(const ch of chunks){
+      const encoded = encodeURIComponent(JSON.stringify({action:'saveAppData',key:'_test',value:ch}));
+      if(encoded.length > LIMIT && ch.length > 1){
+        // Split this chunk further — one staff per chunk
+        for(const s of ch) safeChunks.push([s]);
+      } else {
+        safeChunks.push(ch);
+      }
+    }
+    chunks = safeChunks;
+
+    // ── Save each staff chunk with per-chunk error reporting ──────────────
+    const failedChunks = [];
+    for(let i=0; i<chunks.length; i++){
+      try{
+        await jsonpSave('sc'+i, chunks[i]);
+        if(i < chunks.length-1) await delay(300);
+      } catch(chunkErr){
+        failedChunks.push({i, err: String(chunkErr)});
+        console.error('☁️ Chunk sc'+i+' failed:', chunkErr);
+      }
+    }
+
+    if(failedChunks.length > 0){
+      // Some chunks failed — let the user know which ones and why
+      const msg = `⚠️ ${failedChunks.length} of ${chunks.length} save chunk(s) failed. Data may be incomplete. Check console for details.`;
+      console.error('Failed chunks:', failedChunks);
+      showBanner(msg, 'error', 0); // 0 = don't auto-hide, stays until dismissed
+      setCloudStatus('✗ Partial save — click "Run full check"');
+      showSaveIndicator && showSaveIndicator('error','✗ Not fully saved');
+      // Show the diagnostics panel automatically with a summary
+      const diagLines = failedChunks.map(f => `❌ Chunk ${f.i}: ${f.err}`);
+      diagLines.push('👆 Click "Run full check" for full analysis and fix instructions.');
+      showSaveDiag(diagLines.join('<br>'));
+      // Still try to save metadata with what we have
+    }
+
+    // ── Save metadata: chunk count + extra/equip/rentals ─────────────────
+    await jsonpSave('scMeta', {
+      chunkCount: chunks.length,
+      extra:      c.extra,
+      equip:      c.equip,
+      rentals:    c.rentals,
+      extraList:  c.extraList,
+      staffList:  c.staffList,
+    });
+    await delay(300);
+
+    // ── Save orders ───────────────────────────────────────────────────────
+    await jsonpSave('orders', DB.openOrders||[]);
+    await delay(200);
+
+    // ── Save manually-added projects ──────────────────────────────────────
+    await jsonpSave('manualProjects', DB.projects.filter(p=>p._manual)||[]);
+
+    if(failedChunks.length === 0){
+      const t = new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'});
+      setCloudStatus('✓ Saved '+t);
+      showSaveIndicator && showSaveIndicator('saved','✓ Saved');
+      console.log('☁️ Saved to cloud at', t, '·', chunks.length, 'chunks ·', c.staff.length, 'staff');
+    }
+  }catch(e){
+    console.error('☁️ Save failed:',e);
+    setCloudStatus('✗ Save failed — retrying…');
+    showBanner('⚠️ Roster not saved to cloud. Retrying in 15s…', 'error', 0);
+    showSaveDiag('❌ Save error: '+String(e).slice(0,120)+'<br>👆 Click "Run full check" for diagnosis.<br>🔄 Auto-retrying in 15s…');
+    // Auto-retry once after 15 seconds
+    setTimeout(()=>{ saveToCloud(buildRosterData()); }, 15000);
+  }finally{
+    _cloudSaveInProgress = false;
+  }
 }
 
-// Cloud save queue — batches changes and sends automatically
+function delay(ms){ return new Promise(r=>setTimeout(r,ms)); }
 
-
-
-function loadLocal() {
-  // Data is loaded exclusively from cloud (Google Sheets).
-  // Clear any stale localStorage so it never overrides cloud data.
-  try {
-    localStorage.removeItem('zlc_roster');
-    localStorage.removeItem('zlc_orders');
-    localStorage.removeItem('zlc_manual_projects');
-    localStorage.removeItem('zlc_historical');
-  } catch(e) {}
+async function forceSaveToCloud(){
+  _cloudPendingSnapshot = buildRosterData();
+  clearTimeout(_cloudTimer);
+  if(_cloudSaveInProgress){ toast('☁️ Save queued…'); return; }
+  toast('☁️ Saving to cloud…');
+  hideSaveDiag();
+  await flushPendingCloudSave(true);
 }
 
+function hideSaveDiag(){
+  const el = document.getElementById('save-diag');
+  if(el) el.style.display = 'none';
+}
+
+function showSaveDiag(html){
+  const el  = document.getElementById('save-diag');
+  const txt = document.getElementById('save-diag-text');
+  if(!el||!txt) return;
+  txt.innerHTML = html;
+  el.style.display = 'block';
+}
+
+// ─── SAVE DIAGNOSTICS ─────────────────────────────────────────────────────────
+// Called from sidebar "Run full check" button. Analyzes roster data sizes,
+// detects which chunks would exceed the 14KB URL limit, and tests connectivity.
+async function runSaveDiag(){
+  const diagEl = document.getElementById('save-diag-text');
+  if(diagEl) diagEl.innerHTML = '🔍 Analyzing…';
+
+  const LIMIT  = 14000;
+  const c      = compressRoster(buildRosterData());
+  const lines  = [];
+
+  // ── 1. Apps Script URL ──────────────────────────────────────────────────
+  if(!APPS_SCRIPT_URL){
+    lines.push('❌ No Apps Script URL configured');
+  } else {
+    lines.push('✓ Apps Script URL set');
+  }
+
+  // ── 2. Staff payload sizes ───────────────────────────────────────────────
+  const CHUNK = 2;
+  function makeChunks(arr, size){
+    const out=[];
+    for(let i=0;i<arr.length;i+=size) out.push(arr.slice(i,i+size));
+    return out;
+  }
+  const chunks = makeChunks(c.staff, CHUNK);
+  let bigChunks = 0;
+  let maxChunkKB = 0;
+  chunks.forEach((ch, i) => {
+    const encoded = encodeURIComponent(JSON.stringify({action:'saveAppData',key:'sc'+i,value:ch}));
+    const kb = Math.round(encoded.length/1024*10)/10;
+    if(kb > maxChunkKB) maxChunkKB = kb;
+    if(encoded.length > LIMIT){
+      bigChunks++;
+      // Find the culprit — which staff in this chunk has the most data
+      ch.forEach(s => {
+        const days = Object.keys(s.a||{}).length;
+        lines.push(`❌ Chunk sc${i} too large (${kb}KB > 14KB): "${s.name||s.id}" has ${days} assigned days`);
+      });
+    }
+  });
+
+  if(bigChunks === 0){
+    lines.push(`✓ All ${chunks.length} staff chunks OK (largest: ${maxChunkKB}KB)`);
+  } else {
+    lines.push(`⚠️ ${bigChunks}/${chunks.length} chunk(s) exceed limit — save will fail for those`);
+    lines.push(`💡 Fix: old assignments are accumulating. Clear days before ${getPrevMonthLabel()} from the roster.`);
+  }
+
+  // ── 3. Meta payload ──────────────────────────────────────────────────────
+  const metaEncoded = encodeURIComponent(JSON.stringify({
+    action:'saveAppData', key:'scMeta',
+    value:{ chunkCount:chunks.length, extra:c.extra, equip:c.equip,
+            rentals:c.rentals, extraList:c.extraList, staffList:c.staffList }
+  }));
+  const metaKB = Math.round(metaEncoded.length/1024*10)/10;
+  if(metaEncoded.length > LIMIT){
+    lines.push(`❌ scMeta too large (${metaKB}KB). Extra workers or equipment have too many assigned days.`);
+  } else {
+    lines.push(`✓ scMeta OK (${metaKB}KB)`);
+  }
+
+  // ── 4. Total staff / assignments ─────────────────────────────────────────
+  const totalStaff = STAFF.length + EXTRA.length;
+  let totalDays = 0;
+  [...STAFF,...EXTRA,...EQUIP,...RENTALS].forEach(e => totalDays += Object.keys(e.a||{}).length);
+  lines.push(`ℹ️ ${totalStaff} staff/extra · ${totalDays} total assigned day-slots across all people`);
+
+  // ── 5. Quick connectivity test ───────────────────────────────────────────
+  if(APPS_SCRIPT_URL){
+    lines.push('🔄 Testing connection to Apps Script…');
+    showSaveDiag(lines.join('<br>'));
+    try{
+      await new Promise((res,rej)=>{
+        const cb = '_zlcDiag_'+Date.now();
+        const sc = document.createElement('script');
+        let done=false;
+        window[cb] = (r)=>{ done=true; delete window[cb]; sc.remove(); res(r); };
+        sc.onerror = ()=>{ done=true; delete window[cb]; sc.remove(); rej(new Error('Network error')); };
+        sc.src = APPS_SCRIPT_URL+'?callback='+cb+'&data='+encodeURIComponent(JSON.stringify({action:'ping'}));
+        document.head.appendChild(sc);
+        setTimeout(()=>{ if(!done){ done=true; delete window[cb]; sc.remove(); rej(new Error('Timeout after 10s')); } }, 10000);
+      });
+      lines.pop();
+      lines.push('✓ Apps Script reachable — connection OK');
+    } catch(connErr){
+      lines.pop();
+      lines.push(`❌ Cannot reach Apps Script: ${connErr.message}`);
+      lines.push('💡 Check: Are you connected to the internet? Is the Apps Script URL still valid?');
+    }
+  }
+
+  // ── 6. Recommendation summary ────────────────────────────────────────────
+  lines.push('─────────────────');
+  if(bigChunks > 0){
+    lines.push('🔧 Recommended fix: Go to Roster → select previous months → right-click cells → Clear. Removing old months reduces payload size.');
+  } else {
+    lines.push('✅ No payload issues detected. If save still fails, check the Apps Script logs in Google Drive.');
+  }
+
+  showSaveDiag(lines.join('<br>'));
+}
+
+function getPrevMonthLabel(){
+  const d = new Date();
+  d.setMonth(d.getMonth() - 2);
+  return d.toLocaleString('en-US',{month:'long',year:'numeric'});
+}
+
+async function loadFromCloud(){
+  if(!APPS_SCRIPT_URL) return;
+  setCloudStatus('⏳ Loading…');
+  try{
+    const json = await jsonpLoad();
+    if(!json||!json.ok||!json.data){
+      setCloudStatus('☁️ No data yet — press Save first');
+      return;
+    }
+    const d = json.data;
+    const meta = d.scMeta||{};
+    const chunkCount = Number(meta.chunkCount)||0;
+
+    // Reassemble staff from chunks
+    let allStaff = [];
+    for(let i=0; i<chunkCount; i++) allStaff = allStaff.concat(d['sc'+i]||[]);
+
+    if(allStaff.length > 0){
+      applyRosterData({
+        staff:     allStaff,
+        extra:     meta.extra||[],
+        equip:     meta.equip||[],
+        rentals:   meta.rentals||[],
+        extraList: meta.extraList||[],
+        staffList: meta.staffList||[],
+      });
+      console.log('☁️ Loaded '+allStaff.length+' staff from cloud');
+    }
+
+    if(d.orders && Array.isArray(d.orders)) DB.openOrders = d.orders;
+
+    if(d.manualProjects && Array.isArray(d.manualProjects)){
+      d.manualProjects.forEach(p=>{
+        if(!DB.projects.find(x=>x.id===p.id)) DB.projects.push(p);
+      });
+    }
+
+    if(d.gantt_data && typeof d.gantt_data==='object' && typeof GANTT!=='undefined'){
+      Object.assign(GANTT.tasks, d.gantt_data);
+      if(GANTT.projId && document.getElementById('gantt-body')) ganttRender();
+    }
+
+    const t = new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'});
+    setCloudStatus('✓ Synced '+t);
+    renderRoster(); renderProjTable(); renderOverview(); renderAnalytics();
+    toast('☁️ Loaded from cloud');
+  }catch(e){
+    console.error('☁️ Load error:',e);
+    setCloudStatus('✗ Load error');
+    showBanner('⚠️ Could not load from cloud: '+String(e).slice(0,60),'error');
+  }
+}
+
+// jsonpSave — write one key/value to App Data sheet
+function jsonpSave(key, value){
+  return new Promise((resolve,reject)=>{
+    if(!APPS_SCRIPT_URL){ reject('No Apps Script URL configured'); return; }
+    const body    = JSON.stringify({action:'saveAppData', key, value});
+    const encoded = encodeURIComponent(body);
+    const kb      = Math.round(encoded.length / 1024 * 10) / 10;
+    if(encoded.length > 14000){
+      const err = `Payload too large for key="${key}": ${kb}KB (limit ~14KB). Try fewer assignments per person.`;
+      console.error('☁️', err);
+      reject(err);
+      return;
+    }
+    console.log(`☁️ jsonpSave key=${key} size=${kb}KB`);
+    const cbName  = '_zlcSave_'+Date.now()+'_'+Math.random().toString(36).slice(2,5);
+    const scriptId= '_zlcScript_'+key.replace(/[^a-zA-Z0-9]/g,'_');
+    const old     = document.getElementById(scriptId); if(old) old.remove();
+    let done = false;
+    const cleanup = ()=>{ done=true; delete window[cbName]; const el=document.getElementById(scriptId); if(el)el.remove(); };
+    window[cbName] = (r)=>{ cleanup(); if(r&&r.ok) resolve(r); else reject('Apps Script error for key='+key+': '+JSON.stringify(r)); };
+    const script   = document.createElement('script');
+    script.id      = scriptId;
+    script.src     = APPS_SCRIPT_URL+'?data='+encoded+'&callback='+cbName;
+    script.onerror = ()=>{ cleanup(); reject('Network error saving key='+key+'. Check internet connection.'); };
+    document.head.appendChild(script);
+    setTimeout(()=>{ if(!done){ cleanup(); reject('Timeout (20s) saving key='+key+'. Apps Script may be slow.'); }}, 20000);
+  });
+}
+
+
+// applyRosterData — apply cloud-loaded data back to in-memory STAFF/EXTRA/EQUIP/RENTALS
 function applyRosterData(rd) {
   const apply = (arr, source) => (arr||[]).forEach(saved => {
     const item = source.find(e => e.id === saved.id);
@@ -4288,9 +4526,83 @@ function applyRosterData(rd) {
   apply(rd.extra,   EXTRA);
   apply(rd.equip,   EQUIP);
   apply(rd.rentals, RENTALS);
-  (rd.extraList||[]).forEach(s=>{ if(!EXTRA.find(e=>e.id===s.id)) EXTRA.push({...s,role:'laborer'}); });
-  (rd.staffList||[]).forEach(s=>{ if(!STAFF.find(e=>e.id===s.id)) STAFF.push(s); });
+  (rd.extraList||[]).forEach(s=>{
+    if(!EXTRA.find(e=>e.id===s.id)) EXTRA.push({
+      id:s.id,
+      name:s.name||'Unnamed',
+      team:s.team||'',
+      role:s.role||'laborer',
+      project:s.project||'',
+      a:s.a||{}, notes:s.notes||{}, wh:s.wh||{}, cc:s.cc||{}, co:s.co||{}, confirmed:s.confirmed||{}, pour:s.pour||{},
+    });
+  });
+  (rd.staffList||[]).forEach(s=>{
+    if(!STAFF.find(e=>e.id===s.id)) STAFF.push({
+      id:s.id,
+      name:s.name||'Unnamed',
+      team:s.team||'New team',
+      role:s.role||'',
+      certs:s.certs||[],
+      veh:s.veh||'',
+      a:s.a||{}, notes:s.notes||{}, wh:s.wh||{}, cc:s.cc||{}, co:s.co||{}, confirmed:s.confirmed||{}, pour:s.pour||{},
+    });
+  });
 }
+
+
+// Safe wrappers for UI functions that may not be defined yet at call time
+function showBanner(msg, type='error', duration=6000){
+  const b=document.getElementById('error-banner');
+  const t=document.getElementById('error-banner-text');
+  if(!b||!t)return;
+  t.textContent=msg;
+  b.style.background=type==='error'?'#E24B4A':'#3B6D11';
+  b.style.display='block';
+  if(duration > 0) setTimeout(()=>{b.style.display='none';}, duration);
+  // duration=0 means sticky — stays until user clicks ✕
+}
+
+function showSaveIndicator(state, msg){
+  // Optional UI indicator — safe no-op if element not present
+  const el = document.getElementById('save-indicator');
+  if(!el) return;
+  el.textContent = msg;
+  el.style.display = msg ? 'block' : 'none';
+}
+
+// jsonpLoad — read all keys from App Data sheet
+function jsonpLoad(){
+  return new Promise((resolve,reject)=>{
+    if(!APPS_SCRIPT_URL){ reject('No URL'); return; }
+    const cbName  = '_zlcLoad_'+Date.now();
+    const scriptId= '_zlcLoadScript';
+    const old     = document.getElementById(scriptId); if(old) old.remove();
+    let done = false;
+    const cleanup = ()=>{ done=true; delete window[cbName]; const el=document.getElementById(scriptId); if(el)el.remove(); };
+    window[cbName] = (json)=>{ cleanup(); resolve(json); };
+    const script   = document.createElement('script');
+    script.id      = scriptId;
+    script.src     = APPS_SCRIPT_URL+'?callback='+cbName+'&data='+encodeURIComponent(JSON.stringify({action:'loadAppData'}));
+    script.onerror = ()=>{ cleanup(); reject('Network error loading from cloud'); };
+    document.head.appendChild(script);
+    setTimeout(()=>{ if(!done){ cleanup(); reject('Load timeout'); }}, 20000);
+  });
+}
+
+// saveLocal — called after every change. Saves to cloud only.
+function saveLocal(){
+  try{
+    const rosterData = buildRosterData();
+    saveToCloud(rosterData);
+  }catch(e){ console.warn('saveLocal error:',e); }
+}
+
+// loadLocal — on startup, nothing to load locally. Cloud loads in INIT.
+function loadLocal(){
+  // 100% cloud — no localStorage used for roster data
+  // Manual projects and orders are loaded from cloud via loadFromCloud()
+}
+
 
 // ─── INIT ─────────────────────────────────────────────────────────────────────
 loadLocal();
@@ -5412,6 +5724,36 @@ function ganttForceAssign(taskId, projId) {
 function ganttTaskIndex(taskId, projId) {
   return (GANTT.tasks[projId] || []).findIndex(t => t.id === taskId);
 }
+// ── Gantt cloud save (same mechanism as roster) ───────────────────────────────
+let _ganttSaveTimer = null;
+function ganttSaveToCloud() {
+  clearTimeout(_ganttSaveTimer);
+  _ganttSaveTimer = setTimeout(async () => {
+    try {
+      await jsonpSave('gantt_data', GANTT.tasks);
+      const ss = document.getElementById('gantt-save-status');
+      if (ss) {
+        const t = new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'});
+        ss.textContent = '✓ Saved ' + t;
+        ss.style.display = 'inline-block';
+        ss.style.background = 'rgba(59,109,17,0.12)';
+        ss.style.color = '#3B6D11';
+        setTimeout(() => { ss.style.display = 'none'; }, 4000);
+      }
+    } catch(e) {
+      console.error('Gantt save failed:', e);
+      const ss = document.getElementById('gantt-save-status');
+      if (ss) {
+        ss.textContent = '✗ Save failed';
+        ss.style.display = 'inline-block';
+        ss.style.background = 'rgba(226,75,74,0.12)';
+        ss.style.color = '#E24B4A';
+      }
+    }
+  }, 1500);
+}
+
+
 </script>
 </body>
 </html>
