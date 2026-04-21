@@ -3983,8 +3983,6 @@ function saveExtraW(){
 // Saves roster assignments, notes, extra staff, and manually added projects
 // so data survives page refresh
 // ─── CLOUD PERSISTENCE ───────────────────────────────────────────────────────
-let _cloudTimer = null;
-let _cloudSaveInProgress = false;
 
 function setCloudStatus(msg) {
   ['cloud-status','cloud-status-2'].forEach(id=>{
@@ -4000,85 +3998,63 @@ function setCloudStatus(msg) {
 function compressRoster(rd){
   const c=arr=>(arr||[]).map(e=>{
     const o={id:e.id};
-    if(e.name)o.name=e.name;if(e.project)o.project=e.project;
-    if(e.a&&Object.keys(e.a).length)o.a=e.a;
-    if(e.notes&&Object.keys(e.notes).length)o.notes=e.notes;
-    if(e.wh&&Object.keys(e.wh).length)o.wh=e.wh;
-    if(e.cc&&Object.keys(e.cc).length)o.cc=e.cc;
-    if(e.co&&Object.keys(e.co).length)o.co=e.co;
-    if(e.confirmed&&Object.keys(e.confirmed).length)o.confirmed=e.confirmed;
-    if(e.pour&&Object.keys(e.pour).length)o.pour=e.pour;
+    if(e.name)     o.name=e.name;
+    if(e.project)  o.project=e.project;
+    if(e.a         && Object.keys(e.a).length)         o.a=e.a;
+    if(e.notes     && Object.keys(e.notes).length)     o.notes=e.notes;
+    if(e.wh        && Object.keys(e.wh).length)        o.wh=e.wh;
+    if(e.cc        && Object.keys(e.cc).length)        o.cc=e.cc;
+    if(e.co        && Object.keys(e.co).length)        o.co=e.co;
+    if(e.confirmed && Object.keys(e.confirmed).length) o.confirmed=e.confirmed;
+    if(e.pour      && Object.keys(e.pour).length)      o.pour=e.pour;
     return o;
   }).filter(e=>Object.keys(e).length>1);
-  return{staff:c(rd.staff),extra:c(rd.extra),equip:c(rd.equip),rentals:c(rd.rentals),extraList:rd.extraList||[],staffList:rd.staffList||[]};
+  return{
+    staff:     c(rd.staff),
+    extra:     c(rd.extra),
+    equip:     c(rd.equip),
+    rentals:   c(rd.rentals),
+    extraList: rd.extraList||[],
+    staffList: rd.staffList||[],
+  };
 }
 
-function jsonpSave(key,value){
-  return new Promise((resolve,reject)=>{
-    if(!APPS_SCRIPT_URL){reject('No URL');return;}
-    const body=JSON.stringify({action:'saveAppData',key,value});
-    const encoded=encodeURIComponent(body);
-    if(encoded.length>14000){reject('Payload too large: '+Math.round(encoded.length/1024)+'KB for key='+key);return;}
-    const cbName='_zlcSave_'+Date.now()+'_'+Math.random().toString(36).slice(2,5);
-    const scriptId='_zlcScript_'+key.replace(/[^a-zA-Z0-9]/g,'_');
-    const old=document.getElementById(scriptId);if(old)old.remove();
-    let done=false;
-    const cleanup=()=>{done=true;delete window[cbName];const el=document.getElementById(scriptId);if(el)el.remove();};
-    window[cbName]=(r)=>{cleanup();if(r&&r.ok)resolve(r);else reject('Apps Script error: '+JSON.stringify(r));};
-    const script=document.createElement('script');
-    script.id=scriptId;
-    script.src=APPS_SCRIPT_URL+'?data='+encoded+'&callback='+cbName;
-    script.onerror=()=>{
-      cleanup();
-      fetch(APPS_SCRIPT_URL,{method:'POST',mode:'no-cors',headers:{'Content-Type':'text/plain;charset=utf-8'},body}).then(()=>{console.log('POST fallback for key='+key);resolve({ok:true,fallback:true});}).catch(e2=>reject('Both failed: '+e2));
-    };
-    document.head.appendChild(script);
-    setTimeout(()=>{if(!done){cleanup();reject('Timeout for key='+key);}},15000);
-  });
-}
+// ─── CLOUD PERSISTENCE (100% cloud — Google Sheets App Data tab) ──────────────
+// Every change → jsonpSave → Apps Script → Google Sheet
+// Every page load → jsonpLoad → Apps Script → Google Sheet → app
+// No localStorage is used for roster data.
 
-function jsonpLoad(){
-  return new Promise((resolve,reject)=>{
-    if(!APPS_SCRIPT_URL){reject('No URL');return;}
-    const cbName='_zlcLoad_'+Date.now();
-    const scriptId='_zlcLoadScript';
-    const old=document.getElementById(scriptId);if(old)old.remove();
-    let done=false;
-    const cleanup=()=>{done=true;delete window[cbName];const el=document.getElementById(scriptId);if(el)el.remove();};
-    window[cbName]=(json)=>{cleanup();resolve(json);};
-    const script=document.createElement('script');
-    script.id=scriptId;
-    script.src=APPS_SCRIPT_URL+'?callback='+cbName+'&data='+encodeURIComponent(JSON.stringify({action:'loadAppData'}));
-    script.onerror=()=>{cleanup();reject('Load script error');};
-    document.head.appendChild(script);
-    setTimeout(()=>{if(!done){cleanup();reject('Load timeout');}},15000);
-  });
-}
+let _cloudTimer = null;
+let _cloudSaveInProgress = false;
 
+// Called by saveLocal() — debounce 2s then save
 function saveToCloud(rosterData){
-  if(!APPS_SCRIPT_URL)return;
+  if(!APPS_SCRIPT_URL) return;
   clearTimeout(_cloudTimer);
-  _cloudTimer=setTimeout(()=>_doCloudSave(rosterData),2500);
+  _cloudTimer = setTimeout(()=>_doCloudSave(rosterData), 2000);
 }
 
 async function _doCloudSave(rosterData){
-  if(_cloudSaveInProgress)return;
-  _cloudSaveInProgress=true;
-  setCloudStatus('⏳ Saving...');
-  showSaveIndicator('saving','⏳ Saving…');
+  if(_cloudSaveInProgress) return;
+  _cloudSaveInProgress = true;
+  setCloudStatus('⏳ Saving…');
+  showSaveIndicator && showSaveIndicator('saving','⏳ Saving…');
   try{
-    const c=compressRoster(rosterData);
-    // Save staff in chunks of 5 (to stay under URL size limits)
-    const CHUNK=5;
-    const chunks=[];
-    for(let i=0;i<c.staff.length;i+=CHUNK)chunks.push(c.staff.slice(i,i+CHUNK));
-    // Save each chunk
-    for(let i=0;i<chunks.length;i++){
+    const c = compressRoster(rosterData);
+
+    // Split staff into chunks of 4 to stay under URL limits
+    const CHUNK = 4;
+    const chunks = [];
+    for(let i=0; i<c.staff.length; i+=CHUNK) chunks.push(c.staff.slice(i,i+CHUNK));
+
+    // Save each staff chunk
+    for(let i=0; i<chunks.length; i++){
       await jsonpSave('sc'+i, chunks[i]);
-      if(i<chunks.length-1) await new Promise(r=>setTimeout(r,300));
+      if(i < chunks.length-1) await delay(300);
     }
-    // Save metadata (extra workers, equip, rentals) + chunk count
-    await jsonpSave('scMeta',{
+
+    // Save metadata: chunk count + extra/equip/rentals
+    await jsonpSave('scMeta', {
       chunkCount: chunks.length,
       extra:      c.extra,
       equip:      c.equip,
@@ -4086,445 +4062,146 @@ async function _doCloudSave(rosterData){
       extraList:  c.extraList,
       staffList:  c.staffList,
     });
-    await new Promise(r=>setTimeout(r,300));
-    // Save orders and manual projects
+    await delay(300);
+
+    // Save orders
     await jsonpSave('orders', DB.openOrders||[]);
-    await new Promise(r=>setTimeout(r,200));
+    await delay(200);
+
+    // Save manually-added projects (created from app, not from sheet)
     await jsonpSave('manualProjects', DB.projects.filter(p=>p._manual)||[]);
-    const t=new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'});
+
+    const t = new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'});
     setCloudStatus('✓ Saved '+t);
-    showSaveIndicator('saved','✓ Saved');
+    showSaveIndicator && showSaveIndicator('saved','✓ Saved');
+    console.log('☁️ Saved to cloud at', t);
   }catch(e){
-    console.error('Cloud save failed:',e);
-    setCloudStatus('✗ Save failed');
-    showSaveIndicator('error','✗ Not saved');
-    showBanner('⚠️ Cloud save failed — changes saved locally only. Retrying…','error');
-    // Retry once after 15s
-    setTimeout(()=>{
-      if(!_cloudSaveInProgress){ _doCloudSave(buildRosterData()); }
-    },15000);
-  }finally{_cloudSaveInProgress=false;}
+    console.error('☁️ Save failed:',e);
+    setCloudStatus('✗ Save failed — retrying…');
+    showBanner('⚠️ Changes not saved to cloud. Retrying in 15s…','error');
+    // Auto-retry
+    setTimeout(()=>{ if(!_cloudSaveInProgress) _doCloudSave(buildRosterData()); }, 15000);
+  }finally{
+    _cloudSaveInProgress = false;
+  }
 }
 
+function delay(ms){ return new Promise(r=>setTimeout(r,ms)); }
 
 async function forceSaveToCloud(){
-  if(_cloudSaveInProgress){toast('Save in progress...');return;}
-  const rosterData=buildRosterData();
-  const staffCount=rosterData.staff.filter(e=>Object.keys(e.a||{}).length>0).length;
-  toast('Saving '+staffCount+' people to cloud...');
-  await _doCloudSave(rosterData);
-  setTimeout(()=>loadFromCloud(),2000);
+  if(_cloudSaveInProgress){ toast('Save in progress…'); return; }
+  toast('☁️ Saving to cloud…');
+  await _doCloudSave(buildRosterData());
 }
 
 async function loadFromCloud(){
-  if(!APPS_SCRIPT_URL)return;
-  setCloudStatus('⏳ Loading...');
+  if(!APPS_SCRIPT_URL) return;
+  setCloudStatus('⏳ Loading…');
   try{
-    const json=await jsonpLoad();
+    const json = await jsonpLoad();
     if(!json||!json.ok||!json.data){
-      setCloudStatus('☁️ No cloud data yet — press Save');
+      setCloudStatus('☁️ No data yet — press Save first');
       return;
     }
-    const d=json.data;
-    const meta=d.scMeta||{};
-    const chunkCount=Number(meta.chunkCount)||0;
-    let changed=false;
+    const d = json.data;
+    const meta = d.scMeta||{};
+    const chunkCount = Number(meta.chunkCount)||0;
 
-    // ── Reconstruct staff from chunks ────────────────────────────────────────
-    let allStaff=[];
-    if(chunkCount>0){
-      for(let i=0;i<chunkCount;i++) allStaff=allStaff.concat(d['sc'+i]||[]);
-    }
+    // Reassemble staff from chunks
+    let allStaff = [];
+    for(let i=0; i<chunkCount; i++) allStaff = allStaff.concat(d['sc'+i]||[]);
 
-    if(allStaff.length>0){
-      const rd={
-        staff:    allStaff,
-        extra:    meta.extra||[],
-        equip:    meta.equip||[],
-        rentals:  meta.rentals||[],
-        extraList:meta.extraList||[],
-        staffList:meta.staffList||[],
-      };
-      applyRosterData(rd);
-      // Also update localStorage so next load is instant
-      localStorage.setItem('zlc_roster', JSON.stringify(rd));
-      changed=true;
+    if(allStaff.length > 0){
+      applyRosterData({
+        staff:     allStaff,
+        extra:     meta.extra||[],
+        equip:     meta.equip||[],
+        rentals:   meta.rentals||[],
+        extraList: meta.extraList||[],
+        staffList: meta.staffList||[],
+      });
       console.log('☁️ Loaded '+allStaff.length+' staff from cloud');
     }
 
-    // ── Orders ───────────────────────────────────────────────────────────────
-    if(d.orders && Array.isArray(d.orders)){
-      DB.openOrders=d.orders;
-      localStorage.setItem('zlc_orders', JSON.stringify(d.orders));
-      changed=true;
-    }
+    if(d.orders && Array.isArray(d.orders)) DB.openOrders = d.orders;
 
-    // ── Manual projects (created from app) ───────────────────────────────────
     if(d.manualProjects && Array.isArray(d.manualProjects)){
       d.manualProjects.forEach(p=>{
         if(!DB.projects.find(x=>x.id===p.id)) DB.projects.push(p);
       });
-      localStorage.setItem('zlc_manual_projects', JSON.stringify(d.manualProjects));
-      changed=true;
     }
 
-    // ── Gantt ────────────────────────────────────────────────────────────────
     if(d.gantt_data && typeof d.gantt_data==='object'){
       Object.assign(GANTT.tasks, d.gantt_data);
       if(GANTT.projId && document.getElementById('gantt-body')) ganttRender();
     }
 
-    const t=new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'});
-    setCloudStatus(changed?'✓ Synced '+t:'☁️ Up to date');
-    if(changed){
-      renderRoster();renderProjTable();renderOverview();renderAnalytics();
-      toast('☁️ Loaded from cloud');
-    }
+    const t = new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'});
+    setCloudStatus('✓ Synced '+t);
+    renderRoster(); renderProjTable(); renderOverview(); renderAnalytics();
+    toast('☁️ Loaded from cloud');
   }catch(e){
-    console.error('Cloud load error:',e);
-    setCloudStatus('✗ Load error — using local data');
+    console.error('☁️ Load error:',e);
+    setCloudStatus('✗ Load error');
+    showBanner('⚠️ Could not load from cloud: '+String(e).slice(0,60),'error');
   }
 }
 
-
-function getItemRole(item) {
-  // Extra workers are always laborers
-  if (item.cat === 'extra' || EXTRA.find(e=>e.id===item.id)) return 'laborer';
-  if (item.role) return item.role;
-  const n = (item.note||'').toLowerCase();
-  if (n.includes('foreman')) return 'foreman';
-  if (n.includes('laborer') || n.includes('labor')) return 'laborer';
-  return 'laborer';
-}
-
-function countAssignedDays(projId, code, role) {
-  let count = 0;
-  const allItems = [...STAFF, ...EXTRA, ...EQUIP, ...RENTALS];
-  allItems.forEach(item => {
-    if (role) {
-      const itemRole = getItemRole(item);
-      if (itemRole !== role) return;
-    }
-    Object.entries(item.a || {}).forEach(([key, asgn]) => {
-      if (!asgn) return;
-      try {
-        const sels = JSON.parse(asgn);
-        if (Array.isArray(sels)) {
-          sels.filter(s=>s.type==='job'&&s.id===projId).forEach(s=>{
-            if(!code || s.cc===code) count++;
-          });
-          return;
-        }
-      } catch(e){}
-      if (asgn === projId) {
-        const cc = item.cc?.[key]||'';
-        if (!code || cc === code) count++;
-      }
-    });
+// jsonpSave — write one key/value to App Data sheet
+function jsonpSave(key, value){
+  return new Promise((resolve,reject)=>{
+    if(!APPS_SCRIPT_URL){ reject('No URL'); return; }
+    const body    = JSON.stringify({action:'saveAppData', key, value});
+    const encoded = encodeURIComponent(body);
+    if(encoded.length > 14000){ reject('Payload too large for key='+key+' ('+Math.round(encoded.length/1024)+'KB)'); return; }
+    const cbName  = '_zlcSave_'+Date.now()+'_'+Math.random().toString(36).slice(2,5);
+    const scriptId= '_zlcScript_'+key.replace(/[^a-zA-Z0-9]/g,'_');
+    const old     = document.getElementById(scriptId); if(old) old.remove();
+    let done = false;
+    const cleanup = ()=>{ done=true; delete window[cbName]; const el=document.getElementById(scriptId); if(el)el.remove(); };
+    window[cbName] = (r)=>{ cleanup(); if(r&&r.ok) resolve(r); else reject('Apps Script returned error: '+JSON.stringify(r)); };
+    const script   = document.createElement('script');
+    script.id      = scriptId;
+    script.src     = APPS_SCRIPT_URL+'?data='+encoded+'&callback='+cbName;
+    script.onerror = ()=>{ cleanup(); reject('Network error saving key='+key); };
+    document.head.appendChild(script);
+    setTimeout(()=>{ if(!done){ cleanup(); reject('Timeout saving key='+key); }}, 15000);
   });
-  return count;
 }
 
-function getDaysBudgetSummary(projId) {
-  const proj = DB.projects.find(p => p.id === projId);
-  if (!proj) return [];
-  // Base codes from project
-  const codeMap = {};
-  (proj.codes||[]).forEach(c=>{
-    codeMap[c.code] = {
-      code: c.code, name: CODES_MAP[c.code]||c.code,
-      foremanDays: c.foremanDays||0, laborerDays: c.laborerDays||0,
-    };
+// jsonpLoad — read all keys from App Data sheet
+function jsonpLoad(){
+  return new Promise((resolve,reject)=>{
+    if(!APPS_SCRIPT_URL){ reject('No URL'); return; }
+    const cbName  = '_zlcLoad_'+Date.now();
+    const scriptId= '_zlcLoadScript';
+    const old     = document.getElementById(scriptId); if(old) old.remove();
+    let done = false;
+    const cleanup = ()=>{ done=true; delete window[cbName]; const el=document.getElementById(scriptId); if(el)el.remove(); };
+    window[cbName] = (json)=>{ cleanup(); resolve(json); };
+    const script   = document.createElement('script');
+    script.id      = scriptId;
+    script.src     = APPS_SCRIPT_URL+'?callback='+cbName+'&data='+encodeURIComponent(JSON.stringify({action:'loadAppData'}));
+    script.onerror = ()=>{ cleanup(); reject('Network error loading from cloud'); };
+    document.head.appendChild(script);
+    setTimeout(()=>{ if(!done){ cleanup(); reject('Load timeout'); }}, 20000);
   });
-  // Add CO man-days — only Approved COs count toward budget
-  (proj.cos||[]).filter(co=>/approv/i.test(co.status||'')).forEach(co=>{
-    if((co.foremanDays||0)+(co.laborerDays||0)>0 && co.code){
-      if(!codeMap[co.code]) codeMap[co.code]={code:co.code,name:CODES_MAP[co.code]||co.code,foremanDays:0,laborerDays:0};
-      codeMap[co.code].foremanDays += (co.foremanDays||0);
-      codeMap[co.code].laborerDays += (co.laborerDays||0);
-    }
-  });
-  return Object.values(codeMap).filter(c=>c.foremanDays+c.laborerDays>0).map(c=>({
-    ...c,
-    totalDays: c.foremanDays + c.laborerDays,
-    usedForeman: countAssignedDays(projId, c.code, 'foreman'),
-    usedLaborer: countAssignedDays(projId, c.code, 'laborer'),
-    usedDays:    countAssignedDays(projId, c.code),
-  }));
 }
 
-
-function getProjectCompletion(projId) {
-  const summary = getDaysBudgetSummary(projId);
-  if (!summary.length) return null;
-  const total = summary.reduce((a,c)=>a+c.totalDays,0);
-  const used  = summary.reduce((a,c)=>a+Math.min(c.usedDays,c.totalDays),0);
-  return total > 0 ? Math.round((used/total)*100) : 0;
-}
-
-
-function buildRosterData() {
-  const mapItem = e => ({
-    id: e.id,
-    a: e.a||{},
-    notes: e.notes||{},
-    wh: e.wh||{},
-    cc: e.cc||{},
-    co: e.co||{},
-    confirmed: e.confirmed||{},
-    pour: e.pour||{},
-    name: e.name,
-  });
-  const mapItemExtra = e => ({...mapItem(e), project: e.project});
-  return {
-    staff:     STAFF.map(mapItem),
-    extra:     EXTRA.map(mapItemExtra),
-    equip:     EQUIP.map(mapItemExtra),
-    rentals:   RENTALS.map(mapItemExtra),
-    extraList: EXTRA.filter(e=>!['x1','x2','x3','x4','x5'].includes(e.id)).map(e=>({id:e.id,name:e.name,team:e.team,role:e.role||'laborer'})),
-    staffList: [],
-  };
-}
-
-
-function saveLocal() {
-  try {
-    const rosterData = buildRosterData();
-    // Save to localStorage immediately (fast, works offline)
-    localStorage.setItem('zlc_roster', JSON.stringify(rosterData));
-    localStorage.setItem('zlc_orders', JSON.stringify(DB.openOrders||[]));
-    localStorage.setItem('zlc_manual_projects', JSON.stringify(DB.projects.filter(p=>p._manual)));
-    localStorage.setItem('zlc_historical', JSON.stringify(DB.historical||[]));
-    // Also save to cloud (syncs across devices)
-    saveToCloud(rosterData);
-  } catch(e) { console.warn('saveLocal error:', e); }
-}
-
-// Debounced Gantt save — with status indicator in gantt toolbar
-let _ganttSaveTimer = null;
-function ganttSaveToCloud() {
-  if (!APPS_SCRIPT_URL) return;
-  clearTimeout(_ganttSaveTimer);
-  setGanttSaveStatus('pending');
-  _ganttSaveTimer = setTimeout(async () => {
-    setGanttSaveStatus('saving');
-    try {
-      await jsonpSave('gantt_data', GANTT.tasks);
-      setGanttSaveStatus('saved');
-    } catch(e) {
-      console.warn('Gantt save error:', e);
-      setGanttSaveStatus('error');
-      toast('⚠️ Gantt not saved — check connection', {error:true});
-    }
-  }, 2000);
-}
-
-function setGanttSaveStatus(state) {
-  const el = document.getElementById('gantt-save-status');
-  if (!el) return;
-  const map = {
-    pending: ['⏳ Unsaved changes', '#854F0B', '#FAEEDA'],
-    saving:  ['⏳ Saving…',         '#185FA5', '#E6F1FB'],
-    saved:   ['✓ Saved',            '#3B6D11', '#EAF3DE'],
-    error:   ['✗ Save failed',      '#791F1F', '#FCEBEB'],
-  };
-  const [txt, color, bg] = map[state] || ['', '', ''];
-  el.textContent = txt;
-  el.style.color = color;
-  el.style.background = bg;
-  el.style.display = txt ? 'inline-block' : 'none';
-  if (state === 'saved') setTimeout(() => { if (el.textContent === '✓ Saved') el.style.display = 'none'; }, 3000);
-}
-
-// Cloud save queue — batches changes and sends automatically
-
-
-
-function loadLocal() {
-  // Load from localStorage as fast fallback while cloud loads
-  try {
-    const rosterRaw = localStorage.getItem('zlc_roster');
-    if(rosterRaw) applyRosterData(JSON.parse(rosterRaw));
-    const ordersRaw = localStorage.getItem('zlc_orders');
-    if(ordersRaw) DB.openOrders = JSON.parse(ordersRaw);
-    const manualRaw = localStorage.getItem('zlc_manual_projects');
-    if(manualRaw) {
-      const manual = JSON.parse(manualRaw);
-      manual.forEach(p => { if(!DB.projects.find(x=>x.id===p.id)) DB.projects.push(p); });
-    }
-    const histRaw = localStorage.getItem('zlc_historical');
-    if(histRaw) DB.historical = JSON.parse(histRaw);
-  } catch(e) { console.warn('loadLocal error:', e); }
-}
-
-function applyRosterData(rd) {
-  const apply = (arr, source) => (arr||[]).forEach(saved => {
-    const item = source.find(e => e.id === saved.id);
-    if (item) {
-      if(saved.a)         item.a         = saved.a;
-      if(saved.notes)     item.notes     = saved.notes;
-      if(saved.wh)        item.wh        = saved.wh;
-      if(saved.cc)        item.cc        = saved.cc;
-      if(saved.co)        item.co        = saved.co;
-      if(saved.confirmed) item.confirmed = saved.confirmed;
-      if(saved.pour)      item.pour      = saved.pour;
-      if(saved.name)      item.name      = saved.name;
-      if(saved.project !== undefined) item.project = saved.project;
-    }
-  });
-  apply(rd.staff,   STAFF);
-  apply(rd.extra,   EXTRA);
-  apply(rd.equip,   EQUIP);
-  apply(rd.rentals, RENTALS);
-  (rd.extraList||[]).forEach(s=>{ if(!EXTRA.find(e=>e.id===s.id)) EXTRA.push({...s,role:'laborer'}); });
-  (rd.staffList||[]).forEach(s=>{ if(!STAFF.find(e=>e.id===s.id)) STAFF.push(s); });
-}
-
-
-// ─── BANNER · RATE LIMIT · UNDO ──────────────────────────────────────────────
-let _bannerTimer=null;
-function showBanner(msg,type='error'){
-  const b=document.getElementById('error-banner');
-  const t=document.getElementById('error-banner-text');
-  if(!b||!t)return;
-  t.textContent=msg;
-  b.style.background=type==='error'?'#E24B4A':'#3B6D11';
-  b.style.display='block';
-  clearTimeout(_bannerTimer);
-  _bannerTimer=setTimeout(()=>{b.style.display='none';},6000);
-}
-
-let _lastSync=0;
-function throttledSync(){
-  const now=Date.now();
-  if(now-_lastSync<10000){toast('⏳ Wait '+Math.ceil((10000-(now-_lastSync))/1000)+'s before syncing again');return;}
-  _lastSync=now;
-  syncFromSheets();
-}
-
-let _undoTimer=null;
-function showUndo(label,undoFn){
-  clearTimeout(_undoTimer);
-  const b=document.getElementById('undo-banner');
-  const t=document.getElementById('undo-banner-text');
-  const btn=document.getElementById('undo-btn');
-  if(!b||!t||!btn)return;
-  t.textContent=label;
-  b.style.display='flex';
-  btn.onclick=()=>{clearTimeout(_undoTimer);undoFn&&undoFn();b.style.display='none';};
-  _undoTimer=setTimeout(()=>{b.style.display='none';},8000);
-}
-
-// ─── WEATHER · Open-Meteo (free, no key) ────────────────────────────────────
-const SITE_LAT=37.9777,SITE_LON=-122.0308;
-const WX_CODES={
-  0:'☀️ Clear',1:'🌤️ Mostly clear',2:'⛅ Partly cloudy',3:'☁️ Overcast',
-  45:'🌫️ Foggy',48:'🌫️ Icy fog',51:'🌦️ Light drizzle',53:'🌦️ Drizzle',55:'🌧️ Heavy drizzle',
-  61:'🌧️ Light rain',63:'🌧️ Rain',65:'🌧️ Heavy rain',71:'🌨️ Light snow',73:'🌨️ Snow',
-  80:'🌦️ Showers',81:'🌧️ Heavy showers',82:'⛈️ Violent showers',
-  95:'⛈️ Thunderstorm',96:'⛈️ Thunderstorm+hail',99:'⛈️ Heavy thunderstorm',
-};
-const WX_ALERT=new Set([61,63,65,80,81,82,95,96,99,71,73]);
-let _wxCache=null,_wxCacheTime=0;
-
-async function loadWeather(){
-  const el=document.getElementById('weather-content');if(!el)return;
-  if(_wxCache&&Date.now()-_wxCacheTime<30*60*1000){renderWeather(_wxCache);return;}
-  el.innerHTML='<div class="empty">⏳ Loading weather…</div>';
+// saveLocal — called after every change. Saves to cloud only.
+function saveLocal(){
   try{
-    const url=`https://api.open-meteo.com/v1/forecast?latitude=${SITE_LAT}&longitude=${SITE_LON}&daily=weathercode,temperature_2m_max,temperature_2m_min,precipitation_sum,windspeed_10m_max&temperature_unit=fahrenheit&windspeed_unit=mph&timezone=America%2FLos_Angeles&forecast_days=7`;
-    const res=await fetch(url);const d=await res.json();
-    _wxCache=d;_wxCacheTime=Date.now();renderWeather(d);
-  }catch(e){el.innerHTML=`<div class="empty">⚠️ Weather unavailable: ${e.message}</div>`;}
+    const rosterData = buildRosterData();
+    saveToCloud(rosterData);
+  }catch(e){ console.warn('saveLocal error:',e); }
 }
 
-function renderWeather(d){
-  const el=document.getElementById('weather-content');if(!el)return;
-  const days=d.daily;
-  const DOW=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
-  const concreteProjs=DB.projects.filter(p=>p.status==='Active'&&p.codes.some(c=>c.code==='004'));
-  let alerts='';
-  const cards=days.time.map((date,i)=>{
-    const code=days.weathercode[i];
-    const wx=WX_CODES[code]||`Code ${code}`;
-    const isAlert=WX_ALERT.has(code);
-    const hi=Math.round(days.temperature_2m_max[i]);
-    const lo=Math.round(days.temperature_2m_min[i]);
-    const rain=(days.precipitation_sum[i]||0).toFixed(1);
-    const wind=Math.round(days.windspeed_10m_max[i]||0);
-    const dt=new Date(date+'T12:00:00');
-    const dow=DOW[dt.getDay()];
-    const mon=dt.toLocaleDateString('en-US',{month:'short',day:'numeric'});
-    if(isAlert&&concreteProjs.length){
-      alerts+=`<div style="padding:8px 12px;background:rgba(226,75,74,0.08);border-left:3px solid #E24B4A;border-radius:4px;margin-bottom:6px;font-size:12px">
-        ⚠️ <strong>${dow} ${mon}</strong>: ${wx} — ${concreteProjs.length} concrete project${concreteProjs.length!==1?'s':''} may be affected (${concreteProjs.map(p=>p.id).join(', ')})</div>`;
-    }
-    return`<div style="flex:1;min-width:100px;padding:14px 12px;background:var(--bg);border-radius:10px;border:${isAlert?'1.5px solid #E24B4A':'0.5px solid var(--border)'};text-align:center">
-      <div style="font-size:11px;font-weight:700;color:var(--text2);margin-bottom:4px">${dow}<br>${mon}</div>
-      <div style="font-size:22px;margin:6px 0">${wx.split(' ')[0]}</div>
-      <div style="font-size:11px;color:var(--text2);margin-bottom:4px">${wx.slice(wx.indexOf(' ')+1)}</div>
-      <div style="font-size:13px;font-weight:700">${hi}° / ${lo}°F</div>
-      <div style="font-size:10px;color:var(--text3);margin-top:4px">${rain}" rain · ${wind}mph</div>
-    </div>`;
-  }).join('');
-  el.innerHTML=(alerts?`<div style="margin-bottom:16px"><div style="font-size:12px;font-weight:700;color:#E24B4A;margin-bottom:8px">🚨 Rain/Storm Alerts — Concrete Projects</div>${alerts}</div>`:'')
-    +`<div style="display:flex;gap:8px;flex-wrap:wrap">${cards}</div>`;
+// loadLocal — on startup, nothing to load locally. Cloud loads in INIT.
+function loadLocal(){
+  // 100% cloud — no localStorage used for roster data
+  // Manual projects and orders are loaded from cloud via loadFromCloud()
 }
 
-// ─── CREW OPTIMIZER ──────────────────────────────────────────────────────────
-function renderCrewSuggestions(){
-  const el=document.getElementById('crew-content');if(!el)return;
-  const today=new Date();
-  const workDays=[];
-  let d=new Date(today);
-  while(workDays.length<5){d.setDate(d.getDate()+1);if(d.getDay()!==0&&d.getDay()!==6)workDays.push(new Date(d));}
-  const activeProjs=DB.projects.filter(p=>p.status==='Active');
-  const suggestions=[];
-  STAFF.forEach(item=>{
-    const role=getItemRole(item);
-    const freeDays=workDays.filter(wd=>{
-      const key=`${wd.getFullYear()}-${wd.getMonth()+1}-${wd.getDate()}`;
-      return !item.a?.[key];
-    });
-    if(!freeDays.length)return;
-    const matchingProjs=activeProjs.filter(p=>{
-      const summary=getDaysBudgetSummary(p.id);
-      return summary.some(s=>role==='foreman'?(s.foremanDays-s.usedForeman)>0:(s.laborerDays-s.usedLaborer)>0);
-    });
-    if(!matchingProjs.length)return;
-    const certStr=item.certs?.join(', ')||'none';
-    matchingProjs.slice(0,2).forEach(proj=>{
-      suggestions.push({person:item.name,role,certs:certStr,freeDays:freeDays.length,project:proj.id,projName:proj.name,firstFree:freeDays[0]});
-    });
-  });
-  if(!suggestions.length){
-    el.innerHTML='<div class="empty">No suggestions — all crew assigned or no day budgets set on active projects.</div>';return;
-  }
-  suggestions.sort((a,b)=>b.freeDays-a.freeDays);
-  el.innerHTML=suggestions.slice(0,15).map(s=>{
-    const dStr=s.firstFree.toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric'});
-    const rc=s.role==='foreman'?'#185FA5':'#3B6D11';
-    const pc2=pc(s.project)||'#888';
-    return`<div style="padding:12px 14px;border:0.5px solid var(--border);border-radius:8px;margin-bottom:8px;display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap">
-      <div style="display:flex;align-items:center;gap:10px;flex:1;min-width:200px">
-        <div style="width:10px;height:10px;border-radius:50%;background:${rc};flex-shrink:0"></div>
-        <div>
-          <div style="font-size:13px;font-weight:700">${s.person}</div>
-          <div style="font-size:11px;color:var(--text2)">${s.role} · certs: ${s.certs} · <strong>${s.freeDays} free day${s.freeDays!==1?'s':''}</strong> next week</div>
-          <div style="font-size:11px;color:var(--text3)">First available: ${dStr}</div>
-        </div>
-      </div>
-      <div style="text-align:right">
-        <div style="font-size:11px;font-weight:600;color:var(--text2)">Needs ${s.role}</div>
-        <div style="display:flex;align-items:center;gap:5px;margin-top:2px">
-          <span style="display:inline-block;width:8px;height:8px;border-radius:2px;background:${pc2}"></span>
-          <span style="font-size:12px;font-weight:700">${s.project}</span>
-          <span style="font-size:11px;color:var(--text2)">${s.projName}</span>
-        </div>
-      </div>
-    </div>`;
-  }).join('');
-}
 
 // ─── INIT ─────────────────────────────────────────────────────────────────────
 loadLocal();
