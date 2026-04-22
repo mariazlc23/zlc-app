@@ -774,6 +774,9 @@ body.select-mode .day-cell:hover { filter: brightness(1.15) !important; }
 </div>
 
 <script>
+window.ZLC_GEMINI_KEY = 'AIzaSyAPS42bUDNV7U02gxH2eH-EVVe2TwMaa-U';
+</script>
+<script>
 document.addEventListener('keydown', (event) => {
   if (event.key === 'Escape') {
     const modal = document.querySelector('#modal-area .modal-backdrop');
@@ -6102,9 +6105,6 @@ function ganttDownloadPDF() {
       svg { box-shadow:none; max-width:100%; }
     }
   </style>
-<script>
-window.ZLC_GEMINI_KEY = 'AIzaSyAPS42bUDNV7U02gxH2eH-EVVe2TwMaa-U';
-</script>
 </head>
 <body>
   ${svgContent}
