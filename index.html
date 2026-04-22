@@ -409,6 +409,10 @@
   .gantt-progress-bar { height:6px; border-radius:3px; background:var(--bg3); overflow:hidden; margin-top:3px; }
   .gantt-progress-fill { height:100%; border-radius:3px; background:var(--blue); }
 
+/* ── Paste target mode */
+.day-cell.paste-target { cursor: copy !important; }
+.day-cell.paste-target:hover { outline: 2px dashed #4CAF50 !important; outline-offset: -2px; background: rgba(76,175,80,0.15) !important; }
+
 /* ── Bulk select mode ──────────────────────────────────────────── */
 body.select-mode .day-cell { cursor: crosshair !important; }
 body.select-mode .day-cell:hover { filter: brightness(1.15) !important; }
@@ -658,6 +662,7 @@ body.select-mode .day-cell:hover { filter: brightness(1.15) !important; }
       <button class="btn btn-primary btn-sm" onclick="openModal('assign')">Assign project</button>
       <button class="btn btn-ghost btn-sm" onclick="showRosterHistory()" title="View roster change history this session">📋 History</button>
       <button id="select-mode-btn" class="btn btn-ghost btn-sm" onclick="toggleSelectMode()" title="Select multiple cells to delete">☑ Select</button>
+      <button class="btn btn-ghost btn-sm" onclick="toggleAIChat()" title="AI scheduling assistant" style="background:linear-gradient(135deg,#185FA5,#6E2C7B);color:#fff;border:none">🤖 AI Schedule</button>
     </div>
   </div>
   <div class="roster-controls toolbar">
@@ -758,8 +763,10 @@ body.select-mode .day-cell:hover { filter: brightness(1.15) !important; }
   </div>
   <div style="display:flex;gap:8px">
     <button onclick="bulkSelectAll()" style="font-size:12px;padding:6px 14px;border-radius:6px;border:1px solid rgba(255,255,255,0.3);background:none;color:#fff;cursor:pointer">Select all visible</button>
-    <button onclick="bulkClearSelection()" style="font-size:12px;padding:6px 14px;border-radius:6px;border:1px solid rgba(255,255,255,0.3);background:none;color:#fff;cursor:pointer">Clear selection</button>
-    <button onclick="bulkDeleteSelected()" style="font-size:12px;padding:6px 16px;border-radius:6px;border:none;background:#E24B4A;color:#fff;cursor:pointer;font-weight:700">🗑 Delete selected</button>
+    <button onclick="bulkClearSelection()" style="font-size:12px;padding:6px 14px;border-radius:6px;border:1px solid rgba(255,255,255,0.3);background:none;color:#fff;cursor:pointer">Clear</button>
+    <button onclick="bulkCopySelected()" style="font-size:12px;padding:6px 14px;border-radius:6px;border:1px solid #4A9EFF;background:rgba(74,158,255,0.2);color:#4A9EFF;cursor:pointer;font-weight:600">📋 Copy</button>
+    <button id="bulk-paste-btn" onclick="bulkEnterPasteMode()" style="display:none;font-size:12px;padding:6px 14px;border-radius:6px;border:1px solid #4CAF50;background:rgba(76,175,80,0.2);color:#4CAF50;cursor:pointer;font-weight:600">📌 Paste — click start day</button>
+    <button onclick="bulkDeleteSelected()" style="font-size:12px;padding:6px 16px;border-radius:6px;border:none;background:#E24B4A;color:#fff;cursor:pointer;font-weight:700">🗑 Delete</button>
     <button onclick="toggleSelectMode()" style="font-size:12px;padding:6px 14px;border-radius:6px;border:1px solid rgba(255,255,255,0.3);background:none;color:#fff;cursor:pointer">✕ Cancel</button>
   </div>
 </div>
@@ -2513,11 +2520,25 @@ function dow(y,m,d){return new Date(y,m,d).getDay();}
 function getVisDays(){
   const total=dim(calYear,calMonth);
   if(calView==='month')return Array.from({length:total},(_,i)=>i+1);
-  const t=new Date(),sd=t.getMonth()===calMonth&&t.getFullYear()===calYear?t.getDate():1;
-  const mon=sd-((dow(calYear,calMonth,sd)+6)%7),s=Math.max(1,mon),days=[];
-  for(let i=s;i<=Math.min(s+13,total);i++)days.push(i);
+  // 2-week view: always Mon→Sun, 14 days, may cross into prev/next month
+  // Returns objects: {y,m,d} for each day
+  const t=new Date();
+  const isCurrentMonth=t.getMonth()===calMonth&&t.getFullYear()===calYear;
+  const anchorDay=isCurrentMonth?t.getDate():rosterWeekAnchor||1;
+  const anchor=new Date(calYear,calMonth,anchorDay);
+  const anchorDow=anchor.getDay(); // 0=Sun
+  const backToMon=(anchorDow+6)%7;
+  const monday=new Date(anchor);
+  monday.setDate(anchor.getDate()-backToMon);
+  const days=[];
+  for(let i=0;i<14;i++){
+    const d=new Date(monday);
+    d.setDate(monday.getDate()+i);
+    days.push({y:d.getFullYear(),m:d.getMonth(),d:d.getDate(),iso:`${d.getFullYear()}-${d.getMonth()+1}-${d.getDate()}`});
+  }
   return days;
 }
+let rosterWeekAnchor=1; // tracks anchor day for week navigation
 function getItem(id,type){
   if(type==='staff')return STAFF.find(e=>e.id===id);
   if(type==='extra')return EXTRA.find(e=>e.id===id);
@@ -2806,7 +2827,15 @@ function renderRoster(){
   } else {
     h+=`<th class="ic sticky-col" style="min-width:130px">Name / Unit</th>`;
     h+=`<th class="ic" style="min-width:46px;max-width:56px;font-size:10px">Info</th>`;
-    days.forEach(d=>{const dw=dow(calYear,calMonth,d),wk=dw===0||dw===6;h+=`<th style="min-width:30px;${wk?'color:#c9a200':''}">${d}<br><span style="font-size:8px;font-weight:500">${DLBL[dw]}</span></th>`;});
+    days.forEach((day,di)=>{
+    const d=typeof day==='object'?day.d:day;
+    const y=typeof day==='object'?day.y:calYear;
+    const mo=typeof day==='object'?day.m:calMonth;
+    const dw=new Date(y,mo,d).getDay();
+    const wk=dw===0||dw===6;
+    const otherMonth=typeof day==='object'&&(day.m!==calMonth||day.y!==calYear);
+    h+=`<th style="min-width:30px;${wk?'color:#c9a200':''}${otherMonth?';opacity:0.45;font-style:italic':''}">
+      ${otherMonth?`<span style="font-size:8px;color:var(--text3)">${['J','F','M','A','M','J','J','A','S','O','N','D'][mo]}</span><br>`:''}${d}<br><span style="font-size:8px;font-weight:500">${DLBL[dw]}</span></th>`;});
   }
   h+=`</tr></thead><tbody>`;
 
@@ -2886,8 +2915,12 @@ function renderRoster(){
   };
 
   // All-month cells — supports multi-project comma-separated values
-  const dayCells=(item,type)=>days.map(d=>{
-    const dw=dow(calYear,calMonth,d),wk=dw===0||dw===6,key=`${calYear}-${calMonth+1}-${d}`,asgn=item.a?.[key]||'',isT=d===todayD;
+  const dayCells=(item,type)=>days.map((day,di)=>{
+    const d=typeof day==='object'?day.d:day;
+    const y=typeof day==='object'?day.y:calYear;
+    const mo=typeof day==='object'?day.m:calMonth;
+    const key=`${y}-${mo+1}-${d}`;
+    const dw=new Date(y,mo,d).getDay(),wk=dw===0||dw===6,asgn=item.a?.[key]||'',isT=(y===new Date().getFullYear()&&mo===new Date().getMonth()&&d===new Date().getDate());
     const note=item.notes?.[key]||'';
     const conf=item.confirmed?.[key]!==false; // true by default
     if(asgn || note) assignedCount++;
@@ -2918,7 +2951,7 @@ function renderRoster(){
       // Build title from project names only
       const titlePids = getAsgnPids(asgn);
       const titleTxt = titlePids.map(pid=>{ const p=DB.projects.find(x=>x.id===pid); return p?`${pid} — ${p.name}`:pid; }).join(', ');
-      return`<td class="day-cell${isT?' today-col':''}${wk?' cell-weekend':''}${!conf&&asgn?' cell-conflict':''}" style="position:relative;background:${bg0||'var(--bg3)'};${wk?'filter:brightness(0.97)':''}" draggable="${asgn?'true':'false'}" data-sel-key="${item.id}|${key}|${type}" onclick="_selectMode?bulkToggleCell('${item.id}','${key}','${type}',this):clickCell('${item.id}','${key}','${d}','${type}')" ondragstart="!_selectMode&&rosterDragStart('${item.id}','${key}','${type}',this)" ondragend="rosterDragEnd(this)" ondragover="rosterDragOver(event,this)" ondrop="rosterDrop(event,'${item.id}','${key}','${type}',this)" title="${(titleTxt+(note?' — '+note:'')).replace(/"/g,'&quot;')}${!conf?' ⚠️ NOT CONFIRMED':''}"><div style="display:flex;flex-direction:column;gap:1px;align-items:center">${inner}</div>${noteDot}${warnIcon}</td>`;
+      return`<td class="day-cell${isT?' today-col':''}${wk?' cell-weekend':''}${!conf&&asgn?' cell-conflict':''}" style="position:relative;background:${bg0||'var(--bg3)'};${wk?'filter:brightness(0.97)':''}" draggable="${asgn?'true':'false'}" data-sel-key="${item.id}|${key}|${type}" onclick="_bulkPasteActive?bulkPasteToCell('${item.id}','${key}','${type}'):_selectMode?bulkToggleCell('${item.id}','${key}','${type}',this):clickCell('${item.id}','${key}','${d}','${type}')" ondragstart="!_selectMode&&rosterDragStart('${item.id}','${key}','${type}',this)" ondragend="rosterDragEnd(this)" ondragover="rosterDragOver(event,this)" ondrop="rosterDrop(event,'${item.id}','${key}','${type}',this)" title="${(titleTxt+(note?' — '+note:'')).replace(/"/g,'&quot;')}${!conf?' ⚠️ NOT CONFIRMED':''}"><div style="display:flex;flex-direction:column;gap:1px;align-items:center">${inner}</div>${noteDot}${warnIcon}</td>`;
     }
     const bg=asgn==='NEW'?'#FFEBEE':asgn?(()=>{ const pid=getAsgnFirstPid(asgn); return pc(pid||asgn); })():'';
     const tc=bg?ptc(bg):'';
@@ -2933,7 +2966,7 @@ function renderRoster(){
       return asgn.split('-')[1]||asgn.slice(0,4);
     })();
     const cellBorder=!conf&&asgn?'outline:2px solid #E24B4A;':'';
-    return`<td class="day-cell${isT?' today-col':''}${wk?' cell-weekend':''}${!conf&&asgn?' cell-conflict':''}" style="position:relative;${bg?`background:${bg};`:''}${wk&&!bg?'background:rgba(0,0,0,0.02);':''}" draggable="${asgn?'true':'false'}" data-sel-key="${item.id}|${key}|${type}" onclick="_selectMode?bulkToggleCell('${item.id}','${key}','${type}',this):clickCell('${item.id}','${key}','${d}','${type}')" ondragstart="!_selectMode&&rosterDragStart('${item.id}','${key}','${type}',this)" ondragend="rosterDragEnd(this)" ondragover="rosterDragOver(event,this)" ondrop="rosterDrop(event,'${item.id}','${key}','${type}',this)" title="${titleText.replace(/"/g,'&quot;')}${!conf?' ⚠️ NOT CONFIRMED':''}">${asgn?`<div class="day-block" style="color:${asgn==='NEW'?'#C62828':tc}">${dispLabel}</div>`:''}${noteDot}${warnIcon}${pourIcon}</td>`;
+    return`<td class="day-cell${isT?' today-col':''}${wk?' cell-weekend':''}${!conf&&asgn?' cell-conflict':''}" style="position:relative;${bg?`background:${bg};`:''}${wk&&!bg?'background:rgba(0,0,0,0.02);':''}" draggable="${asgn?'true':'false'}" data-sel-key="${item.id}|${key}|${type}" onclick="_bulkPasteActive?bulkPasteToCell('${item.id}','${key}','${type}'):_selectMode?bulkToggleCell('${item.id}','${key}','${type}',this):clickCell('${item.id}','${key}','${d}','${type}')" ondragstart="!_selectMode&&rosterDragStart('${item.id}','${key}','${type}',this)" ondragend="rosterDragEnd(this)" ondragover="rosterDragOver(event,this)" ondrop="rosterDrop(event,'${item.id}','${key}','${type}',this)" title="${titleText.replace(/"/g,'&quot;')}${!conf?' ⚠️ NOT CONFIRMED':''}">${asgn?`<div class="day-block" style="color:${asgn==='NEW'?'#C62828':tc}">${dispLabel}</div>`:''}${noteDot}${warnIcon}${pourIcon}</td>`;
   }).join('');
 
   // Render a row — returns '' if day mode and no assignment/note
@@ -3090,7 +3123,7 @@ function clickCell(itemId,dateKey,day,type){
       });
       html+=`<div class="fg" style="margin-bottom:${budgetHtml?'4px':'8px'}">
         <label style="font-size:11px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.05em">Cost code</label>
-        <select id="cp-cc" style="width:100%;font-size:13px;padding:6px 8px;border-radius:var(--radius);border:0.5px solid var(--border2);background:var(--bg);color:var(--text)">${ccOpts}</select>
+        <select id="cp-cc" onchange="markModalDirty()" style="width:100%;font-size:13px;padding:6px 8px;border-radius:var(--radius);border:0.5px solid var(--border2);background:var(--bg);color:var(--text)">${ccOpts}</select>
       </div>`;
       if(budgetHtml) html+=`<div style="background:var(--bg3);border-radius:var(--radius);padding:8px 10px;margin-bottom:8px;border:0.5px solid var(--border)">${budgetHtml}</div>`;
     }
@@ -3151,7 +3184,7 @@ function clickCell(itemId,dateKey,day,type){
           <div style="max-height:250px;overflow-y:auto">${dumpOpts}</div></div>
       </div>
       <div class="fg" style="margin-top:8px"><label>Notes</label>
-        <textarea id="cp-note" style="min-height:45px;width:100%;font-size:12px;padding:6px 8px;border-radius:var(--radius);border:0.5px solid var(--border2);background:var(--bg);color:var(--text);font-family:inherit;resize:vertical">${curNote}</textarea></div>
+        <textarea id="cp-note" oninput="markModalDirty()" style="min-height:45px;width:100%;font-size:12px;padding:6px 8px;border-radius:var(--radius);border:0.5px solid var(--border2);background:var(--bg);color:var(--text);font-family:inherit;resize:vertical">${curNote}</textarea></div>
       <div class="form-actions">
         ${cur?`<button class="btn btn-deny btn-sm" onclick="clearCell('${itemId}','${dateKey}','${type}')">Clear</button>`:''}
         <button class="btn" onclick="closeModal()">Cancel</button>
@@ -3170,15 +3203,15 @@ function clickCell(itemId,dateKey,day,type){
   showModal(`<div class="modal-title">Assign · ${item.name}</div>
     <div style="font-size:12px;color:var(--text2);margin-bottom:12px">${dl}</div>
     <div class="fg"><label>Project / assignment</label>
-      <select id="cp-proj" onchange="updateCellExtraFields('${itemId}','${dateKey}')">${pOpts}</select>
+      <select id="cp-proj" onchange="markModalDirty();updateCellExtraFields('${itemId}','${dateKey}')">${pOpts}</select>
     </div>
     <div style="display:flex;align-items:center;gap:12px;background:var(--bg3);padding:8px 10px;border-radius:var(--radius);margin-bottom:8px">
       <span style="font-size:12px;font-weight:600;color:var(--text)">Confirmed?</span>
       <label style="display:flex;align-items:center;gap:4px;cursor:pointer;font-size:12px;margin:0">
-        <input type="radio" name="cp-conf" value="yes" ${curConf?'checked':''} style="width:auto;accent-color:#3B6D11"> ✅ Yes
+        <input type="radio" name="cp-conf" value="yes" onchange="markModalDirty()" ${curConf?'checked':''} style="width:auto;accent-color:#3B6D11"> ✅ Yes
       </label>
       <label style="display:flex;align-items:center;gap:4px;cursor:pointer;font-size:12px;margin:0">
-        <input type="radio" name="cp-conf" value="no" ${!curConf?'checked':''} style="width:auto;accent-color:#E24B4A"> ⚠️ Not confirmed
+        <input type="radio" name="cp-conf" value="no" onchange="markModalDirty()" ${!curConf?'checked':''} style="width:auto;accent-color:#E24B4A"> ⚠️ Not confirmed
       </label>
     </div>
     <div id="cp-extra-fields" style="margin-bottom:0">${extraFields}</div>
@@ -3186,12 +3219,12 @@ function clickCell(itemId,dateKey,day,type){
       <label style="color:#185FA5;font-weight:600;display:flex;align-items:center;gap:6px;margin-bottom:8px">
         <span style="font-size:18px">🪣</span> Pour
         <label style="display:flex;align-items:center;gap:4px;cursor:pointer;font-size:11px;font-weight:400;color:var(--text2);margin:0;margin-left:auto">
-          <input type="checkbox" id="cp-pour-enabled" ${curPour?'checked':''} style="width:auto;accent-color:#185FA5" onchange="togglePourFields(this.checked)"> Enable pour
+          <input type="checkbox" id="cp-pour-enabled" onchange="markModalDirty()" ${curPour?'checked':''} style="width:auto;accent-color:#185FA5" onchange="togglePourFields(this.checked)"> Enable pour
         </label>
       </label>
       <div id="cp-pour-fields" style="display:${curPour?'flex':'none'};gap:8px;flex-wrap:wrap">
         <div style="flex:1;min-width:90px"><label style="font-size:11px;color:var(--text2)">Time</label>
-          <input id="cp-pour-time" type="text" value="${pourTime}" placeholder="e.g. 6:00am" style="width:100%;font-size:13px;padding:5px 8px;border-radius:var(--radius);border:0.5px solid #6AAED6;background:var(--bg);color:var(--text)"></div>
+          <input id="cp-pour-time" type="text" oninput="markModalDirty()" value="${pourTime}" placeholder="e.g. 6:00am" style="width:100%;font-size:13px;padding:5px 8px;border-radius:var(--radius);border:0.5px solid #6AAED6;background:var(--bg);color:var(--text)"></div>
         <div style="flex:1;min-width:70px"><label style="font-size:11px;color:var(--text2)">PSI</label>
           <input id="cp-pour-psi" type="number" value="${pourPsi}" placeholder="3000" style="width:100%;font-size:13px;padding:5px 8px;border-radius:var(--radius);border:0.5px solid #6AAED6;background:var(--bg);color:var(--text)"></div>
         <div style="flex:1;min-width:70px"><label style="font-size:11px;color:var(--text2)">Yards</label>
@@ -3199,12 +3232,12 @@ function clickCell(itemId,dateKey,day,type){
       </div>
     </div>
     <div class="fg"><label>Notes for this day</label>
-      <textarea id="cp-note" placeholder="Site instructions, contact info..." style="min-height:60px;width:100%;font-size:13px;padding:8px;border-radius:var(--radius);border:0.5px solid var(--border2);background:var(--bg);color:var(--text);font-family:inherit;resize:vertical">${curNote}</textarea></div>
+      <textarea id="cp-note" oninput="markModalDirty()" placeholder="Site instructions, contact info..." style="min-height:60px;width:100%;font-size:13px;padding:8px;border-radius:var(--radius);border:0.5px solid var(--border2);background:var(--bg);color:var(--text);font-family:inherit;resize:vertical">${curNote}</textarea></div>
     <div class="fg" style="background:rgba(255,243,205,0.4);border:0.5px solid #F0C040;border-radius:var(--radius);padding:10px 12px;margin-bottom:0">
       <label style="color:#7A5800;font-weight:600;display:flex;align-items:center;gap:6px">
         <span>📦</span> Warehouse notes
       </label>
-      <textarea id="cp-wh" placeholder="e.g. 2x concrete bags, rebar #4, generator..." style="min-height:60px;width:100%;font-size:13px;padding:8px;border-radius:var(--radius);border:0.5px solid #F0C040;background:#FFFEF5;color:var(--text);font-family:inherit;resize:vertical;margin-top:6px">${curWh}</textarea>
+      <textarea id="cp-wh" oninput="markModalDirty()" placeholder="e.g. 2x concrete bags, rebar #4, generator..." style="min-height:60px;width:100%;font-size:13px;padding:8px;border-radius:var(--radius);border:0.5px solid #F0C040;background:#FFFEF5;color:var(--text);font-family:inherit;resize:vertical;margin-top:6px">${curWh}</textarea>
     </div>
     <div class="fg" style="background:rgba(232,240,254,0.5);border:0.5px solid #B5D4F4;border-radius:var(--radius);padding:10px 12px;margin-top:8px">
       <label style="color:#185FA5;font-weight:600;display:flex;align-items:center;gap:6px;margin-bottom:8px;font-size:12px">
@@ -3255,7 +3288,7 @@ function updateCellExtraFields(itemId, dateKey) {
       +proj.codes.map(c=>`<option value="${c.code}"${curCc===c.code?' selected':''}>${c.code} — ${CODES_MAP[c.code]||c.code} (${fmt(c.value)})</option>`).join('');
     html+=`<div class="fg" style="margin-bottom:8px">
       <label style="font-size:11px;font-weight:600;color:var(--text2);text-transform:uppercase;letter-spacing:.05em">Cost code</label>
-      <select id="cp-cc" style="width:100%;font-size:13px;padding:6px 8px;border-radius:var(--radius);border:0.5px solid var(--border2);background:var(--bg);color:var(--text)">${ccOpts}</select>
+      <select id="cp-cc" onchange="markModalDirty()" style="width:100%;font-size:13px;padding:6px 8px;border-radius:var(--radius);border:0.5px solid var(--border2);background:var(--bg);color:var(--text)">${ccOpts}</select>
     </div>`;
   }
   const openCOs = (proj.cos||[]).filter(c=>c.status==='Pending'||c.status==='Approved');
@@ -3587,9 +3620,36 @@ function updateAssignExtraFields(){
 
 // ─── MODALS ──────────────────────────────────────────────────────────────────
 function showModal(content,large=false){
-  document.getElementById('modal-area').innerHTML=`<div class="modal-backdrop" onclick="if(event.target===this)closeModal()"><div class="modal${large?' modal-lg':''}">${content}</div></div>`;
+  _modalDirty = false;
+  document.getElementById('modal-area').innerHTML=`<div class="modal-backdrop" onclick="if(event.target===this)checkModalDirtyClose()"><div class="modal${large?' modal-lg':''}">${content}</div></div>`;
 }
-function closeModal(){document.getElementById('modal-area').innerHTML='';assignSelected.clear();}
+let _modalDirty=false;
+function markModalDirty(){ _modalDirty=true; }
+
+function closeModal(){
+  _modalDirty=false;
+  document.getElementById('modal-area').innerHTML='';
+  if(typeof assignSelected!=='undefined') assignSelected.clear();
+}
+
+function checkModalDirtyClose(){
+  if(!_modalDirty){ closeModal(); return; }
+  // Show warning bar inside modal
+  const existing=document.getElementById('modal-dirty-bar');
+  if(existing){ existing.style.display='flex'; return; }
+  const modal=document.querySelector('#modal-area .modal');
+  if(!modal){ closeModal(); return; }
+  const bar=document.createElement('div');
+  bar.id='modal-dirty-bar';
+  bar.style.cssText='display:flex;align-items:center;justify-content:space-between;gap:10px;padding:10px 16px;background:#FFF3CD;border-top:1px solid #FFD166;position:sticky;bottom:0;border-radius:0 0 var(--radius) var(--radius)';
+  bar.innerHTML=`
+    <span style="font-size:12px;font-weight:600;color:#7A5800">⚠️ You have unsaved changes</span>
+    <div style="display:flex;gap:8px">
+      <button onclick="closeModal()" style="font-size:11px;padding:4px 12px;border-radius:4px;border:1px solid #ccc;background:#fff;cursor:pointer;color:#444">Discard</button>
+      <button onclick="document.getElementById('modal-dirty-bar').style.display='none'" style="font-size:11px;padding:4px 12px;border-radius:4px;border:none;background:var(--blue);color:#fff;cursor:pointer;font-weight:600">Keep editing</button>
+    </div>`;
+  modal.appendChild(bar);
+}
 
 function openModal(type,pid,extra){
   const codeOpts=Object.entries(CODES_MAP).map(([k,v])=>`<option value="${k}">${k} — ${v}</option>`).join('');
@@ -4965,9 +5025,13 @@ function renderCrewSuggestions(){
     });
     if(!matchingProjs.length)return;
     const certStr=item.certs?.join(', ')||'none';
-    matchingProjs.slice(0,2).forEach(proj=>{
-      suggestions.push({person:item.name,role,certs:certStr,freeDays:freeDays.length,project:proj.id,projName:proj.name,firstFree:freeDays[0]});
-    });
+    // One suggestion per person — show the project with most remaining days
+    const bestProj = matchingProjs.reduce((best, p) => {
+      const summary = getDaysBudgetSummary(p.id);
+      const rem = summary.reduce((a,s) => a + (role==='foreman' ? s.foremanDays-s.usedForeman : s.laborerDays-s.usedLaborer), 0);
+      return rem > (best.rem||0) ? {proj:p, rem} : best;
+    }, {}).proj;
+    if(bestProj) suggestions.push({person:item.name,role,certs:certStr,freeDays:freeDays.length,project:bestProj.id,projName:bestProj.name,firstFree:freeDays[0]});
   });
 
   let result='';
@@ -5002,6 +5066,200 @@ function renderCrewSuggestions(){
   _crewCache=result;
   _crewCacheMonth=calMonth;
   el.innerHTML=result;
+}
+
+
+// ─── BULK COPY / PASTE ────────────────────────────────────────────────────────
+let _bulkClipboard = []; // [{itemId, type, data:{a,notes,wh,cc,co,confirmed,pour}, relDays}]
+let _bulkPasteActive = false;
+
+function bulkCopySelected(){
+  if(_selectedCells.size===0){toast('Select cells first');return;}
+  _bulkClipboard=[];
+  // Find the earliest day selected as anchor
+  let minDay=Infinity;
+  _selectedCells.forEach(({itemId,dateKey,type})=>{
+    const parts=dateKey.split('-').map(Number);
+    const d=new Date(parts[0],parts[1]-1,parts[2]);
+    if(d.getTime()<minDay) minDay=d.getTime();
+  });
+  _selectedCells.forEach(({itemId,dateKey,type})=>{
+    const item=getItem(itemId,type);if(!item)return;
+    const parts=dateKey.split('-').map(Number);
+    const d=new Date(parts[0],parts[1]-1,parts[2]);
+    const relDays=Math.round((d.getTime()-minDay)/86400000);
+    _bulkClipboard.push({
+      itemId, type, relDays,
+      data:{
+        a:item.a?.[dateKey], notes:item.notes?.[dateKey],
+        wh:item.wh?.[dateKey], cc:item.cc?.[dateKey],
+        co:item.co?.[dateKey], confirmed:item.confirmed?.[dateKey],
+        pour:item.pour?.[dateKey],
+      }
+    });
+  });
+  const pasteBtn=document.getElementById('bulk-paste-btn');
+  if(pasteBtn) pasteBtn.style.display='inline-block';
+  toast(`📋 Copied ${_bulkClipboard.length} cell${_bulkClipboard.length!==1?'s':''}. Click "Paste to date…" to paste.`);
+}
+
+function bulkEnterPasteMode(){
+  if(!_bulkClipboard.length){toast('Nothing copied');return;}
+  _bulkPasteActive=true;
+  // Update bar hint
+  const countEl=document.getElementById('bulk-delete-count');
+  if(countEl) countEl.textContent=`📌 Click any cell to paste ${_bulkClipboard.length} event${_bulkClipboard.length!==1?'s':''} starting there`;
+  // Highlight all cells as paste targets
+  document.querySelectorAll('.day-cell').forEach(el=>el.classList.add('paste-target'));
+  toast('Click any cell to paste — that day becomes the start date');
+}
+
+function bulkCancelPasteMode(){
+  _bulkPasteActive=false;
+  document.querySelectorAll('.day-cell.paste-target').forEach(el=>el.classList.remove('paste-target'));
+  updateBulkBar();
+}
+
+// Called when a cell is clicked in paste mode
+function bulkPasteToCell(itemId, dateKey, type){
+  if(!_bulkPasteActive||!_bulkClipboard.length) return false;
+  // dateKey is the start date for paste
+  const parts=dateKey.split('-').map(Number);
+  const startMs=new Date(parts[0],parts[1]-1,parts[2]).getTime();
+  let pasted=0;
+  const snapshots=[];
+  _bulkClipboard.forEach(({itemId:srcId,type:srcType,relDays,data})=>{
+    const item=getItem(srcId,srcType);if(!item)return;
+    const targetDate=new Date(startMs+relDays*86400000);
+    const tKey=`${targetDate.getFullYear()}-${targetDate.getMonth()+1}-${targetDate.getDate()}`;
+    snapshots.push({itemId:srcId,dateKey:tKey,type:srcType,
+      a:item.a?.[tKey],notes:item.notes?.[tKey],wh:item.wh?.[tKey],
+      cc:item.cc?.[tKey],co:item.co?.[tKey],confirmed:item.confirmed?.[tKey],pour:item.pour?.[tKey]
+    });
+    if(!item.a) item.a={};
+    if(!item.notes) item.notes={};
+    if(!item.wh) item.wh={};
+    if(!item.cc) item.cc={};
+    if(!item.co) item.co={};
+    if(!item.confirmed) item.confirmed={};
+    if(!item.pour) item.pour={};
+    if(data.a)         item.a[tKey]=data.a;
+    if(data.notes)     item.notes[tKey]=data.notes;
+    if(data.wh)        item.wh[tKey]=data.wh;
+    if(data.cc)        item.cc[tKey]=data.cc;
+    if(data.co)        item.co[tKey]=data.co;
+    if(data.pour)      item.pour[tKey]=data.pour;
+    item.confirmed[tKey]=data.confirmed!==undefined?data.confirmed:true;
+    pasted++;
+  });
+  bulkCancelPasteMode();
+  toggleSelectMode();
+  saveLocal(); renderRoster();
+  showUndo(`Pasted ${pasted} assignment${pasted!==1?'s':''} — Undo?`,()=>{
+    snapshots.forEach(s=>{
+      const item=getItem(s.itemId,s.type);if(!item)return;
+      if(s.a) item.a[s.dateKey]=s.a; else if(item.a) delete item.a[s.dateKey];
+      if(s.notes) item.notes[s.dateKey]=s.notes; else if(item.notes) delete item.notes[s.dateKey];
+      if(s.cc) item.cc[s.dateKey]=s.cc; else if(item.cc) delete item.cc[s.dateKey];
+      if(s.co) item.co[s.dateKey]=s.co; else if(item.co) delete item.co[s.dateKey];
+      if(s.pour) item.pour[s.dateKey]=s.pour; else if(item.pour) delete item.pour[s.dateKey];
+      if(item.confirmed) item.confirmed[s.dateKey]=s.confirmed;
+    });
+    saveLocal();renderRoster();toast(`↩ Paste undone`);
+  });
+  toast(`✓ Pasted ${pasted} assignment${pasted!==1?'s':''}`);
+  return true;
+}
+
+
+
+
+// ─── AI SCHEDULING ASSISTANT ─────────────────────────────────────────────────
+let _aiChatHistory = [];
+
+function toggleAIChat(){
+  const panel=document.getElementById('ai-chat-panel');
+  if(!panel)return;
+  const isOpen=panel.style.display==='flex';
+  panel.style.display=isOpen?'none':'flex';
+  if(!isOpen){
+    setTimeout(()=>{
+      const inp=document.getElementById('ai-chat-input');
+      if(inp) inp.focus();
+    },100);
+  }
+}
+
+function addAIMessage(role, text){
+  const box=document.getElementById('ai-chat-messages');
+  if(!box)return;
+  const isUser=role==='user';
+  const div=document.createElement('div');
+  div.style.cssText=`max-width:90%;align-self:${isUser?'flex-end':'flex-start'};background:${isUser?'var(--blue)':'var(--bg3)'};color:${isUser?'#fff':'var(--text)'};border-radius:${isUser?'12px 4px 12px 12px':'4px 12px 12px 12px'};padding:10px 14px;font-size:12px;line-height:1.5;white-space:pre-wrap`;
+  div.textContent=text;
+  box.appendChild(div);
+  box.scrollTop=box.scrollHeight;
+}
+
+async function sendAIMessage(){
+  const inp=document.getElementById('ai-chat-input');
+  const typing=document.getElementById('ai-typing');
+  if(!inp||!inp.value.trim())return;
+  const userMsg=inp.value.trim();
+  inp.value='';
+  addAIMessage('user', userMsg);
+  _aiChatHistory.push({role:'user',content:userMsg});
+  if(typing) typing.style.display='block';
+
+  // Build context about current roster and projects
+  const activeProjs=DB.projects.filter(p=>p.status==='Active').slice(0,10)
+    .map(p=>`${p.id} — ${p.name} (${p.codes.map(c=>c.code+' $'+Math.round(c.value/1000)+'k').join(', ')})`).join('\n');
+  const staffList=STAFF.map(e=>`${e.name} (${e.role||'laborer'}${e.certs&&e.certs.length?' certs:'+e.certs.join(','):''})`).join(', ');
+  const systemPrompt=`You are a construction scheduling assistant for ZLC Corp in Concord CA.
+Current active projects:\n${activeProjs}
+Available staff: ${staffList}
+Today: ${new Date().toLocaleDateString('en-US',{weekday:'long',month:'long',day:'numeric',year:'numeric'})}
+
+Help the user create optimal crew assignments for their projects.
+When suggesting assignments, be specific: name the person, the project ID, the dates (use Mon/Tue/Wed format), and the cost code.
+Keep responses concise and actionable. Format suggestions as a simple schedule table when relevant.`;
+
+  try{
+    // Use Anthropic API (requires CORS proxy or deployed backend)
+    const response=await fetch('https://api.anthropic.com/v1/messages',{
+      method:'POST',
+      headers:{
+        'Content-Type':'application/json',
+        'x-api-key': window.ZLC_ANTHROPIC_KEY||'',
+        'anthropic-version':'2023-06-01',
+        'anthropic-dangerous-direct-browser-access':'true',
+      },
+      body:JSON.stringify({
+        model:'claude-haiku-4-5-20251001',
+        max_tokens:1000,
+        system:systemPrompt,
+        messages:_aiChatHistory,
+      })
+    });
+    if(!response.ok){
+      const err=await response.json();
+      throw new Error(err.error?.message||'API error '+response.status);
+    }
+    const data=await response.json();
+    const reply=data.content?.[0]?.text||'Sorry, I could not generate a response.';
+    _aiChatHistory.push({role:'assistant',content:reply});
+    if(typing) typing.style.display='none';
+    addAIMessage('assistant', reply);
+  }catch(e){
+    if(typing) typing.style.display='none';
+    if(String(e).includes('401')||String(e).includes('api_key')){
+      addAIMessage('assistant','⚠️ API key not configured. Ask your admin to set window.ZLC_ANTHROPIC_KEY in the app config.');
+    } else if(String(e).includes('403')||String(e).includes('CORS')){
+      addAIMessage('assistant','⚠️ Browser API calls blocked by CORS. This feature requires a backend proxy. Contact your admin.');
+    } else {
+      addAIMessage('assistant','⚠️ Error: '+String(e).slice(0,100)+'. Please try again.');
+    }
+  }
 }
 
 // ─── INIT ─────────────────────────────────────────────────────────────────────
@@ -5769,6 +6027,33 @@ function ganttDownloadPDF() {
   <script>
     window.onload = function() { setTimeout(function(){ window.print(); }, 400); };
   <\/script>
+
+  <!-- AI Scheduling Assistant -->
+  <div id="ai-chat-panel" style="display:none;position:fixed;right:0;top:0;bottom:0;width:380px;background:var(--bg);border-left:1px solid var(--border);z-index:900;display:none;flex-direction:column;box-shadow:-4px 0 20px rgba(0,0,0,0.1)">
+    <div style="padding:14px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;background:var(--blue);color:#fff">
+      <div>
+        <div style="font-size:14px;font-weight:700">🤖 AI Schedule Assistant</div>
+        <div style="font-size:11px;opacity:0.8">Powered by Claude</div>
+      </div>
+      <button onclick="toggleAIChat()" style="background:none;border:none;color:#fff;font-size:18px;cursor:pointer;padding:4px">✕</button>
+    </div>
+    <div id="ai-chat-messages" style="flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:12px">
+      <div style="background:var(--bg3);border-radius:12px;border-radius:4px 12px 12px 12px;padding:12px 14px;font-size:12px;color:var(--text);max-width:90%">
+        👋 Hi! I'm your scheduling assistant. Tell me about your project and I'll help you build the optimal schedule.<br><br>
+        For example: <em>"I have project 26-010 starting Monday. I need 2 foremen and 4 laborers for concrete work over 2 weeks. Available: Carlos, Chuy, JRod, Daniel, Fernando, Rigo."</em>
+      </div>
+    </div>
+    <div style="padding:12px;border-top:1px solid var(--border)">
+      <div id="ai-typing" style="display:none;font-size:11px;color:var(--text3);padding:4px 0 8px">⏳ Thinking…</div>
+      <div style="display:flex;gap:8px">
+        <textarea id="ai-chat-input" placeholder="Describe your project needs…" rows="3"
+          style="flex:1;font-size:12px;padding:8px 10px;border-radius:8px;border:1px solid var(--border2);background:var(--bg);color:var(--text);resize:none;font-family:inherit"
+          onkeydown="if(event.key==='Enter'&&!event.shiftKey){event.preventDefault();sendAIMessage()}"></textarea>
+        <button onclick="sendAIMessage()" style="align-self:flex-end;padding:8px 14px;background:var(--blue);color:#fff;border:none;border-radius:8px;cursor:pointer;font-weight:600;font-size:12px">Send</button>
+      </div>
+      <div style="font-size:10px;color:var(--text3);margin-top:6px;text-align:center">Enter = send · Shift+Enter = new line</div>
+    </div>
+  </div>
 </body>
 </html>`;
 
