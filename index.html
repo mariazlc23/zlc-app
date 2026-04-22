@@ -774,7 +774,7 @@ body.select-mode .day-cell:hover { filter: brightness(1.15) !important; }
 </div>
 
 <script>
-window.ZLC_GEMINI_KEY = 'AIzaSyAnFufKfA9qIr2o0OPSkwTevQjl7bjgLe8';
+window.ZLC_GEMINI_KEY = 'AIzaSyAPS42bUDNV7U02gxH2eH-EVVe2TwMaa-U';
 </script>
 <script>
 document.addEventListener('keydown', (event) => {
@@ -5289,7 +5289,7 @@ Si un trabajador ya está asignado, no lo pongas en otro proyecto el mismo día.
 Responde en español. Sé conciso y práctico. Usa formato de tabla cuando sea útil.
 Si no tienes suficiente info, pregunta: ¿cuántos días dura el trabajo? ¿qué cuadrilla se necesita?`;
 
-  const geminiKey = window.ZLC_GEMINI_KEY||'';
+  const geminiKey = window.ZLC_GEMINI_KEY||'AIzaSyAnFufKfA9qIr2o0OPSkwTevQjl7bjgLe8';
   if(!geminiKey){
     if(typing) typing.style.display='none';
     addAIMessage('assistant',
@@ -5315,7 +5315,7 @@ Si no tienes suficiente info, pregunta: ¿cuántos días dura el trabajo? ¿qué
     messages.push({role:'user',parts:[{text:userMsg}]});
 
     const response=await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${geminiKey}`,
+      `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiKey}`,
       {method:'POST',headers:{'Content-Type':'application/json'},
        body:JSON.stringify({contents:messages,generationConfig:{maxOutputTokens:1000,temperature:0.7}})}
     );
