@@ -3226,7 +3226,7 @@ function clickCell(itemId,dateKey,day,type){
       <label style="color:#185FA5;font-weight:600;display:flex;align-items:center;gap:6px;margin-bottom:8px">
         <span style="font-size:18px">🪣</span> Pour
         <label style="display:flex;align-items:center;gap:4px;cursor:pointer;font-size:11px;font-weight:400;color:var(--text2);margin:0;margin-left:auto">
-          <input type="checkbox" id="cp-pour-enabled" onchange="markModalDirty()" ${curPour?'checked':''} style="width:auto;accent-color:#185FA5" onchange="togglePourFields(this.checked)"> Enable pour
+          <input type="checkbox" id="cp-pour-enabled" onchange="markModalDirty();togglePourFields(this.checked)" ${curPour?'checked':''} style="width:auto;accent-color:#185FA5"> Enable pour
         </label>
       </label>
       <div id="cp-pour-fields" style="display:${curPour?'flex':'none'};gap:8px;flex-wrap:wrap">
