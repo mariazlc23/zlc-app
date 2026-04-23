@@ -5238,14 +5238,14 @@ function clearAIKey(){
   _aiChatHistory = [];
   const box = document.getElementById('ai-chat-messages');
   if(box) box.innerHTML = '';
-  addAIMessage('assistant', '🔑 Key eliminada. Ingresa una nueva key para usar el AI.');
+  addAIMessage('assistant', '🔑 API key cleared. Enter a new key to use the AI assistant.');
   // Trigger the key setup UI
   sendAIMessage._noKey = true;
   const geminiKey = '';
   // Re-show setup UI
   const setupDiv = document.createElement('div');
   setupDiv.style.cssText = 'background:var(--bg3);border-radius:4px 12px 12px 12px;padding:14px;font-size:12px;color:var(--text);max-width:95%';
-  setupDiv.innerHTML = `<div style="font-weight:700;margin-bottom:8px">🔑 Ingresa tu Gemini API Key</div>
+  setupDiv.innerHTML = `<div style="font-weight:700;margin-bottom:8px">🔑 Enter your Gemini API Key</div>
     <div style="display:flex;gap:6px">
       <input id="ai-key-input" type="password" placeholder="AIzaSy..." 
         style="flex:1;font-size:12px;padding:6px 8px;border-radius:6px;border:1px solid var(--border2);background:var(--bg);color:var(--text)"
@@ -5324,8 +5324,8 @@ ${activeProjs}
 Ayudas a María (project manager) a planear el schedule semanal de su cuadrilla.
 Cuando sugieras asignaciones: menciona el nombre del trabajador, el job#, los días específicos (Lun/Mar/Mié/Jue/Vie), y el cost code.
 Si un trabajador ya está asignado, no lo pongas en otro proyecto el mismo día.
-Responde en español. Sé conciso y práctico. Usa formato de tabla cuando sea útil.
-Si no tienes suficiente info, pregunta: ¿cuántos días dura el trabajo? ¿qué cuadrilla se necesita?`;
+Respond in English. Be concise and practical. Use table format when helpful.
+If you need more info, ask: How many days does the job last? What crew size is needed?`;
 
   const geminiKey = localStorage.getItem('zlc_gemini_key') || window.ZLC_GEMINI_KEY || '';
   if(!geminiKey){
@@ -5336,11 +5336,11 @@ Si no tienes suficiente info, pregunta: ¿cuántos días dura el trabajo? ¿qué
       const setupDiv = document.createElement('div');
       setupDiv.style.cssText = 'background:var(--bg3);border-radius:4px 12px 12px 12px;padding:14px;font-size:12px;color:var(--text);max-width:95%';
       setupDiv.innerHTML = `
-        <div style="font-weight:700;margin-bottom:8px">🔑 Configurar AI — Gratis</div>
+        <div style="font-weight:700;margin-bottom:8px">🔑 Set up AI — Free</div>
         <div style="color:var(--text2);margin-bottom:10px;line-height:1.5">
-          1. Ve a <a href="https://aistudio.google.com" target="_blank" style="color:var(--blue)">aistudio.google.com</a><br>
-          2. Clic <strong>Get API Key → Create API Key</strong><br>
-          3. Pega tu key aquí abajo 👇
+          1. Go to <a href="https://aistudio.google.com" target="_blank" style="color:var(--blue)">aistudio.google.com</a><br>
+          2. Click <strong>Get API Key → Create API Key</strong><br>
+          3. Paste your key below 👇
         </div>
         <div style="display:flex;gap:6px">
           <input id="ai-key-input" type="password" placeholder="AIzaSy..." 
@@ -5349,7 +5349,7 @@ Si no tienes suficiente info, pregunta: ¿cuántos días dura el trabajo? ¿qué
           <button onclick="saveAIKey()" style="padding:6px 12px;border-radius:6px;border:none;background:var(--blue);color:#fff;cursor:pointer;font-weight:600;font-size:12px">Guardar</button>
         </div>
         <div style="font-size:10px;color:var(--text3);margin-top:6px">
-          ✅ Se guarda solo en este navegador — nunca en GitHub
+          ✅ Saved only in this browser — never uploaded to GitHub
         </div>`;
       box.appendChild(setupDiv);
       box.scrollTop = box.scrollHeight;
@@ -5382,7 +5382,7 @@ Si no tienes suficiente info, pregunta: ¿cuántos días dura el trabajo? ¿qué
     addAIMessage('assistant', reply);
   }catch(e){
     if(typing) typing.style.display='none';
-    addAIMessage('assistant','⚠️ Error: '+String(e).slice(0,120)+'\n\nVerifica que tu Gemini API key sea correcta en window.ZLC_GEMINI_KEY');
+    addAIMessage('assistant','⚠️ Error: '+String(e).slice(0,120)+'\n\nCheck that your Gemini API key is correct in window.ZLC_GEMINI_KEY');
   }
 }
 
@@ -6556,7 +6556,7 @@ function ganttSaveToCloud() {
     <div style="padding:14px 16px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;background:var(--blue);color:#fff">
       <div>
         <div style="font-size:14px;font-weight:700">🤖 AI Schedule Assistant</div>
-        <div style="font-size:11px;opacity:0.8">Gemini AI · Gratis</div>
+        <div style="font-size:11px;opacity:0.8">Gemini AI · Free</div>
       </div>
       <div style="display:flex;gap:6px;align-items:center">
         <button onclick="clearAIKey()" title="Cambiar API key" style="background:rgba(255,255,255,0.15);border:none;color:#fff;font-size:10px;cursor:pointer;padding:3px 7px;border-radius:4px">🔑 Key</button>
@@ -6565,13 +6565,13 @@ function ganttSaveToCloud() {
     </div>
     <div id="ai-chat-messages" style="flex:1;overflow-y:auto;padding:16px;display:flex;flex-direction:column;gap:12px">
       <div style="background:var(--bg3);border-radius:4px 12px 12px 12px;padding:12px 14px;font-size:12px;color:var(--text);max-width:95%">
-        👋 ¡Hola! Soy tu asistente de scheduling de ZLC Corp.<br><br>
-        Tengo acceso a todos tus proyectos activos y el roster actual. Puedo ayudarte a:<br>
-        • 📅 Planear la semana de una cuadrilla<br>
-        • 👷 Recomendar quién va a qué proyecto<br>
-        • ⚠️ Detectar conflictos de asignación<br>
-        • 📊 Ver quién tiene días libres<br><br>
-        <em>Ejemplo: "Tengo el 26-010 empezando el lunes. Necesito 1 foreman y 3 laborers para concreto (004), 5 días. ¿A quién le asigno?"</em>
+        👋 Hi! I'm your ZLC Corp scheduling assistant.<br><br>
+        I have access to all your active projects and the current roster. I can help you:<br>
+        • 📅 Plan a crew's week<br>
+        • 👷 Recommend who goes to which project<br>
+        • ⚠️ Detect scheduling conflicts<br>
+        • 📊 See who has free days<br><br>
+        <em>Example: "I have project 26-010 starting Monday. I need 1 foreman and 3 laborers for concrete (004), 5 days. Who should I assign?"</em>
       </div>
     </div>
     <div style="padding:12px;border-top:1px solid var(--border)">
