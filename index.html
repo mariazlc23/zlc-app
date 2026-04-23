@@ -5246,13 +5246,13 @@ function clearAIKey(){
   // Re-show setup UI
   const setupDiv = document.createElement('div');
   setupDiv.style.cssText = 'background:var(--bg3);border-radius:4px 12px 12px 12px;padding:14px;font-size:12px;color:var(--text);max-width:95%';
-  setupDiv.innerHTML = `<div style="font-weight:700;margin-bottom:8px">🔑 Enter your Gemini API Key</div>
-    <div style="display:flex;gap:6px">
-      <input id="ai-key-input" type="password" placeholder="AIzaSy..." 
-        style="flex:1;font-size:12px;padding:6px 8px;border-radius:6px;border:1px solid var(--border2);background:var(--bg);color:var(--text)"
-        onkeydown="if(event.key==='Enter')saveAIKey()">
-      <button onclick="saveAIKey()" style="padding:6px 12px;border-radius:6px;border:none;background:var(--blue);color:#fff;cursor:pointer;font-weight:600;font-size:12px">Guardar</button>
-    </div>`;
+  setupDiv.innerHTML = '<div style="font-weight:700;margin-bottom:8px">🔑 Enter your Gemini API Key</div>'
+    + '<div style="display:flex;gap:6px">'
+    + '<input id="ai-key-input" type="password" placeholder="AIzaSy..." '
+    + 'style="flex:1;font-size:12px;padding:6px 8px;border-radius:6px;border:1px solid var(--border2);background:var(--bg);color:var(--text)" '
+    + 'onkeydown="if(event.key===&quot;Enter&quot;)saveAIKey()">'
+    + '<button onclick="saveAIKey()" style="padding:6px 12px;border-radius:6px;border:none;background:var(--blue);color:#fff;cursor:pointer;font-weight:600;font-size:12px">Save</button>'
+    + '</div>';
   if(box){ box.appendChild(setupDiv); box.scrollTop = box.scrollHeight; }
   setTimeout(()=>document.getElementById('ai-key-input')?.focus(), 100);
 }
@@ -5303,30 +5303,53 @@ async function sendAIMessage(){
   // Teams
   const teams=[...new Set(STAFF.map(e=>e.team).filter(Boolean))].join(', ');
 
-  const systemPrompt=`Eres el asistente de scheduling de ZLC Corp, empresa de construcción en Concord, CA.
-Fecha de hoy: ${todayStr}
+  const systemPrompt=`You are the scheduling assistant for ZLC Corp, a construction company based in Concord, CA.
+Today: ${todayStr}
 
-== SOBRE ZLC CORP ==
-Empresa de construcción civil. Trabajan principalmente en: demolición, excavación, concreto, pavimentación y utilities.
-Los proyectos tienen número de job (ej: 26-010) y cost codes que indican el tipo de trabajo.
-${codeGuide}
+== ABOUT ZLC CORP ==
+Civil construction company. Main work types: demolition, excavation, concrete, paving, utilities.
+Each project has a job number (e.g. 26-010) and cost codes indicating the type of work.
+Cost codes: 001=Hard Demo, 002=Soft Demo, 003=Excavation, 004=Concrete (pour day), 005=Utilities, 006=Paving/Grading
 
-== EQUIPOS ==
-Los trabajadores están organizados en equipos: ${teams}
-Cada foreman lidera su equipo en campo.
+== HOW SCHEDULING WORKS ==
+- Crew is assigned per day per project in the Staff Roster (Mon–Fri, no weekends)
+- Each project needs at least 1 FOREMAN to lead the crew
+- LABORERS work under the foreman
+- DRIVERS (Francisco #5, Driver 2) transport equipment/materials and can be assigned to multiple jobs per day
+- Each person can only be on ONE project per day (except drivers who can do multi-assign)
+- When concrete (cost code 004) is scheduled → mark it as a POUR DAY (special flag)
+- Projects have a budget of foreman-days and laborer-days per cost code
 
-== TRABAJADORES DISPONIBLES ==
-${staffInfo}
+== CREW TEAMS ==
+Each team has 1 foreman + laborers who usually work together:
+• Team Xolos      → Carlos #15 (foreman), Victor (laborer), Juan Alejo (laborer)
+• Team Chingones  → Chuy #14 (foreman), Luis (laborer), Santos (laborer)
+• Team Poblanos   → JRod #12 (foreman), Daniel (laborer), Fernando (laborer)
+• Team Guerreros Z → Temo #9 (foreman), Cabrera (laborer), Rigo (laborer)
+• Team Lobos      → Miguel #11 (foreman)
+• Team Aguilas    → Joaquin (laborer) — can be assigned to any team that needs extra labor
+• Drivers         → Francisco #5, Driver 2 — transport crew/materials, multi-assign capable
 
-== PROYECTOS ACTIVOS ==
+== FOREMEN (can lead a crew independently) ==
+Carlos #15, Chuy #14, JRod #12, Temo #9, Miguel #11
+
+== LABORERS (work under a foreman) ==
+Victor, Juan Alejo, Luis, Santos, Daniel, Fernando, Cabrera, Rigo, Joaquin
+
+== ACTIVE PROJECTS ==
 ${activeProjs}
 
-== TU ROL ==
-Ayudas a María (project manager) a planear el schedule semanal de su cuadrilla.
-Cuando sugieras asignaciones: menciona el nombre del trabajador, el job#, los días específicos (Lun/Mar/Mié/Jue/Vie), y el cost code.
-Si un trabajador ya está asignado, no lo pongas en otro proyecto el mismo día.
-Respond in English. Be concise and practical. Use table format when helpful.
-If you need more info, ask: How many days does the job last? What crew size is needed?`;
+== CURRENT ROSTER (this month) ==
+${staffInfo}
+
+== YOUR JOB ==
+Help Maria (project manager) plan the weekly crew schedule.
+When suggesting assignments be specific: name + project ID + days (Mon/Tue/Wed/Thu/Fri) + cost code.
+Never assign the same person to two projects on the same day (except Francisco/Driver 2).
+Always pair a foreman with their team unless asked otherwise.
+If a project needs concrete (004), ask what day the pour is scheduled.
+Respond in English. Be concise. Use a table when suggesting a week schedule.
+If info is missing, ask: How many days? Which cost code? Pour day?`;
 
   const geminiKey = localStorage.getItem('zlc_gemini_key') || window.ZLC_GEMINI_KEY || '';
   if(!geminiKey){
@@ -5336,22 +5359,18 @@ If you need more info, ask: How many days does the job last? What crew size is n
     if(box){
       const setupDiv = document.createElement('div');
       setupDiv.style.cssText = 'background:var(--bg3);border-radius:4px 12px 12px 12px;padding:14px;font-size:12px;color:var(--text);max-width:95%';
-      setupDiv.innerHTML = `
-        <div style="font-weight:700;margin-bottom:8px">🔑 Set up AI — Free</div>
-        <div style="color:var(--text2);margin-bottom:10px;line-height:1.5">
-          1. Go to <a href="https://aistudio.google.com" target="_blank" style="color:var(--blue)">aistudio.google.com</a><br>
-          2. Click <strong>Get API Key → Create API Key</strong><br>
-          3. Paste your key below 👇
-        </div>
-        <div style="display:flex;gap:6px">
-          <input id="ai-key-input" type="password" placeholder="AIzaSy..." 
-            style="flex:1;font-size:12px;padding:6px 8px;border-radius:6px;border:1px solid var(--border2);background:var(--bg);color:var(--text)"
-            onkeydown="if(event.key==='Enter')saveAIKey()">
-          <button onclick="saveAIKey()" style="padding:6px 12px;border-radius:6px;border:none;background:var(--blue);color:#fff;cursor:pointer;font-weight:600;font-size:12px">Guardar</button>
-        </div>
-        <div style="font-size:10px;color:var(--text3);margin-top:6px">
-          ✅ Saved only in this browser — never uploaded to GitHub
-        </div>`;
+      setupDiv.innerHTML = '<div style="font-weight:700;margin-bottom:8px">🔑 Set up AI — Free</div>'
+        + '<div style="color:var(--text2);margin-bottom:10px;line-height:1.5">'
+        + '1. Go to <a href="https://aistudio.google.com" target="_blank" style="color:var(--blue)">aistudio.google.com</a><br>'
+        + '2. Click <strong>Get API Key → Create API Key</strong><br>'
+        + '3. Paste your key below 👇</div>'
+        + '<div style="display:flex;gap:6px">'
+        + '<input id="ai-key-input" type="password" placeholder="AIzaSy..." '
+        + 'style="flex:1;font-size:12px;padding:6px 8px;border-radius:6px;border:1px solid var(--border2);background:var(--bg);color:var(--text)" '
+        + 'onkeydown="if(event.key===&quot;Enter&quot;)saveAIKey()">'
+        + '<button onclick="saveAIKey()" style="padding:6px 12px;border-radius:6px;border:none;background:var(--blue);color:#fff;cursor:pointer;font-weight:600;font-size:12px">Save</button>'
+        + '</div>'
+        + '<div style="font-size:10px;color:var(--text3);margin-top:6px">✅ Saved only in this browser — never in GitHub</div>';
       box.appendChild(setupDiv);
       box.scrollTop = box.scrollHeight;
       setTimeout(()=>document.getElementById('ai-key-input')?.focus(), 100);
