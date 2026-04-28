@@ -505,6 +505,13 @@ body.select-mode .day-cell:hover { filter: brightness(1.15) !important; }
     <div id="write-log" style="display:none;font-size:10px;color:var(--text3);margin-top:6px;word-break:break-all;line-height:1.4;padding:4px 6px;background:var(--bg3);border-radius:4px"></div>
     <div style="font-size:10px;color:var(--text3);text-align:center;margin-top:6px">ZLC Project Manager v1.2</div>
   </div>
+  <div style="padding:8px 10px;border-top:1px solid var(--border);margin-top:4px">
+    <button onclick="openEstimatingSystem()" style="width:100%;padding:9px 12px;background:rgba(61,170,110,.1);border:1px solid rgba(61,170,110,.4);border-radius:8px;color:#3DAA6E;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit;display:flex;align-items:center;justify-content:center;gap:6px">
+      <svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="1" y="2" width="14" height="12" rx="1.5"/><path d="M4 6h8M4 9h5M4 12h3"/></svg>
+      Estimating System ↗
+      <span id="est-won-badge" style="display:none;background:#3DAA6E;color:#fff;font-size:9px;padding:1px 5px;border-radius:99px;margin-left:2px"></span>
+    </button>
+  </div>
 </div>
 
 <!-- MAIN -->
@@ -517,8 +524,6 @@ body.select-mode .day-cell:hover { filter: brightness(1.15) !important; }
     <button class="dtab active" onclick="goDash('analytics',this)">Historical analytics</button>
     <button class="dtab" onclick="goDash('overview',this)">Overview</button>
     <button class="dtab" onclick="goDash('warehouse',this)">Warehouse</button>
-    <button class="dtab" onclick="goDash('weather',this)">🌤️ Weather</button>
-    <button class="dtab" onclick="goDash('crew',this)">👷 Crew</button>
   </div>
   <div id="dash-overview" style="display:none">
     
@@ -579,22 +584,8 @@ body.select-mode .day-cell:hover { filter: brightness(1.15) !important; }
     </div>
     <div id="wh-dash-content"><div class="empty">Loading…</div></div>
   </div>
-  <div id="dash-weather" style="display:none">
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
-      <div><div style="font-size:18px;font-weight:700">🌤️ Weather Forecast</div>
-        <div style="font-size:12px;color:var(--text2);margin-top:2px">Concord, CA — 7-day forecast for job sites</div></div>
-      <button class="btn btn-sm btn-ghost" onclick="loadWeather()">↻ Refresh</button>
-    </div>
-    <div id="weather-content"><div class="empty">Loading weather…</div></div>
-  </div>
-  <div id="dash-crew" style="display:none">
-    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:16px">
-      <div><div style="font-size:18px;font-weight:700">👷 Crew Optimizer</div>
-        <div style="font-size:12px;color:var(--text2);margin-top:2px">Suggestions based on roster and project needs</div></div>
-      <button class="btn btn-sm btn-ghost" onclick="renderCrewSuggestions()">↻ Refresh</button>
-    </div>
-    <div id="crew-content"><div class="empty">Loading…</div></div>
-  </div>
+
+
   <div id="dash-analytics">
     <div style="display:flex;justify-content:flex-end;margin-bottom:14px">
       <button class="btn btn-primary" onclick="openModal('historical')">+ Add historical year</button>
@@ -651,10 +642,30 @@ body.select-mode .day-cell:hover { filter: brightness(1.15) !important; }
   <div class="page-header">
     <div><div class="page-title">Staff roster</div><div class="page-subtitle">Monthly schedule by team, equipment &amp; rentals</div></div>
     <div class="toolbar">
-      <button class="btn btn-ghost btn-sm" onclick="openModal('emp')">+ Employee</button>
-      <button class="btn btn-ghost btn-sm" onclick="openModal('extraW')">+ Extra worker</button>
       <button class="btn btn-primary btn-sm" onclick="openModal('assign')">Assign project</button>
-      <button class="btn btn-ghost btn-sm" onclick="showRosterHistory()" title="View roster change history this session">📋 History</button>
+      
+      <div style="position:relative;display:inline-block" id="util-wrap">
+        <button class="btn btn-ghost btn-sm" onclick="toggleUtilMenu()" style="font-weight:600">
+          🔧 Utilities ▾
+        </button>
+        <div id="util-menu" style="display:none;position:absolute;right:0;top:calc(100% + 4px);background:var(--bg);border:1px solid var(--border2);border-radius:10px;box-shadow:0 6px 24px rgba(0,0,0,.13);z-index:900;min-width:195px;padding:4px 0;white-space:nowrap">
+
+          <div style="font-size:10px;font-weight:700;color:var(--text3);padding:6px 14px 2px;text-transform:uppercase;letter-spacing:.08em">Staff</div>
+          <button onclick="openModal('emp');closeUtilMenu()" style="width:100%;padding:9px 14px;border:none;background:none;cursor:pointer;font-size:12px;color:var(--text);text-align:left;display:flex;align-items:center;gap:8px" onmouseover="this.style.background='var(--bg2)'" onmouseout="this.style.background='none'">👤 + Employee</button>
+          <button onclick="openModal('extraW');closeUtilMenu()" style="width:100%;padding:9px 14px;border:none;background:none;cursor:pointer;font-size:12px;color:var(--text);text-align:left;display:flex;align-items:center;gap:8px" onmouseover="this.style.background='var(--bg2)'" onmouseout="this.style.background='none'">🦺 + Extra worker</button>
+
+          <div style="height:1px;background:var(--border);margin:3px 0"></div>
+          <div style="font-size:10px;font-weight:700;color:var(--text3);padding:6px 14px 2px;text-transform:uppercase;letter-spacing:.08em">Info</div>
+          <button onclick="showRosterPanel('weather');closeUtilMenu()" style="width:100%;padding:9px 14px;border:none;background:none;cursor:pointer;font-size:12px;color:var(--text);text-align:left;display:flex;align-items:center;gap:8px" onmouseover="this.style.background='var(--bg2)'" onmouseout="this.style.background='none'">🌤️ Weather forecast</button>
+          <button onclick="showRosterPanel('crew');closeUtilMenu()" style="width:100%;padding:9px 14px;border:none;background:none;cursor:pointer;font-size:12px;color:var(--text);text-align:left;display:flex;align-items:center;gap:8px" onmouseover="this.style.background='var(--bg2)'" onmouseout="this.style.background='none'">👷 Crew optimizer</button>
+
+          <div style="height:1px;background:var(--border);margin:3px 0"></div>
+          <div style="font-size:10px;font-weight:700;color:var(--text3);padding:6px 14px 2px;text-transform:uppercase;letter-spacing:.08em">Actions</div>
+          <button onclick="showRosterHistory();closeUtilMenu()" style="width:100%;padding:9px 14px;border:none;background:none;cursor:pointer;font-size:12px;color:var(--text);text-align:left;display:flex;align-items:center;gap:8px" onmouseover="this.style.background='var(--bg2)'" onmouseout="this.style.background='none'">📋 History</button>
+          <button onclick="forceSaveToCloud();closeUtilMenu()" style="width:100%;padding:9px 14px;border:none;background:none;cursor:pointer;font-size:12px;color:var(--text);text-align:left;display:flex;align-items:center;gap:8px" onmouseover="this.style.background='var(--bg2)'" onmouseout="this.style.background='none'">☁️ Save to cloud</button>
+          <button onclick="loadFromCloud();closeUtilMenu()" style="width:100%;padding:9px 14px;border:none;background:none;cursor:pointer;font-size:12px;color:var(--text);text-align:left;display:flex;align-items:center;gap:8px" onmouseover="this.style.background='var(--bg2)'" onmouseout="this.style.background='none'">↺ Sync from cloud</button>
+        </div>
+      </div>
       <button id="select-mode-btn" class="btn btn-ghost btn-sm" onclick="toggleSelectMode()" title="Select multiple cells to delete">☑ Select</button>
       <button class="btn btn-ghost btn-sm" onclick="toggleAIChat()" title="AI scheduling assistant" style="background:linear-gradient(135deg,#185FA5,#6E2C7B);color:#fff;border:none">🤖 AI Schedule</button>
     </div>
@@ -675,13 +686,7 @@ body.select-mode .day-cell:hover { filter: brightness(1.15) !important; }
         <button id="density-compact" onclick="setRosterDensity('compact',this)">Compact</button>
       </div>
     </div>
-    <div class="toolbar-group">
-      <span class="toolbar-label">Project</span>
-      <select id="roster-proj-filter" class="select" onchange="setRosterProjFilter(this.value)">
-        <option value="">— All projects —</option>
-      </select>
-      <button class="btn btn-sm btn-ghost" onclick="setRosterProjFilter('');document.getElementById('roster-proj-filter').value=''">✕ Clear</button>
-    </div>
+    
     <div class="toolbar-group">
       <span class="toolbar-label">Date</span>
       <select id="day-btn-row" class="select" onchange="setRosterDayFilter(this.value)">
@@ -705,6 +710,10 @@ body.select-mode .day-cell:hover { filter: brightness(1.15) !important; }
     <button class="ft" id="gantt-tab-btn" onclick="openGanttView(this)" style="margin-left:auto;background:var(--blue-light);color:var(--blue);border-color:var(--blue-mid);font-weight:600">📅 Project Gantt</button>
   </div>
   <div class="legend" id="roster-legend"></div>
+  <div id="roster-panel" style="display:none;background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-lg);padding:16px 20px;margin:0 0 10px 0;position:relative">
+    <button onclick="closeRosterPanel()" style="position:absolute;top:10px;right:12px;background:none;border:none;cursor:pointer;font-size:15px;color:var(--text3)">✕</button>
+    <div id="roster-panel-body"></div>
+  </div>
   <div id="pdf-print-header"></div>
   <div class="roster-wrap comfortable" id="roster-wrap"><table class="rt" id="roster-tbl"></table></div>
 
@@ -819,6 +828,9 @@ const DUMP_TYPE_COLORS = {
 
 const TEAM_COLORS={Xolos:'#3bccb7',Chingones:'#4a86e8',Poblanos:'#cc00cc',Lobos:'#9900ff','Guerreros Z':'#c9a200',Warehouse:'#888780',Driver:'#D85A30'};
 const PROJ_COLORS={'25-006':'#C2185B','26-002':'#00838F','25-064':'#2E7D32','25-087':'#1565C0','24-102':'#6A1B9A','25-061':'#AD1457','26-006':'#F57F17','25-103':'#0277BD','25-105':'#558B2F','26-003':'#4E342E','26-004':'#D81B60','25-036':'#00695C','25-076':'#E65100','25-075':'#B71C1C','24-112':'#1B5E20','24-126':'#880E4F','23-134':'#BF360C','26-001':'#827717','26-005':'#4A148C','25-063':'#283593','25-081':'#006064','25-085':'#33691E','25-089':'#01579B','25-094':'#1A237E','25-102':'#3E2723','OFF':'#cc3333','Warehouse':'#555555'};
+// Load any user-customized colors from localStorage
+try { const _savedColors = JSON.parse(localStorage.getItem('zlc_proj_colors') || '{}');
+  Object.assign(PROJ_COLORS, _savedColors); } catch(e) {}
 const MONTHS=['January','February','March','April','May','June','July','August','September','October','November','December'];
 const MO=['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
 const DLBL=['Su','Mo','Tu','We','Th','Fr','Sa'];
@@ -1283,7 +1295,8 @@ async function syncFromSheets(silent=false) {
     // Preserve historical data (already in DB)
     // Also preserve manually added projects that came from the app
     const manualProjects = DB.projects.filter(p => p._manual);
-    DB.projects = projects;
+    if(!DB._deletedProjects) DB._deletedProjects=[];
+    DB.projects = projects.filter(p=>!DB._deletedProjects.includes(p.id));
     // Re-merge manual projects (ones created from the app, not from the sheet)
     manualProjects.forEach(mp => {
       if (!DB.projects.find(p => p.id === mp.id)) DB.projects.push(mp);
@@ -1559,8 +1572,9 @@ function buildRosterSummary(itemsVisible, conflictCount, assignedCount, dayMode)
     projHtml = projList.map(([pid, info])=>{
       const color = pc(pid)||'#888';
       const tc = ptc(color);
-      return `<span style="display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:99px;background:${color};color:${tc};font-size:11px;font-weight:700;cursor:pointer;margin:2px"
-        onclick="setRosterProjFilter('${pid}',true)" title="${pid} — ${info.name} · ${info.count} assignments">
+      const isActive = rosterProjFilter === pid;
+      return `<span style="display:inline-flex;align-items:center;gap:5px;padding:3px 9px;border-radius:99px;background:${color};color:${tc};font-size:11px;font-weight:700;cursor:pointer;margin:2px;${isActive?'outline:2.5px solid #fff;box-shadow:0 0 0 4px '+color+',0 0 0 5px #fff':''}"
+        onclick="setRosterProjFilter('${pid}',true)" title="${pid} — ${info.name} · ${info.count} assignments · ${isActive?'click to clear':'click to filter'}">
         <span>${pid}</span>
         <span style="opacity:.7;font-size:10px">${info.count}</span>
       </span>`;
@@ -1590,19 +1604,73 @@ function buildRosterSummary(itemsVisible, conflictCount, assignedCount, dayMode)
         Projects active in <strong>${MONTHS[calMonth]} ${calYear}</strong>
         <span style="font-size:10px;color:var(--text3);margin-left:8px">(click to filter)</span>
       </div>
-      <div style="display:flex;flex-wrap:wrap;gap:2px;align-items:center">${projHtml}</div>
+      <div style="display:flex;flex-wrap:wrap;gap:4px;align-items:center">
+        ${rosterProjFilter ? `
+          <span onclick="setRosterProjFilter('')" style="display:inline-flex;align-items:center;gap:4px;padding:3px 10px;border-radius:99px;background:var(--bg4);color:var(--text2);font-size:11px;font-weight:700;cursor:pointer;border:1.5px solid var(--border2)" title="Show all projects">
+            ✕ All
+          </span>` : ''}
+        ${projHtml}
+        ${rosterProjFilter ? `<span style="font-size:10px;color:var(--blue);margin-left:4px">Filtering by ${rosterProjFilter} — click pill again or ✕ All to reset</span>` : ''}
+      </div>
     </div>`;
 }
 
 // ─── NAV ────────────────────────────────────────────────────────────────────
 function goTab(n,b){
-  document.querySelectorAll('.view').forEach(v=>v.classList.remove('active'));
+  document.querySelectorAll('.view').forEach(v=>{v.classList.remove('active');if(v.id==='view-estimating')v.style.display='none';});
   document.querySelectorAll('.nav-item').forEach(x=>x.classList.remove('active'));
-  document.getElementById('view-'+n).classList.add('active');
-  b.classList.add('active');
+  const viewEl=document.getElementById('view-'+n);
+  if(viewEl){ viewEl.classList.add('active'); if(n==='estimating') viewEl.style.display='flex'; }
+  if(b) b.classList.add('active');
   if(n==='dashboard'){if(activeDash==='analytics')renderAnalytics();else renderOverview();}
   if(n==='projects'){renderProjTable();if(selProj)renderDetail();}
   if(n==='roster')renderRoster();
+  if(n==='schedule')initScheduleView();
+}
+
+function initEstimatingView(){
+  const frame=document.getElementById('estimating-frame');
+  const fallback=document.getElementById('est-iframe-fallback');
+  if(!frame)return;
+  frame.onerror=()=>{frame.style.display='none';if(fallback)fallback.style.display='flex';};
+}
+
+function openEstimatingTab(){
+  window.open('https://mariazlc23.github.io/zlc-estimator/','_blank');
+}
+
+function syncEstimatingProjects(){
+  const active=DB.projects.filter(p=>p.status==='Active'||p.status==='Won/Approved');
+  const estProjects=active.map(p=>({
+    _fromPM:true, id:p.id, num:p.id, name:p.name,
+    client:p.client||'', pm:p.pmName||'',
+    status:p.status==='Won/Approved'?'Active':p.status,
+    address:p.address||'', city:p.address||'',
+    codes:(p.codes||[]).map(c=>c.code+' '+({
+      '001':'Hard Demo','002':'Soft Demo','003':'Excavation',
+      '004':'Concrete','005':'Utilities','006':'Paving & Grading'
+    }[c.code]||'')),
+    budgets:[],
+    cos:(p.cos||[]).map(co=>({
+      desc:co.description||co.desc||'', code:co.code||'',
+      value:co.value||0, status:co.status||'Pending',
+      date:co.date||new Date().toISOString().split('T')[0]
+    })),
+    created:p.created||new Date().toISOString(),
+  }));
+  localStorage.setItem('zlc_pm_sync_projects',JSON.stringify(estProjects));
+  localStorage.setItem('zlc_pm_sync_time',new Date().toISOString());
+  const frame=document.getElementById('estimating-frame');
+  if(frame&&frame.contentWindow){
+    try{frame.contentWindow.postMessage({type:'zlc_sync_projects',projects:estProjects},'*');}catch(e){}
+  }
+  const statusEl=document.getElementById('est-sync-status');
+  if(statusEl){
+    statusEl.textContent='✓ Synced '+estProjects.length+' projects · '+new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'});
+    statusEl.style.color='#3DAA6E';
+    setTimeout(()=>{statusEl.style.color='var(--text3)';},5000);
+  }
+  toast('✓ '+estProjects.length+' active projects synced to Estimating');
 }
 function goDash(t,b){
   activeDash=t;
@@ -1610,13 +1678,12 @@ function goDash(t,b){
   document.getElementById('dash-overview').style.display=t==='overview'?'block':'none';
   document.getElementById('dash-analytics').style.display=t==='analytics'?'block':'none';
   document.getElementById('dash-warehouse').style.display=t==='warehouse'?'block':'none';
-  document.getElementById('dash-weather').style.display=t==='weather'?'block':'none';
-  document.getElementById('dash-crew').style.display=t==='crew'?'block':'none';
+  
   if(t==='overview')renderOverview();
   else if(t==='analytics')renderAnalytics();
   else if(t==='warehouse')syncWarehouse();
-  else if(t==='weather')loadWeather();
-  else if(t==='crew')renderCrewSuggestions();
+  
+  
 }
 
 // ─── DASHBOARD OVERVIEW ──────────────────────────────────────────────────────
@@ -1713,12 +1780,87 @@ function renderOverview(){
   // 2026 total from E39:G39 (loaded on Sync)
   const won2026 = DB.total2026 || 0;
   const won2026Sub = won2026 ? `${fmt(won2026)} won 2026` : 'Sync to load 2026 total';
+  // ── Client concentration risk ──────────────────────────────────────────────
+  const clientTotals={};
+  active.forEach(p=>{
+    const cl=p.client||'Unknown';
+    clientTotals[cl]=(clientTotals[cl]||0)+bv(p);
+  });
+  const totalActiveVal=Object.values(clientTotals).reduce((a,b)=>a+b,0);
+  const topClient=Object.entries(clientTotals).sort((a,b)=>b[1]-a[1])[0];
+  const topPct=totalActiveVal>0&&topClient?Math.round(topClient[1]/totalActiveVal*100):0;
+  const isRisk=topPct>=30;
+
+  // ── Monthly scheduled value (next 6 months) ─────────────────────────────────
+  const _now=new Date();
+  const schedMonths=[];
+  for(let mo=0;mo<6;mo++){
+    const yr  =_now.getFullYear()+(_now.getMonth()+mo>11?1:0);
+    const m   =(_now.getMonth()+mo)%12;
+    const lbl =['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][m]+' '+yr;
+    const dim =new Date(yr,m+1,0).getDate();
+    const projDays={};
+    [...STAFF,...EXTRA].forEach(item=>{
+      for(let d=1;d<=dim;d++){
+        const key=`${yr}-${m+1}-${d}`;
+        const asgn=item.a?.[key];
+        if(!asgn)continue;
+        getAsgnPids(asgn).forEach(pid=>{
+          if(pid&&pid!=='OFF'&&pid!=='Warehouse') projDays[pid]=(projDays[pid]||0)+1;
+        });
+      }
+    });
+    let moVal=0;
+    Object.entries(projDays).forEach(([pid,days])=>{
+      const proj=DB.projects.find(p=>p.id===pid);if(!proj)return;
+      const budgetDays=(proj.codes||[]).reduce((a,c)=>a+(c.foremanDays||0)+(c.laborerDays||0),0);
+      const projVal=bv(proj);
+      if(budgetDays>0&&projVal>0) moVal+=Math.min(days/budgetDays,1)*projVal;
+      else if(projVal>0&&days>0) moVal+=days*500;
+    });
+    schedMonths.push({label:lbl,value:moVal,projCount:Object.keys(projDays).length});
+  }
+  const maxSchedVal=Math.max(...schedMonths.map(s=>s.value),1);
+
   document.getElementById('dash-metrics').innerHTML=`
     <div class="metric"><div class="metric-label">Active projects</div><div class="metric-value">${active.length}</div></div>
     <div class="metric"><div class="metric-label">Active contracted</div><div class="metric-value" style="font-size:18px">${fmt(contracted)}</div><div class="metric-sub">${won2026Sub}</div></div>
     <div class="metric"><div class="metric-label">Pending COs</div><div class="metric-value">${pendCOs.length}</div><div class="metric-sub">${fmt(pendVal)} in review</div></div>
     <div class="metric"><div class="metric-label">Open RFIs</div><div class="metric-value">${openRFIs.length}</div></div>
-    <div class="metric"><div class="metric-label">Subs in review</div><div class="metric-value">${openSubs.length}</div></div>`;
+    <div class="metric"><div class="metric-label">Subs in review</div><div class="metric-value">${openSubs.length}</div></div>
+    <div class="metric" style="${isRisk?'border:1.5px solid #E24B4A;background:rgba(226,75,74,0.04)':''}">
+      <div class="metric-label">⚠️ Client risk</div>
+      <div class="metric-value" style="font-size:20px;color:${isRisk?'#E24B4A':'#3B6D11'}">${topPct}%</div>
+      <div class="metric-sub">${topClient?topClient[0]:'—'}</div>
+      ${isRisk?'<div style="font-size:10px;color:#E24B4A;font-weight:700;margin-top:3px">Over 30% — concentration risk</div>':'<div style="font-size:10px;color:#3B6D11;margin-top:3px">Within safe range</div>'}
+    </div>`;
+
+  // ── Scheduled value chart ────────────────────────────────────────────────────
+  const chartRows=schedMonths.map(s=>`
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
+      <div style="font-size:11px;color:var(--text2);width:64px;flex-shrink:0">${s.label}</div>
+      <div style="flex:1;background:var(--bg3);border-radius:4px;height:20px;overflow:hidden;position:relative">
+        <div style="height:100%;background:linear-gradient(90deg,#185FA5,#4A9EFF);border-radius:4px;width:${Math.round(s.value/maxSchedVal*100)}%;min-width:${s.value>0?'3px':'0'};transition:width .4s"></div>
+      </div>
+      <div style="font-size:11px;font-weight:700;width:74px;text-align:right;color:var(--text)">${fmt(s.value)}</div>
+      <div style="font-size:10px;color:var(--text3);width:50px">${s.projCount} proj.</div>
+    </div>`).join('');
+
+  // Inject chart — create the section if it doesn't exist
+  let chartEl=document.getElementById('dash-sched-chart');
+  if(!chartEl){
+    chartEl=document.createElement('div');
+    chartEl.id='dash-sched-chart';
+    chartEl.className='card';
+    chartEl.style.cssText='margin-bottom:16px;padding:18px 20px';
+    const metricsEl=document.getElementById('dash-metrics');
+    if(metricsEl&&metricsEl.parentNode) metricsEl.parentNode.insertBefore(chartEl,metricsEl.nextSibling);
+  }
+  chartEl.innerHTML=`
+    <div style="font-size:13px;font-weight:700;color:var(--text);margin-bottom:14px">📊 Scheduled value — next 6 months
+      <span style="font-size:10px;font-weight:400;color:var(--text3);margin-left:8px">Based on roster assignments vs. day budgets</span>
+    </div>
+    ${chartRows}`;
 
   // COs with filter
   renderCOList();
@@ -2402,6 +2544,8 @@ function deleteProject(pid){
   const _deleted=JSON.parse(JSON.stringify(p));
 
   DB.projects=DB.projects.filter(x=>x.id!==pid);
+  if(!DB._deletedProjects) DB._deletedProjects=[];
+  if(!DB._deletedProjects.includes(pid)) DB._deletedProjects.push(pid);
 
   if(selProj===pid){
     selProj=null;
@@ -2588,7 +2732,12 @@ function prevM(){calMonth--;if(calMonth<0){calMonth=11;calYear--;}renderRoster()
 function nextM(){calMonth++;if(calMonth>11){calMonth=0;calYear++;}renderRoster();}
 function setCV(v,b){calView=v;document.querySelectorAll('.vt-btn').forEach(x=>x.classList.remove('active'));b.classList.add('active');renderRoster();}
 function setSect(s,b){rosterSect=s;document.querySelectorAll('.ft').forEach(x=>x.classList.remove('active'));b.classList.add('active');renderRoster();}
-function setRosterProjFilter(pid){rosterProjFilter=pid;renderRoster();}
+function setRosterProjFilter(pid, toggle){
+  // If clicking the already-active filter, clear it (toggle off)
+  if(toggle && rosterProjFilter === pid) rosterProjFilter = '';
+  else rosterProjFilter = pid || '';
+  renderRoster();
+}
 function setRosterDayFilter(d){
   const raw=(d||'').trim();
   if(raw){
@@ -2650,16 +2799,7 @@ function populateRosterDayFilter(){
   renderDayButtons();
 }
 
-function populateRosterProjFilter(){
-  const sel=document.getElementById('roster-proj-filter');
-  if(!sel)return;
-  const cur=sel.value;
-  // Only show active projects + special values
-  const activeProjs=DB.projects.filter(p=>p.status==='Active').sort((a,b)=>a.id.localeCompare(b.id));
-  const opts=activeProjs.map(p=>`<option value="${p.id}"${cur===p.id?' selected':''}>${p.id} — ${p.name}</option>`).join('');
-  sel.innerHTML=`<option value="">— All projects —</option>`+opts;
-  sel.value=cur||'';
-}
+
 
 // ─── EXTRA WORKER WEEKLY SUMMARY ─────────────────────────────────────────────
 // Returns a compact HTML summary of where this extra worker was sent each day
@@ -2781,7 +2921,7 @@ function renderDayButtons(){
 
 function renderRoster(){
   document.getElementById('month-lbl').textContent=`${MONTHS[calMonth]} ${calYear}`;
-  populateRosterProjFilter();
+  
   populateRosterDayFilter();
   const days=getVisDays();
   const t=new Date(),todayD=t.getMonth()===calMonth&&t.getFullYear()===calYear?t.getDate():null;
@@ -3209,8 +3349,20 @@ function clickCell(itemId,dateKey,day,type){
 
   showModal(`<div class="modal-title">Assign · ${item.name}</div>
     <div style="font-size:12px;color:var(--text2);margin-bottom:12px">${dl}</div>
-    <div class="fg"><label>Project / assignment</label>
-      <select id="cp-proj" onchange="markModalDirty();updateCellExtraFields('${itemId}','${dateKey}')">${pOpts}</select>
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:8px">
+      <div class="fg" style="flex:1;margin-bottom:0"><label>Project / assignment</label>
+        <select id="cp-proj" onchange="markModalDirty();updateCellExtraFields('${itemId}','${dateKey}');updateColorPreview()">${pOpts}</select>
+      </div>
+      <div class="fg" style="flex-shrink:0;margin-bottom:0">
+        <label style="font-size:11px;color:var(--text3);white-space:nowrap">Cell color</label>
+        <div style="display:flex;align-items:center;gap:4px">
+          <input type="color" id="cp-color" value="${PROJ_COLORS[curProjId]||pc(curProjId)||'#185FA5'}"
+            onchange="markModalDirty()"
+            style="width:36px;height:30px;border:0.5px solid var(--border2);border-radius:4px;cursor:pointer;padding:2px;background:var(--bg3)">
+          <button onclick="resetCellColor('${curProjId}')" title="Reset to default color"
+            style="padding:4px 7px;background:var(--bg3);border:0.5px solid var(--border2);border-radius:4px;cursor:pointer;font-size:11px;color:var(--text3)">↺</button>
+        </div>
+      </div>
     </div>
     <div style="display:flex;align-items:center;gap:12px;background:var(--bg3);padding:8px 10px;border-radius:var(--radius);margin-bottom:8px">
       <span style="font-size:12px;font-weight:600;color:var(--text)">Confirmed?</span>
@@ -3387,6 +3539,13 @@ function saveCell(id,key,type){
   // Track as selected for copy/paste
   rosterSelectCell(id, key, type);
   const _snap_a = item.a?.[key]; // capture for history
+  // Save custom color for the selected project
+  const colorPicker = document.getElementById('cp-color');
+  const projSel = document.getElementById('cp-proj');
+  if(colorPicker && projSel && projSel.value && projSel.value !== 'OFF' && projSel.value !== 'Warehouse' && projSel.value !== 'NEW') {
+    PROJ_COLORS[projSel.value] = colorPicker.value;
+    saveLocal(); // persist color
+  }
   // Snapshot for undo
   undoPush({id,key,type, snapshot:{
     a:   item.a?.[key],
@@ -4393,6 +4552,8 @@ async function _doCloudSave(rosterData){
     // ── Save orders ───────────────────────────────────────────────────────
     await jsonpSave('orders', DB.openOrders||[]);
     await delay(200);
+    await jsonpSave('deletedProjects', DB._deletedProjects||[]);
+    await delay(200);
 
     // ── Save manually-added projects ──────────────────────────────────────
     await jsonpSave('manualProjects', DB.projects.filter(p=>p._manual)||[]);
@@ -4578,6 +4739,10 @@ async function loadFromCloud(){
     }
 
     if(d.orders && Array.isArray(d.orders)) DB.openOrders = d.orders;
+    if(d.deletedProjects && Array.isArray(d.deletedProjects)){
+      if(!DB._deletedProjects) DB._deletedProjects=[];
+      d.deletedProjects.forEach(id=>{ if(!DB._deletedProjects.includes(id)) DB._deletedProjects.push(id); });
+    }
 
     if(d.manualProjects && Array.isArray(d.manualProjects)){
       d.manualProjects.forEach(p=>{
@@ -4721,6 +4886,8 @@ function saveLocal(){
   try{
     const rosterData = buildRosterData();
     saveToCloud(rosterData);
+    // Persist custom project colors
+    localStorage.setItem('zlc_proj_colors', JSON.stringify(PROJ_COLORS));
   }catch(e){ console.warn('saveLocal error:',e); }
 }
 
@@ -5149,51 +5316,75 @@ function bulkCancelPasteMode(){
 // Called when a cell is clicked in paste mode
 function bulkPasteToCell(itemId, dateKey, type){
   if(!_bulkPasteActive||!_bulkClipboard.length) return false;
-  // dateKey is the start date for paste
+
   const parts=dateKey.split('-').map(Number);
   const startMs=new Date(parts[0],parts[1]-1,parts[2]).getTime();
+
+  // Detect if pasting to a DIFFERENT person than source
+  const srcIds=[...new Set(_bulkClipboard.map(c=>c.itemId))];
+  const isCrossPersonPaste = srcIds.length===1 && srcIds[0]!==itemId;
+  // Cross-person paste: copy the assignments to the TARGET person row
+  // Same-person paste: shift dates forward (original behavior)
+
   let pasted=0;
   const snapshots=[];
+
   _bulkClipboard.forEach(({itemId:srcId,type:srcType,relDays,data})=>{
-    const item=getItem(srcId,srcType);if(!item)return;
+    // Target item: if cross-person, use clicked item; else use original item
+    const tgtId   = isCrossPersonPaste ? itemId   : srcId;
+    const tgtType = isCrossPersonPaste ? type      : srcType;
+    const item = getItem(tgtId, tgtType);
+    if(!item) return;
+
     const targetDate=new Date(startMs+relDays*86400000);
     const tKey=`${targetDate.getFullYear()}-${targetDate.getMonth()+1}-${targetDate.getDate()}`;
-    snapshots.push({itemId:srcId,dateKey:tKey,type:srcType,
-      a:item.a?.[tKey],notes:item.notes?.[tKey],wh:item.wh?.[tKey],
-      cc:item.cc?.[tKey],co:item.co?.[tKey],confirmed:item.confirmed?.[tKey],pour:item.pour?.[tKey]
+
+    // Snapshot for undo
+    snapshots.push({itemId:tgtId, dateKey:tKey, type:tgtType,
+      a:item.a?.[tKey], notes:item.notes?.[tKey], wh:item.wh?.[tKey],
+      cc:item.cc?.[tKey], co:item.co?.[tKey], confirmed:item.confirmed?.[tKey], pour:item.pour?.[tKey]
     });
-    if(!item.a) item.a={};
-    if(!item.notes) item.notes={};
-    if(!item.wh) item.wh={};
-    if(!item.cc) item.cc={};
-    if(!item.co) item.co={};
+
+    if(!item.a)         item.a={};
+    if(!item.notes)     item.notes={};
+    if(!item.wh)        item.wh={};
+    if(!item.cc)        item.cc={};
+    if(!item.co)        item.co={};
     if(!item.confirmed) item.confirmed={};
-    if(!item.pour) item.pour={};
-    if(data.a)         item.a[tKey]=data.a;
-    if(data.notes)     item.notes[tKey]=data.notes;
-    if(data.wh)        item.wh[tKey]=data.wh;
-    if(data.cc)        item.cc[tKey]=data.cc;
-    if(data.co)        item.co[tKey]=data.co;
-    if(data.pour)      item.pour[tKey]=data.pour;
-    item.confirmed[tKey]=data.confirmed!==undefined?data.confirmed:true;
+    if(!item.pour)      item.pour={};
+
+    if(data.a)     item.a[tKey]=data.a;
+    if(data.notes) item.notes[tKey]=data.notes;
+    if(data.wh)    item.wh[tKey]=data.wh;
+    if(data.cc)    item.cc[tKey]=data.cc;
+    if(data.co)    item.co[tKey]=data.co;
+    if(data.pour)  item.pour[tKey]=data.pour;
+    item.confirmed[tKey] = data.confirmed!==undefined ? data.confirmed : true;
     pasted++;
   });
+
   bulkCancelPasteMode();
   toggleSelectMode();
-  saveLocal(); renderRoster();
-  showUndo(`Pasted ${pasted} assignment${pasted!==1?'s':''} — Undo?`,()=>{
+  saveLocal();
+  renderRoster();
+
+  const label = isCrossPersonPaste
+    ? `✓ Pasted ${pasted} assignment${pasted!==1?'s':''} to new row`
+    : `✓ Pasted ${pasted} assignment${pasted!==1?'s':''}`;
+
+  showUndo(label+' — Undo?', ()=>{
     snapshots.forEach(s=>{
-      const item=getItem(s.itemId,s.type);if(!item)return;
-      if(s.a) item.a[s.dateKey]=s.a; else if(item.a) delete item.a[s.dateKey];
-      if(s.notes) item.notes[s.dateKey]=s.notes; else if(item.notes) delete item.notes[s.dateKey];
-      if(s.cc) item.cc[s.dateKey]=s.cc; else if(item.cc) delete item.cc[s.dateKey];
-      if(s.co) item.co[s.dateKey]=s.co; else if(item.co) delete item.co[s.dateKey];
-      if(s.pour) item.pour[s.dateKey]=s.pour; else if(item.pour) delete item.pour[s.dateKey];
+      const item=getItem(s.itemId,s.type); if(!item)return;
+      if(s.a)     item.a[s.dateKey]=s.a;         else if(item.a)         delete item.a[s.dateKey];
+      if(s.notes) item.notes[s.dateKey]=s.notes; else if(item.notes)     delete item.notes[s.dateKey];
+      if(s.cc)    item.cc[s.dateKey]=s.cc;       else if(item.cc)         delete item.cc[s.dateKey];
+      if(s.co)    item.co[s.dateKey]=s.co;       else if(item.co)         delete item.co[s.dateKey];
+      if(s.pour)  item.pour[s.dateKey]=s.pour;   else if(item.pour)       delete item.pour[s.dateKey];
       if(item.confirmed) item.confirmed[s.dateKey]=s.confirmed;
     });
-    saveLocal();renderRoster();toast(`↩ Paste undone`);
+    saveLocal(); renderRoster(); toast('↩ Paste undone');
   });
-  toast(`✓ Pasted ${pasted} assignment${pasted!==1?'s':''}`);
+  toast(label);
   return true;
 }
 
@@ -5417,11 +5608,244 @@ function toggleWhNotes(label){
   if(isHidden) setTimeout(()=>document.getElementById('cp-wh')?.focus(),50);
 }
 
+
+// ─── 🔧 UTILITIES MENU ────────────────────────────────────────────────────────
+function toggleUtilMenu(){
+  const m=document.getElementById('util-menu');
+  if(!m)return;
+  const open=m.style.display==='block';
+  m.style.display=open?'none':'block';
+  if(!open) setTimeout(()=>document.addEventListener('click',_utilOutside,{once:true}),50);
+}
+function _utilOutside(e){
+  const w=document.getElementById('util-wrap');
+  if(w&&!w.contains(e.target)) closeUtilMenu();
+}
+function closeUtilMenu(){
+  const m=document.getElementById('util-menu');
+  if(m) m.style.display='none';
+}
+
+// ─── ROSTER PANEL (Weather / Crew) ───────────────────────────────────────────
+function showRosterPanel(tab){
+  const panel=document.getElementById('roster-panel');
+  const body =document.getElementById('roster-panel-body');
+  if(!panel||!body)return;
+  // Toggle off if same tab open
+  if(panel.style.display!=='none'&&panel.dataset.tab===tab){
+    panel.style.display='none'; panel.dataset.tab=''; return;
+  }
+  panel.dataset.tab=tab;
+  panel.style.display='block';
+  if(tab==='weather'){
+    body.innerHTML='<div style="font-size:13px;font-weight:700;margin-bottom:12px">🌤️ Weather — Concord, CA</div><div id="rp-wx">⏳ Loading…</div>';
+    _rosterLoadWeather();
+  } else if(tab==='crew'){
+    body.innerHTML='<div style="font-size:13px;font-weight:700;margin-bottom:12px">👷 Crew Optimizer</div><div id="rp-crew">⏳ Calculating…</div>';
+    _rosterLoadCrew();
+  }
+}
+function closeRosterPanel(){
+  const p=document.getElementById('roster-panel');
+  if(p){p.style.display='none';p.dataset.tab='';}
+}
+
+async function _rosterLoadWeather(){
+  const el=document.getElementById('rp-wx');if(!el)return;
+  try{
+    if(_wxCache&&Date.now()-_wxCacheTime<30*60*1000){_rosterRenderWx(el,_wxCache);return;}
+    const url=`https://api.open-meteo.com/v1/forecast?latitude=${SITE_LAT}&longitude=${SITE_LON}&daily=weathercode,temperature_2m_max,temperature_2m_min,precipitation_sum,windspeed_10m_max&temperature_unit=fahrenheit&windspeed_unit=mph&timezone=America%2FLos_Angeles&forecast_days=7`;
+    const d=await (await fetch(url)).json();
+    _wxCache=d;_wxCacheTime=Date.now();
+    _rosterRenderWx(el,d);
+  }catch(e){if(el)el.textContent='⚠️ Weather unavailable';}
+}
+function _rosterRenderWx(el,d){
+  const DOW=['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+  const cards=d.daily.time.map((date,i)=>{
+    const code=d.daily.weathercode[i];
+    const wx=WX_CODES[code]||'';
+    const alert=WX_ALERT.has(code);
+    const hi=Math.round(d.daily.temperature_2m_max[i]);
+    const lo=Math.round(d.daily.temperature_2m_min[i]);
+    const rain=(d.daily.precipitation_sum[i]||0).toFixed(1);
+    const wind=Math.round(d.daily.windspeed_10m_max[i]||0);
+    const dt=new Date(date+'T12:00:00');
+    const dow=DOW[dt.getDay()];
+    const mon=dt.toLocaleDateString('en-US',{month:'short',day:'numeric'});
+    return`<div style="flex:1;min-width:80px;padding:10px 8px;background:var(--bg3);border-radius:8px;border:${alert?'1.5px solid #E24B4A':'0.5px solid var(--border)'};text-align:center">
+      <div style="font-size:10px;font-weight:700;color:var(--text2)">${dow}<br>${mon}</div>
+      <div style="font-size:22px;margin:4px 0">${wx.split(' ')[0]}</div>
+      <div style="font-size:11px;font-weight:700">${hi}°/${lo}°F</div>
+      <div style="font-size:9px;color:var(--text3)">${rain}" · ${wind}mph</div>
+    </div>`;
+  }).join('');
+  el.innerHTML=`<div style="display:flex;gap:6px;flex-wrap:wrap">${cards}</div>`;
+}
+function _rosterLoadCrew(){
+  const el=document.getElementById('rp-crew');if(!el)return;
+  _crewCache=null;
+  renderCrewSuggestions();
+  const src=document.getElementById('crew-content');
+  el.innerHTML=src?src.innerHTML:'<div style="color:var(--text3);font-size:12px">No suggestions available.</div>';
+}
+
+
+// ═══════════════════════════════════════════════════════════════
+// ESTIMATING SYSTEM INTEGRATION
+// ═══════════════════════════════════════════════════════════════
+function openEstimatingSystem(){
+  // ZLC_Estimating_System.html lives in the same GitHub Pages repo
+  const base = window.location.origin + window.location.pathname.replace(/\/[^\/]*$/, '');
+  window.open(base + '/ZLC_Estimating_System.html', '_blank');
+}
+
+function checkWonQueue(){
+  // Check if Estimating System has any Won projects waiting to be imported
+  try {
+    const queue = JSON.parse(localStorage.getItem('zlc_est_won_queue') || '[]');
+    const badge = document.getElementById('est-won-badge');
+
+    if(queue.length === 0){ if(badge) badge.style.display='none'; return; }
+
+    // Show badge
+    if(badge){ badge.textContent = queue.length; badge.style.display='inline-block'; }
+
+    // Show notification banner
+    const existing = document.getElementById('est-won-banner');
+    if(existing) return; // already showing
+
+    const banner = document.createElement('div');
+    banner.id = 'est-won-banner';
+    banner.style.cssText = 'position:fixed;top:52px;right:0;left:220px;z-index:800;background:#1B3A2A;border-bottom:2px solid #3DAA6E;padding:10px 20px;display:flex;align-items:center;justify-content:space-between;gap:12px';
+    banner.innerHTML = `
+      <div style="display:flex;align-items:center;gap:10px">
+        <span style="font-size:16px">🏆</span>
+        <div>
+          <div style="font-size:13px;font-weight:700;color:#3DAA6E">${queue.length} project${queue.length>1?'s':''} won in Estimating — ready to import</div>
+          <div style="font-size:11px;color:rgba(61,170,110,.7)">${queue.map(p=>p.num+' — '+p.name).join(' · ')}</div>
+        </div>
+      </div>
+      <div style="display:flex;gap:8px;flex-shrink:0">
+        <button onclick="importWonProjects()" style="padding:6px 14px;background:#3DAA6E;border:none;border-radius:6px;color:#fff;font-size:12px;font-weight:700;cursor:pointer;font-family:inherit">⬇ Import to Project Manager</button>
+        <button onclick="dismissWonBanner()" style="padding:6px 10px;background:none;border:1px solid rgba(61,170,110,.4);border-radius:6px;color:#3DAA6E;font-size:12px;cursor:pointer;font-family:inherit">Later</button>
+      </div>`;
+    document.body.appendChild(banner);
+  } catch(e) { console.warn('Won queue check error:', e); }
+}
+
+function dismissWonBanner(){
+  const b = document.getElementById('est-won-banner');
+  if(b) b.remove();
+}
+
+function importWonProjects(){
+  try {
+    const queue = JSON.parse(localStorage.getItem('zlc_est_won_queue') || '[]');
+    if(!queue.length){ toast('No projects to import'); return; }
+
+    let imported = 0, updated = 0;
+    queue.forEach(p => {
+      const existing = DB.projects.find(x => x.id === p.id || x.id === p._estimatingId);
+      if(existing){
+        // Update status
+        existing.status = 'Active';
+        if(p.num) existing.id = p.num;  // assign job number
+        existing._estimatingId = p._estimatingId;
+        updated++;
+      } else {
+        // Create new project in PM format
+        const newProj = {
+          id:       p.num || p.id,
+          name:     p.name,
+          client:   p.client || '',
+          pmName:   p.pm || '',
+          status:   'Active',
+          address:  p.address || '',
+          codes:    (p.codes || []).map(c => ({
+            code:  c.code,
+            value: c.value || c.estimatedValue || 0,
+            foremanDays: c.foremanDays || 0,
+            laborerDays: c.laborerDays || 0,
+          })),
+          cos:      (p.cos || []).map(co => ({
+            description: co.description || co.desc || '',
+            code:    co.code || '',
+            value:   co.value || 0,
+            status:  co.status || 'Pending',
+            date:    co.date || '',
+            stat:    co.status === 'Approved' ? 'Approved' : 'Pending',
+          })),
+          rfis:     [],
+          subs:     [],
+          notes:    p.notes || '',
+          history:  [{ date: new Date().toISOString().split('T')[0], text: 'Project won — imported from Estimating System', type:'created' }],
+          _fromEstimating: true,
+          _estimatingId:   p._estimatingId,
+          wonDate:  p.wonDate,
+          created:  new Date().toISOString(),
+        };
+        DB.projects.push(newProj);
+        imported++;
+      }
+    });
+
+    // Clear the queue
+    localStorage.removeItem('zlc_est_won_queue');
+    localStorage.removeItem('zlc_est_won_time');
+
+    saveLocal();
+    renderProjTable();
+    renderOverview();
+    renderAnalytics();
+    dismissWonBanner();
+    document.getElementById('est-won-badge').style.display='none';
+
+    const msg = [imported && `${imported} imported`, updated && `${updated} updated`].filter(Boolean).join(', ');
+    toast(`✓ ${msg} from Estimating System`);
+
+    // Switch to projects view to show the new ones
+    if(imported > 0){
+      goTab('projects', document.querySelector('[onclick*="projects"]'));
+    }
+  } catch(e) {
+    console.error('Import error:', e);
+    toast('Import error: ' + e.message);
+  }
+}
+
+
+// ─── ROSTER CELL COLOR HELPERS ────────────────────────────────────────────────
+function updateColorPreview(){
+  const sel = document.getElementById('cp-proj');
+  const picker = document.getElementById('cp-color');
+  if(!sel || !picker) return;
+  const pid = sel.value;
+  if(pid && pid !== 'OFF' && pid !== 'Warehouse' && pid !== 'NEW') {
+    picker.value = PROJ_COLORS[pid] || pc(pid) || '#185FA5';
+  }
+}
+
+function resetCellColor(pid){
+  if(!pid) return;
+  // Remove custom color — let it regenerate from hash
+  delete PROJ_COLORS[pid];
+  const picker = document.getElementById('cp-color');
+  if(picker) picker.value = pc(pid) || '#185FA5';
+  saveLocal();
+  markModalDirty();
+  toast('↺ Color reset to default');
+}
+
 // ─── INIT ─────────────────────────────────────────────────────────────────────
 loadLocal();
 renderAnalytics();
 renderProjTable();
 syncFromSheets();
+// Check if Estimating System has won projects waiting
+setTimeout(checkWonQueue, 2000);
+// Re-check every 30s (in case user switches tabs)
+setInterval(checkWonQueue, 30000);
 
 // Auto-sync from Sheets every 5 minutes in background
 setInterval(() => {
@@ -6607,5 +7031,37 @@ function ganttSaveToCloud() {
   </div>
 </body>
 </html>
+
+      <div style="font-size:11px;color:var(--text3)">Budgets · Proposals · Change Orders</div>
+    </div>
+    <div style="display:flex;gap:8px;align-items:center">
+      <span id="est-sync-status" style="font-size:11px;color:var(--text3)"></span>
+      <button class="btn btn-ghost btn-sm" onclick="syncEstimatingProjects()" title="Push active projects from Project Manager to Estimating">
+        🔄 Sync Projects
+      </button>
+      <button class="btn btn-primary btn-sm" onclick="openEstimatingTab()">
+        ↗ Full Screen
+      </button>
+    </div>
+  </div>
+  <iframe id="estimating-frame"
+    src="https://mariazlc23.github.io/zlc-estimator/"
+    style="flex:1;border:none;width:100%"
+    allow="downloads"
+    title="ZLC Estimating System">
+  </iframe>
+  <div id="est-iframe-fallback" style="display:none;flex:1;align-items:center;justify-content:center;flex-direction:column;gap:16px;background:var(--bg)">
+    <div style="font-size:32px">📊</div>
+    <div style="font-size:14px;font-weight:600">ZLC Estimating System</div>
+    <div style="font-size:12px;color:var(--text3);text-align:center;max-width:340px">
+      The estimating system runs as a standalone app.<br>
+      Click below to open it.
+    </div>
+    <button class="btn btn-primary" onclick="openEstimatingTab()">↗ Open Estimating System</button>
+    <div style="font-size:11px;color:var(--text3);margin-top:8px">
+      Or download and open: <a href="#" onclick="downloadEstimating()" style="color:var(--blue)">ZLC_Estimating_System.html</a>
+    </div>
+  </div>
+</div>
 </body>
 </html>
