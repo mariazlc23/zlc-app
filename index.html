@@ -5542,11 +5542,34 @@ async function sendAIMessage(){
   }).join('\n');
 
   // Staff with their roles, certs, and current month assignments
+  // Current month key prefix (YYYY-M)
+  const nowD = new Date(calYear, calMonth, 1);
+  const curMonthPrefix = `${nowD.getFullYear()}-${nowD.getMonth()+1}`;
+  // Next month key prefix
+  const nextD = new Date(calYear, calMonth+1, 1);
+  const nextMonthPrefix = `${nextD.getFullYear()}-${nextD.getMonth()+1}`;
+  const nextMonthLabel = nextD.toLocaleDateString('en-US',{month:'long',year:'numeric'});
+  const curMonthLabel  = nowD.toLocaleDateString('en-US',{month:'long',year:'numeric'});
+
   const staffInfo=STAFF.map(e=>{
-    const assigned=Object.entries(e.a||{}).filter(([k])=>k.startsWith(thisMonthKey.split('-').slice(0,2).join('-'))).map(([,v])=>v).filter(Boolean);
-    const projsThisMonth=[...new Set(assigned.flatMap(v=>getAsgnPids(v)).filter(p=>p&&p!=='OFF'))];
-    const daysOff=assigned.filter(v=>v==='OFF').length;
-    return `• ${e.name} | ${e.role||'laborer'} | Team: ${e.team||'?'} | Certs: ${(e.certs||[]).join(',')||'none'} | This month: ${projsThisMonth.join(',')||'unassigned'}${daysOff?' | '+daysOff+' days OFF':''}`;
+    const allKeys = Object.keys(e.a||{});
+    // Current month assignments
+    const curKeys  = allKeys.filter(k=>k.startsWith(curMonthPrefix+'-'));
+    const curProjs = [...new Set(curKeys.flatMap(k=>getAsgnPids(e.a[k])).filter(p=>p&&p!=='OFF'))];
+    const curOff   = curKeys.filter(k=>e.a[k]==='OFF').length;
+    // Next month assignments
+    const nxtKeys  = allKeys.filter(k=>k.startsWith(nextMonthPrefix+'-'));
+    const nxtProjs = [...new Set(nxtKeys.flatMap(k=>getAsgnPids(e.a[k])).filter(p=>p&&p!=='OFF'))];
+    const nxtOff   = nxtKeys.filter(k=>e.a[k]==='OFF').length;
+    // Days available next month (working days minus assigned)
+    const nxtWorkDays = new Date(nextD.getFullYear(), nextD.getMonth()+1, 0).getDate();
+    const nxtAssigned = nxtKeys.filter(k=>{const v=e.a[k]; return v&&v!=='OFF';}).length;
+    const nxtAvail    = Math.max(0, nxtWorkDays - nxtAssigned - nxtOff);
+    return [
+      `• ${e.name} | ${e.role||'laborer'} | Team: ${e.team||'?'} | Certs: ${(e.certs||[]).join(',')||'none'}`,
+      `  ${curMonthLabel}: ${curProjs.join(', ')||'unassigned'}${curOff?' | '+curOff+' days OFF':''}`,
+      `  ${nextMonthLabel}: ${nxtProjs.join(', ')||'unassigned'}${nxtOff?' | '+nxtOff+' days OFF':''}${nxtAvail>0?' | ~'+nxtAvail+' days available':''}`,
+    ].join('\n');
   }).join('\n');
 
   // Cost code meanings
@@ -5591,7 +5614,8 @@ Victor, Juan Alejo, Luis, Santos, Daniel, Fernando, Cabrera, Rigo, Joaquin
 == ACTIVE PROJECTS ==
 ${activeProjs}
 
-== CURRENT ROSTER (this month) ==
+== CURRENT ROSTER (${curMonthLabel} + ${nextMonthLabel}) ==
+Each person shows: this month's projects, next month's projects, and estimated available days next month.
 ${staffInfo}
 
 == YOUR JOB ==
@@ -5600,7 +5624,9 @@ When suggesting assignments be specific: name + project ID + days (Mon/Tue/Wed/T
 Never assign the same person to two projects on the same day (except Francisco/Driver 2).
 Always pair a foreman with their team unless asked otherwise.
 If a project needs concrete (004), ask what day the pour is scheduled.
-Respond in English. Be concise. Use a table when suggesting a week schedule.
+You can see assignments for ${curMonthLabel} AND ${nextMonthLabel}.
+When planning, check both months to avoid double-booking.
+Respond in English. Be concise. Use a table when suggesting a week or multi-week schedule.
 If info is missing, ask: How many days? Which cost code? Pour day?`;
 
   const geminiKey = localStorage.getItem('zlc_gemini_key') || window.ZLC_GEMINI_KEY || '';
@@ -6253,18 +6279,37 @@ function performUndo() {
 // Keyboard shortcut: Ctrl+Z / Cmd+Z
 document.addEventListener('keydown', e => {
   const modal = document.querySelector('#modal-area .modal-backdrop');
-  if (modal) return; // don't intercept when modal is open
-
-  // Ctrl+Z — Undo
+  
+  // Ctrl+Z — Undo (works even if modal just closed)
   if ((e.ctrlKey || e.metaKey) && e.key === 'z' && !e.shiftKey) {
-    e.preventDefault(); performUndo();
+    e.preventDefault(); performUndo(); return;
   }
-  // Ctrl+C — Copy selected roster cell
+
+  // Block other shortcuts when modal is open
+  if (modal) return;
+  // Ctrl+C — Copy selected roster cell DATA
   if ((e.ctrlKey || e.metaKey) && e.key === 'c') {
     if (_rosterSelected) {
-      _rosterClipboard = JSON.parse(JSON.stringify(_rosterSelected));
-      toast('📋 Cell copied');
-      e.preventDefault();
+      const { id, key, type } = _rosterSelected;
+      const item = getItem(id, type)
+        || getItem(id,'staff') || getItem(id,'extra')
+        || getItem(id,'equip') || getItem(id,'rental');
+      if (item) {
+        _rosterClipboard = {
+          a:         item.a?.[key],
+          notes:     item.notes?.[key],
+          wh:        item.wh?.[key],
+          cc:        item.cc?.[key],
+          co:        item.co?.[key],
+          confirmed: item.confirmed?.[key],
+          pour:      item.pour?.[key],
+        };
+        const proj = item.a?.[key] || '(empty)';
+        toast('📋 Copied: ' + (proj === '(empty)' ? 'empty cell' : proj));
+        e.preventDefault();
+      }
+    } else {
+      toast('Click a cell first, then Ctrl+C to copy');
     }
   }
   // Ctrl+V — Paste to selected roster cell
@@ -6272,8 +6317,16 @@ document.addEventListener('keydown', e => {
     if (_rosterClipboard && _rosterSelected) {
       rosterPasteCell(_rosterSelected.id, _rosterSelected.key, _rosterSelected.type);
       e.preventDefault();
-    } else if (_rosterClipboard) {
-      toast('Click a cell first, then Ctrl+V to paste');
+    } else if (_rosterClipboard && !_rosterSelected) {
+      toast('📋 Ready to paste — click any roster cell to paste into it', 3000);
+      e.preventDefault();
+      // Highlight cells to show paste mode
+      document.querySelectorAll('.ic:not(.sticky-col)').forEach(td => {
+        td.style.outline = '2px dashed var(--blue)';
+        setTimeout(() => td.style.outline = '', 2500);
+      });
+    } else {
+      toast('Copy a cell first with Ctrl+C');
     }
   }
 });
@@ -6284,6 +6337,10 @@ let _rosterSelected  = null; // {id, key, type}
 
 function rosterSelectCell(id, key, type) {
   _rosterSelected = {id, key, type};
+  // Update visual selection indicator
+  document.querySelectorAll('.cell-selected-kb').forEach(el => el.classList.remove('cell-selected-kb'));
+  const cellEl = document.querySelector(`[data-id="${id}"][data-key="${key}"]`);
+  if (cellEl) cellEl.classList.add('cell-selected-kb');
 }
 
 function rosterPasteCell(id, key, type) {
