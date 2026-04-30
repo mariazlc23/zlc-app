@@ -147,7 +147,7 @@
   .rt td { border: 0.5px solid var(--border); padding: 0; vertical-align: middle; }
   .rt td.ic { padding: 5px 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; width: 82px; min-width: 82px; max-width: 82px; }
   /* Day view note cells — allow full text, no clipping */
-  .rt td.ic.day-note { white-space: normal; overflow: visible; text-overflow: unset; max-width: 120px; min-width: 120px; }
+  .rt td.ic.day-note { white-space: normal; overflow: visible; text-overflow: unset; max-width: none; min-width: 100px; }
 
   .rt th.ic:first-child, .rt td.ic:first-child { width: 82px; min-width: 82px; max-width: 82px; }
   .rt th.ic:nth-child(2), .rt td.ic:nth-child(2) { width: 120px; min-width: 120px; max-width: 120px; }
@@ -653,6 +653,7 @@ body.select-mode .day-cell:hover { filter: brightness(1.15) !important; }
           <div style="font-size:10px;font-weight:700;color:var(--text3);padding:6px 14px 2px;text-transform:uppercase;letter-spacing:.08em">Staff</div>
           <button onclick="openModal('emp');closeUtilMenu()" style="width:100%;padding:9px 14px;border:none;background:none;cursor:pointer;font-size:12px;color:var(--text);text-align:left;display:flex;align-items:center;gap:8px" onmouseover="this.style.background='var(--bg2)'" onmouseout="this.style.background='none'">👤 + Employee</button>
           <button onclick="openModal('extraW');closeUtilMenu()" style="width:100%;padding:9px 14px;border:none;background:none;cursor:pointer;font-size:12px;color:var(--text);text-align:left;display:flex;align-items:center;gap:8px" onmouseover="this.style.background='var(--bg2)'" onmouseout="this.style.background='none'">🦺 + Extra worker</button>
+          <button onclick="openModal('rental');closeUtilMenu()" style="width:100%;padding:9px 14px;border:none;background:none;cursor:pointer;font-size:12px;color:var(--text);text-align:left;display:flex;align-items:center;gap:8px" onmouseover="this.style.background='var(--bg2)'" onmouseout="this.style.background='none'">🚜 + Rental</button>
 
           <div style="height:1px;background:var(--border);margin:3px 0"></div>
           <div style="font-size:10px;font-weight:700;color:var(--text3);padding:6px 14px 2px;text-transform:uppercase;letter-spacing:.08em">Info</div>
@@ -661,7 +662,7 @@ body.select-mode .day-cell:hover { filter: brightness(1.15) !important; }
 
           <div style="height:1px;background:var(--border);margin:3px 0"></div>
           <div style="font-size:10px;font-weight:700;color:var(--text3);padding:6px 14px 2px;text-transform:uppercase;letter-spacing:.08em">Actions</div>
-          <button onclick="showRosterHistory();closeUtilMenu()" style="width:100%;padding:9px 14px;border:none;background:none;cursor:pointer;font-size:12px;color:var(--text);text-align:left;display:flex;align-items:center;gap:8px" onmouseover="this.style.background='var(--bg2)'" onmouseout="this.style.background='none'">📋 History</button>
+          <button onclick="showRosterHistory();closeUtilMenu()" style="width:100%;padding:9px 14px;border:none;background:none;cursor:pointer;font-size:12px;color:var(--text);text-align:left;display:flex;align-items:center;gap:8px" onmouseover="this.style.background='var(--bg2)'" onmouseout="this.style.background='none'">📋 Version History</button>
           <button onclick="forceSaveToCloud();closeUtilMenu()" style="width:100%;padding:9px 14px;border:none;background:none;cursor:pointer;font-size:12px;color:var(--text);text-align:left;display:flex;align-items:center;gap:8px" onmouseover="this.style.background='var(--bg2)'" onmouseout="this.style.background='none'">☁️ Save to cloud</button>
           <button onclick="loadFromCloud();closeUtilMenu()" style="width:100%;padding:9px 14px;border:none;background:none;cursor:pointer;font-size:12px;color:var(--text);text-align:left;display:flex;align-items:center;gap:8px" onmouseover="this.style.background='var(--bg2)'" onmouseout="this.style.background='none'">↺ Sync from cloud</button>
         </div>
@@ -2955,10 +2956,10 @@ function renderRoster(){
   // Build header
   let h='<thead><tr>';
   if(dayMode){
-    h+=`<th class="ic sticky-col" style="min-width:140px">Nombre</th>`;
-    h+=`<th class="ic" style="min-width:180px">Trabajo · Cost code</th>`;
-    h+=`<th class="ic" style="min-width:220px">Detalles del día</th>`;
-    h+=`<th class="ic" style="min-width:180px;background:rgba(255,243,205,0.4)">📦 Warehouse</th>`;
+    h+=`<th class="ic sticky-col" style="min-width:130px;max-width:160px;width:130px">Nombre</th>`;
+    h+=`<th class="ic" style="min-width:160px;max-width:200px;width:160px">Trabajo · Cost code</th>`;
+    h+=`<th class="ic" style="width:40%;min-width:280px">Detalles del día</th>`;
+    h+=`<th class="ic" style="min-width:180px;max-width:240px;width:200px;background:rgba(255,243,205,0.4)">📦 Warehouse</th>`;
   } else {
     h+=`<th class="ic sticky-col" style="min-width:130px">Name / Unit</th>`;
     h+=`<th class="ic" style="min-width:46px;max-width:56px;font-size:10px">Info</th>`;
@@ -3033,7 +3034,7 @@ function renderRoster(){
     // ── Col 2: Detalles — editable inline, only show if has note ───────────────
     const noteId=`inline-note-${item.id}-${key.replace(/[^\w]/g,'')}`;
     const detallesHtml = `<div>
-      <div id="${noteId}-disp" style="font-size:12px;color:var(--text);line-height:1.4;cursor:text;min-height:20px;border-radius:4px;padding:2px 4px"
+      <div id="${noteId}-disp" style="font-size:13px;color:var(--text);line-height:1.5;cursor:text;min-height:30px;border-radius:4px;padding:4px 6px;white-space:pre-wrap"
         ondblclick="startInlineNoteEdit('${item.id}','${key}','${type||'staff'}')" title="Double-click to edit">
         ${note||'<span class="no-print" style=\'color:var(--text3);font-size:11px\'>double-click to add note</span>'}
       </div>
@@ -3041,12 +3042,12 @@ function renderRoster(){
 
     // ── Col 3: Warehouse notes ─────────────────────────────────────────────────
     const whHtml = wh
-      ? `<span style="font-size:12px;color:#7A5800;line-height:1.4">📦 ${wh}</span>`
+      ? `<span style="font-size:12px;color:#7A5800;line-height:1.5;display:block;white-space:pre-wrap">📦 ${wh}</span>`
       : `<span style="color:var(--text3);font-size:11px"></span>`;
 
-    return `<td class="ic day-note" style="vertical-align:top;padding:8px 10px">${trabajoHtml}</td>`
-          +`<td class="ic day-note" style="vertical-align:top;padding:8px 10px">${detallesHtml}</td>`
-          +`<td class="ic day-note" style="vertical-align:top;padding:8px 10px;background:rgba(255,243,205,0.2)">${whHtml}</td>`;
+    return `<td class="ic day-note" style="vertical-align:top;padding:8px 10px;min-width:160px;max-width:200px;width:160px">${trabajoHtml}</td>`
+          +`<td class="ic day-note" style="vertical-align:top;padding:8px 10px;width:40%;min-width:280px">${detallesHtml}</td>`
+          +`<td class="ic day-note" style="vertical-align:top;padding:8px 10px;min-width:180px;max-width:240px;width:200px;background:rgba(255,243,205,0.25)">${whHtml}</td>`;
   };
 
   // All-month cells — supports multi-project comma-separated values
@@ -3115,7 +3116,7 @@ function renderRoster(){
       const key=getRosterFilterKey();
       const asgn=item.a?.[key]||'';
       const projKey=getAsgnFirstPid(asgn)||'ZZZ'; // sort by first project
-      const rowHtml=`<tr style="${bgStyle}"><td class="ic day-note" style="vertical-align:top;padding:8px 10px;max-width:150px">${nameCell(item.id,type)}</td>${extra}</tr>`;
+      const rowHtml=`<tr style="${bgStyle}"><td class="ic day-note" style="vertical-align:top;padding:8px 10px;min-width:130px;max-width:160px;width:130px">${nameCell(item.id,type)}</td>${extra}</tr>`;
       visibleItems.push(item);
       dayViewRows.push({proj:projKey, html:rowHtml});
       return ''; // will be added sorted later
@@ -3328,7 +3329,6 @@ function clickCell(itemId,dateKey,day,type){
           <div style="max-height:250px;overflow-y:auto">${jobOpts}</div></div>
         <div><div style="font-size:11px;font-weight:700;text-transform:uppercase;margin-bottom:5px;padding-bottom:4px;border-bottom:2px solid #854F0B">🗑️ Dump sites</div>
           <div style="max-height:250px;overflow-y:auto">${dumpOpts}</div></div>
-      </div>
       </div>
       <div class="fg" style="margin-top:8px"><label>Notes</label>
         <textarea id="cp-note" oninput="markModalDirty()" style="min-height:45px;width:100%;font-size:12px;padding:6px 8px;border-radius:var(--radius);border:0.5px solid var(--border2);background:var(--bg);color:var(--text);font-family:inherit;resize:vertical">${curNote}</textarea></div>
@@ -3543,8 +3543,12 @@ function saveCell(id,key,type){
   const colorPicker = document.getElementById('cp-color');
   const projSel = document.getElementById('cp-proj');
   if(colorPicker && projSel && projSel.value && projSel.value !== 'OFF' && projSel.value !== 'Warehouse' && projSel.value !== 'NEW') {
+    const oldColor = PROJ_COLORS[projSel.value];
     PROJ_COLORS[projSel.value] = colorPicker.value;
-    saveLocal(); // persist color
+    // If color changed, trigger cloud save immediately so other users see it
+    if(oldColor !== colorPicker.value) {
+      saveLocal(); // triggers cloud save via debounce
+    }
   }
   // Snapshot for undo
   undoPush({id,key,type, snapshot:{
@@ -4445,15 +4449,15 @@ function compressRoster(rd){
 
 let _cloudTimer = null;
 let _cloudSaveInProgress = false;
-
 let _cloudPendingSnapshot = null;
+let _saveFailCount = 0; // tracks consecutive save failures
 
 // Called by saveLocal() — debounce 2s then save the latest snapshot
 function saveToCloud(rosterData){
   if(!APPS_SCRIPT_URL) return;
   _cloudPendingSnapshot = rosterData;
   clearTimeout(_cloudTimer);
-  _cloudTimer = setTimeout(()=>flushPendingCloudSave(), 2000);
+  _cloudTimer = setTimeout(()=>flushPendingCloudSave(), 3000); // 3s debounce — batches rapid edits
 }
 
 async function flushPendingCloudSave(force=false, _retryCount=0){
@@ -4517,7 +4521,7 @@ async function _doCloudSave(rosterData){
     for(let i=0; i<chunks.length; i++){
       try{
         await jsonpSave('sc'+i, chunks[i]);
-        if(i < chunks.length-1) await delay(600);
+        if(i < chunks.length-1) await delay(400); // reduced from 600ms for faster saves
       } catch(chunkErr){
         failedChunks.push({i, err: String(chunkErr)});
         console.error('☁️ Chunk sc'+i+' failed:', chunkErr);
@@ -4531,10 +4535,15 @@ async function _doCloudSave(rosterData){
       showBanner(msg, 'error', 0); // 0 = don't auto-hide, stays until dismissed
       setCloudStatus('✗ Partial save — click "Run full check"');
       showSaveIndicator && showSaveIndicator('error','✗ Not fully saved');
-      // Show the diagnostics panel automatically with a summary
-      const diagLines = failedChunks.map(f => `❌ Chunk ${f.i}: ${f.err}`);
-      diagLines.push('👆 Click "Run full check" for full analysis and fix instructions.');
-      showSaveDiag(diagLines.join('<br>'));
+      // Only show diagnostics panel after persistent failures (not transient)
+      _saveFailCount = (_saveFailCount||0) + 1;
+      if(_saveFailCount >= 2) {
+        const diagLines = failedChunks.map(f => `❌ Chunk ${f.i}: ${f.err}`);
+        diagLines.push('👆 Click "Run full check" for full analysis and fix instructions.');
+        showSaveDiag(diagLines.join('<br>'));
+      } else {
+        console.warn('☁️ Save had failures (attempt', _saveFailCount, ') — will retry');
+      }
       // Still try to save metadata with what we have
     }
 
@@ -4555,11 +4564,17 @@ async function _doCloudSave(rosterData){
     await jsonpSave('deletedProjects', DB._deletedProjects||[]);
     await delay(200);
 
+    // ── Save custom project colors ────────────────────────────────────────
+    // Filter to only user-customized colors (not the defaults hardcoded in PROJ_COLORS)
+    await jsonpSave('projColors', PROJ_COLORS);
+    await delay(200);
+
     // ── Save manually-added projects ──────────────────────────────────────
     await jsonpSave('manualProjects', DB.projects.filter(p=>p._manual)||[]);
 
     if(failedChunks.length === 0){
-      const t = new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'});
+      _saveFailCount = 0; // reset on success
+    const t = new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'});
       setCloudStatus('✓ Saved '+t);
       showSaveIndicator && showSaveIndicator('saved','✓ Saved');
       console.log('☁️ Saved to cloud at', t, '·', chunks.length, 'chunks ·', c.staff.length, 'staff');
@@ -4744,6 +4759,18 @@ async function loadFromCloud(){
       d.deletedProjects.forEach(id=>{ if(!DB._deletedProjects.includes(id)) DB._deletedProjects.push(id); });
     }
 
+    // ── Load custom project colors ────────────────────────────────────────
+    if(d.projColors && typeof d.projColors === 'object'){
+      Object.assign(PROJ_COLORS, d.projColors);
+      console.log('☁️ Loaded', Object.keys(d.projColors).length, 'custom project colors');
+    }
+
+    // ── Load roster version history ───────────────────────────────────────────
+    if(d.rosterHistory && Array.isArray(d.rosterHistory)){
+      _persistedHistory = d.rosterHistory;
+      console.log('☁️ Loaded', _persistedHistory.length, 'history entries');
+    }
+
     if(d.manualProjects && Array.isArray(d.manualProjects)){
       d.manualProjects.forEach(p=>{
         if(!DB.projects.find(x=>x.id===p.id)) DB.projects.push(p);
@@ -4886,8 +4913,8 @@ function saveLocal(){
   try{
     const rosterData = buildRosterData();
     saveToCloud(rosterData);
-    // Persist custom project colors
-    localStorage.setItem('zlc_proj_colors', JSON.stringify(PROJ_COLORS));
+    // Colors are now saved to cloud — localStorage is just a local fallback
+    try { localStorage.setItem('zlc_proj_colors', JSON.stringify(PROJ_COLORS)); } catch(e){}
   }catch(e){ console.warn('saveLocal error:',e); }
 }
 
@@ -5844,8 +5871,38 @@ renderProjTable();
 syncFromSheets();
 // Check if Estimating System has won projects waiting
 setTimeout(checkWonQueue, 2000);
+
+// Prompt for username if not set
+if(!localStorage.getItem('zlc_username')){
+  setTimeout(()=>{
+    const name = prompt('Enter your name for the roster history log (e.g. "Maria", "Diego"):');
+    if(name && name.trim()){
+      _currentUser = name.trim();
+      localStorage.setItem('zlc_username', _currentUser);
+      toast('✓ Name saved: ' + _currentUser);
+    }
+  }, 3000);
+}
 // Re-check every 30s (in case user switches tabs)
 setInterval(checkWonQueue, 30000);
+
+// ── Sync colors from cloud every 2 min so all users stay in sync ─────────────
+setInterval(async ()=>{
+  try{
+    if(!APPS_SCRIPT_URL) return;
+    const json = await jsonpLoad();
+    if(json?.data?.projColors && typeof json.data.projColors === 'object'){
+      const updated = Object.keys(json.data.projColors).filter(k=>
+        PROJ_COLORS[k] !== json.data.projColors[k]
+      );
+      if(updated.length > 0){
+        Object.assign(PROJ_COLORS, json.data.projColors);
+        renderRoster(); // re-render roster cells with new colors
+        console.log('☁️ Colors synced — updated:', updated.join(', '));
+      }
+    }
+  } catch(e){ /* silent */ }
+}, 2 * 60 * 1000); // every 2 minutes
 
 // Auto-sync from Sheets every 5 minutes in background
 setInterval(() => {
@@ -5873,46 +5930,178 @@ setInterval(() => {
 // Corrected build: removed duplicate CO filter functions and added config fallback support.
 
 // ─── ROSTER CHANGE HISTORY ───────────────────────────────────────────────────
-const _rosterHistory = []; // [{ts, who, key, from, to}]
-const ROSTER_HISTORY_LIMIT = 100;
+const _rosterHistory = []; // session only
+const ROSTER_HISTORY_LIMIT = 200;
+let _persistedHistory = [];   // loaded from cloud
+let _historyDirty = false;    // needs saving
+let _currentUser = localStorage.getItem('zlc_username') || 'Unknown';
 
 function rosterHistoryPush(id, key, fromVal, toVal) {
   const item = getItem(id,'staff')||getItem(id,'extra')||getItem(id,'equip')||getItem(id,'rental');
   const name = item?.name || id;
-  _rosterHistory.push({
-    ts: new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'}),
+  const entry = {
+    ts:   new Date().toISOString(),
+    user: _currentUser,
     name, key,
-    from: fromVal || '(empty)',
-    to:   toVal   || '(empty)',
-  });
-  if (_rosterHistory.length > ROSTER_HISTORY_LIMIT) _rosterHistory.shift();
+    from: String(fromVal || '(empty)').slice(0,40),
+    to:   String(toVal   || '(empty)').slice(0,40),
+  };
+  _rosterHistory.push(entry);
+  if(_rosterHistory.length > ROSTER_HISTORY_LIMIT) _rosterHistory.shift();
+  // Also push to persisted log
+  _persistedHistory.unshift(entry); // newest first
+  if(_persistedHistory.length > 500) _persistedHistory.pop(); // keep last 500
+  _historyDirty = true;
+  // Debounced cloud save
+  clearTimeout(_historyTimer);
+  _historyTimer = setTimeout(saveHistoryToCloud, 5000);
+}
+let _historyTimer = null;
+
+async function saveHistoryToCloud(){
+  if(!_historyDirty || !APPS_SCRIPT_URL) return;
+  try {
+    await jsonpSave('rosterHistory', _persistedHistory.slice(0, 500));
+    _historyDirty = false;
+  } catch(e) { console.warn('History save failed:', e); }
 }
 
-function showRosterHistory() {
-  if (!_rosterHistory.length) { toast('No roster changes this session'); return; }
-  const rows = [..._rosterHistory].reverse().slice(0,30).map(h =>
-    `<tr style="font-size:11px">
-      <td style="padding:5px 8px;color:var(--text3);white-space:nowrap">${h.ts}</td>
-      <td style="padding:5px 8px;font-weight:600">${h.name}</td>
-      <td style="padding:5px 8px;color:var(--text2)">${h.key}</td>
-      <td style="padding:5px 8px;color:var(--red)">${String(h.from).slice(0,20)}</td>
-      <td style="padding:5px 8px;color:var(--green)">${String(h.to).slice(0,20)}</td>
-    </tr>`).join('');
-  showModal(`<div class="modal-title">Roster change history (this session)</div>
-    <div style="font-size:11px;color:var(--text3);margin-bottom:10px">Last ${Math.min(_rosterHistory.length,30)} changes</div>
-    <div class="tbl-wrap" style="max-height:400px;overflow-y:auto">
-      <table style="width:100%;border-collapse:collapse">
-        <thead><tr style="font-size:10px;color:var(--text2)">
-          <th style="padding:5px 8px;text-align:left">Time</th>
-          <th style="padding:5px 8px;text-align:left">Person</th>
-          <th style="padding:5px 8px;text-align:left">Date</th>
-          <th style="padding:5px 8px;text-align:left">From</th>
-          <th style="padding:5px 8px;text-align:left">To</th>
-        </tr></thead>
-        <tbody>${rows}</tbody>
-      </table>
+async function loadHistoryFromCloud(){
+  if(!APPS_SCRIPT_URL) return;
+  try {
+    const json = await jsonpLoad();
+    if(json?.data?.rosterHistory && Array.isArray(json.data.rosterHistory)){
+      _persistedHistory = json.data.rosterHistory;
+      console.log('☁️ Loaded', _persistedHistory.length, 'history entries');
+    }
+  } catch(e) { console.warn('History load failed:', e); }
+}
+
+function showRosterHistory(filter='') {
+  // Combine session + persisted history, deduplicate by ts
+  const seenTs = new Set();
+  const allHistory = [..._persistedHistory];
+  _rosterHistory.forEach(h => { if(!seenTs.has(h.ts)){ allHistory.unshift(h); seenTs.add(h.ts); } });
+
+  let filtered = allHistory;
+  if(filter) filtered = allHistory.filter(h =>
+    h.name?.toLowerCase().includes(filter.toLowerCase()) ||
+    h.user?.toLowerCase().includes(filter.toLowerCase()) ||
+    h.to?.toLowerCase().includes(filter.toLowerCase()) ||
+    h.from?.toLowerCase().includes(filter.toLowerCase()) ||
+    h.key?.includes(filter)
+  );
+
+  // Group by date
+  const byDate = {};
+  filtered.slice(0,200).forEach(h => {
+    const dateKey = h.ts ? new Date(h.ts).toLocaleDateString('en-US',{weekday:'short',month:'short',day:'numeric',year:'numeric'}) : 'Unknown date';
+    if(!byDate[dateKey]) byDate[dateKey] = [];
+    byDate[dateKey].push(h);
+  });
+
+  const groupedRows = Object.entries(byDate).map(([date, entries]) => {
+    const rows = entries.map(h => {
+      const time = h.ts ? new Date(h.ts).toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'}) : h.ts;
+      const isNew   = h.to   && h.to   !== '(empty)';
+      const isBlank = h.from === '(empty)';
+      let badge = '';
+      if(isBlank)        badge = '<span style="font-size:9px;padding:1px 5px;background:rgba(59,125,216,.15);color:#3B7DD8;border-radius:3px;margin-right:4px">NEW</span>';
+      else if(!isNew)    badge = '<span style="font-size:9px;padding:1px 5px;background:rgba(226,75,74,.15);color:#E24B4A;border-radius:3px;margin-right:4px">CLR</span>';
+      else               badge = '<span style="font-size:9px;padding:1px 5px;background:rgba(61,170,110,.15);color:#3DAA6E;border-radius:3px;margin-right:4px">CHG</span>';
+      return `<tr style="font-size:11px;border-bottom:1px solid var(--border)">
+        <td style="padding:5px 8px;color:var(--text3);white-space:nowrap;width:60px">${time}</td>
+        <td style="padding:5px 8px;font-size:10px;color:var(--blue);white-space:nowrap">${h.user||'—'}</td>
+        <td style="padding:5px 8px;font-weight:600">${h.name||'—'}</td>
+        <td style="padding:5px 8px;color:var(--text3);font-size:10px">${h.key||'—'}</td>
+        <td style="padding:5px 8px">${badge}<span style="color:var(--red);text-decoration:${isNew?'line-through':'none'};opacity:${isNew?.6:1}">${(h.from||'').slice(0,18)}</span></td>
+        <td style="padding:5px 8px;color:var(--green);font-weight:${isNew?600:400}">${(h.to||'').slice(0,18)}</td>
+      </tr>`;
+    }).join('');
+    return `<tr><td colspan="6" style="padding:8px 8px 3px;font-size:10px;font-weight:700;color:var(--text3);text-transform:uppercase;letter-spacing:.08em;border-top:2px solid var(--border);background:var(--bg3)">${date} <span style="font-weight:400;opacity:.6">(${entries.length} change${entries.length!==1?'s':''})</span></td></tr>${rows}`;
+  }).join('');
+
+  const totalCount = filtered.length;
+  const totalStored = allHistory.length;
+
+  showModal(`
+    <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px">
+      <div>
+        <div class="modal-title" style="margin-bottom:0">📋 Version History</div>
+        <div style="font-size:11px;color:var(--text3);margin-top:2px">${totalStored} total changes stored · showing ${Math.min(totalCount,200)}</div>
+      </div>
+      <div style="display:flex;gap:6px;align-items:center">
+        <button onclick="exportHistoryCSV()" class="btn btn-sm btn-ghost" style="font-size:11px">⬇ Export CSV</button>
+        <button onclick="clearHistoryConfirm()" class="btn btn-sm btn-ghost" style="font-size:11px;color:var(--red)">🗑 Clear</button>
+      </div>
     </div>
-    <div class="form-actions"><button class="btn btn-primary" onclick="closeModal()">Close</button></div>`, true);
+
+    <!-- Who am I -->
+    <div style="display:flex;align-items:center;gap:8px;padding:8px 10px;background:var(--bg3);border-radius:var(--radius);margin-bottom:12px;font-size:12px">
+      <span>👤 You are:</span>
+      <input id="hist-username" value="${_currentUser}" placeholder="Enter your name"
+        style="flex:1;padding:4px 8px;background:var(--bg4);border:1px solid var(--border2);border-radius:4px;font-size:12px;color:var(--text)"
+        onchange="_currentUser=this.value;localStorage.setItem('zlc_username',this.value);toast('Name saved — will show in future changes')">
+      <span style="font-size:10px;color:var(--text3)">← set your name so others know who made changes</span>
+    </div>
+
+    <!-- Search -->
+    <div style="margin-bottom:10px">
+      <input placeholder="🔍 Search by name, user, project…" id="hist-search"
+        style="width:100%;padding:7px 10px;background:var(--bg3);border:1px solid var(--border2);border-radius:var(--radius);font-size:12px;color:var(--text)"
+        oninput="showRosterHistory(this.value)">
+    </div>
+
+    <!-- Table -->
+    <div style="max-height:440px;overflow-y:auto;border:1px solid var(--border);border-radius:var(--radius)">
+      ${totalStored === 0
+        ? '<div class="empty" style="padding:32px">No history yet — changes will appear here after you edit the roster</div>'
+        : `<table style="width:100%;border-collapse:collapse">
+            <thead style="position:sticky;top:0;background:var(--bg2);z-index:1">
+              <tr style="font-size:10px;color:var(--text2)">
+                <th style="padding:6px 8px;text-align:left">Time</th>
+                <th style="padding:6px 8px;text-align:left">User</th>
+                <th style="padding:6px 8px;text-align:left">Employee</th>
+                <th style="padding:6px 8px;text-align:left">Day</th>
+                <th style="padding:6px 8px;text-align:left">Before</th>
+                <th style="padding:6px 8px;text-align:left">After</th>
+              </tr>
+            </thead>
+            <tbody>${groupedRows || '<tr><td colspan="6" style="padding:20px;text-align:center;color:var(--text3)">No matches</td></tr>'}</tbody>
+          </table>`}
+    </div>
+    <div class="form-actions" style="margin-top:12px">
+      <button class="btn btn-primary" onclick="closeModal()">Close</button>
+    </div>
+  `, true);
+}
+
+function exportHistoryCSV(){
+  const seenTs = new Set();
+  const all = [..._persistedHistory];
+  _rosterHistory.forEach(h => { if(!seenTs.has(h.ts)){ all.unshift(h); seenTs.add(h.ts); } });
+  const rows = [['Timestamp','User','Employee','Day','From','To']];
+  all.forEach(h => {
+    const ts = h.ts ? new Date(h.ts).toLocaleString() : '';
+    rows.push([ts, h.user||'', h.name||'', h.key||'', h.from||'', h.to||'']);
+  });
+  const csv = rows.map(r => r.map(v => `"${String(v).replace(/"/g,'""')}"`).join(',')).join('\n');
+  const blob = new Blob([csv], {type:'text/csv'});
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'ZLC_RosterHistory_' + new Date().toISOString().split('T')[0] + '.csv';
+  a.click();
+  toast('✓ History exported as CSV');
+}
+
+function clearHistoryConfirm(){
+  if(!confirm('Clear ALL history? This cannot be undone.')) return;
+  _persistedHistory = [];
+  _rosterHistory.length = 0;
+  _historyDirty = true;
+  saveHistoryToCloud();
+  closeModal();
+  toast('History cleared');
 }
 
 // ─── GLOBAL SEARCH ───────────────────────────────────────────────────────────
@@ -7029,39 +7218,5 @@ function ganttSaveToCloud() {
       <div style="font-size:10px;color:var(--text3);margin-top:6px;text-align:center">Enter = send · Shift+Enter = new line</div>
     </div>
   </div>
-</body>
-</html>
-
-      <div style="font-size:11px;color:var(--text3)">Budgets · Proposals · Change Orders</div>
-    </div>
-    <div style="display:flex;gap:8px;align-items:center">
-      <span id="est-sync-status" style="font-size:11px;color:var(--text3)"></span>
-      <button class="btn btn-ghost btn-sm" onclick="syncEstimatingProjects()" title="Push active projects from Project Manager to Estimating">
-        🔄 Sync Projects
-      </button>
-      <button class="btn btn-primary btn-sm" onclick="openEstimatingTab()">
-        ↗ Full Screen
-      </button>
-    </div>
-  </div>
-  <iframe id="estimating-frame"
-    src="https://mariazlc23.github.io/zlc-estimator/"
-    style="flex:1;border:none;width:100%"
-    allow="downloads"
-    title="ZLC Estimating System">
-  </iframe>
-  <div id="est-iframe-fallback" style="display:none;flex:1;align-items:center;justify-content:center;flex-direction:column;gap:16px;background:var(--bg)">
-    <div style="font-size:32px">📊</div>
-    <div style="font-size:14px;font-weight:600">ZLC Estimating System</div>
-    <div style="font-size:12px;color:var(--text3);text-align:center;max-width:340px">
-      The estimating system runs as a standalone app.<br>
-      Click below to open it.
-    </div>
-    <button class="btn btn-primary" onclick="openEstimatingTab()">↗ Open Estimating System</button>
-    <div style="font-size:11px;color:var(--text3);margin-top:8px">
-      Or download and open: <a href="#" onclick="downloadEstimating()" style="color:var(--blue)">ZLC_Estimating_System.html</a>
-    </div>
-  </div>
-</div>
 </body>
 </html>
