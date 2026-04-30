@@ -4155,6 +4155,21 @@ function openModal(type,pid,extra){
         <button class="btn btn-primary" onclick="saveOrder()">Save order</button>
       </div>`);
   }
+
+  if(type==='rental'){
+    showModal(`<div class="modal-title">🚜 New Rental</div>
+      <div class="fg"><label>Equipment / Rental name</label>
+        <input id="rental-name" placeholder="e.g. Scissor lift — Cresco" style="font-size:13px"></div>
+      <div class="fg"><label>Company / Vendor</label>
+        <input id="rental-vendor" placeholder="e.g. Cresco, Sunbelt, United Rentals"></div>
+      <div class="fg"><label>Notes</label>
+        <input id="rental-notes" placeholder="e.g. Call 48h ahead, delivery included"></div>
+      <div class="form-actions">
+        <button class="btn" onclick="closeModal()">Cancel</button>
+        <button class="btn btn-primary" onclick="saveRental()">Add Rental</button>
+      </div>`);
+    setTimeout(()=>document.getElementById('rental-name')?.focus(), 50);
+  }
 }
 
 // ─── SAVES ───────────────────────────────────────────────────────────────────
@@ -4340,6 +4355,17 @@ function saveEmp(){
   STAFF.push({id:uid(),name,team,certs,veh:document.getElementById('n-veh').value,a:{},notes:{}});
   saveLocal();closeModal();renderRoster();toast(`${name} added`);
 }
+function saveRental(){
+  const name   = (document.getElementById('rental-name')?.value||'').trim();
+  const vendor = (document.getElementById('rental-vendor')?.value||'').trim();
+  const notes  = (document.getElementById('rental-notes')?.value||'').trim();
+  if(!name){ toast('Equipment name required'); return; }
+  const fullName = vendor ? `${name} — ${vendor}` : name;
+  RENTALS.push({id:'r'+uid(), cat:'Rental', name:fullName, notes_meta:notes, a:{}, notes:{}});
+  saveLocal(); closeModal(); renderRoster();
+  toast(`✓ ${fullName} added to rentals`);
+}
+
 function saveExtraW(){
   const name=document.getElementById('ew-name').value.trim();if(!name){toast('Name required');return;}
   EXTRA.push({id:'ew'+uid(),name,role:'laborer',project:document.getElementById('ew-proj').value,a:{},notes:{}});
@@ -4496,7 +4522,7 @@ async function _doCloudSave(rosterData){
     // Start with chunks of 2 staff. If any chunk exceeds the URL limit,
     // split down to 1 per chunk automatically. This handles employees with
     // many assigned days whose serialized data grows large.
-    const LIMIT = 12000; // stay safely under Apps Script's 14KB URL cap
+    const LIMIT = 13000; // Apps Script safe URL cap (conservative)
     function makeChunks(arr, size){
       const out = [];
       for(let i=0;i<arr.length;i+=size) out.push(arr.slice(i,i+size));
@@ -4521,7 +4547,7 @@ async function _doCloudSave(rosterData){
     for(let i=0; i<chunks.length; i++){
       try{
         await jsonpSave('sc'+i, chunks[i]);
-        if(i < chunks.length-1) await delay(400); // reduced from 600ms for faster saves
+        if(i < chunks.length-1) await delay(300);
       } catch(chunkErr){
         failedChunks.push({i, err: String(chunkErr)});
         console.error('☁️ Chunk sc'+i+' failed:', chunkErr);
@@ -4548,7 +4574,10 @@ async function _doCloudSave(rosterData){
     }
 
     // ── Save metadata: chunk count + extra/equip/rentals ─────────────────
-    await jsonpSave('scMeta', {
+    // Save metadata with retry
+    let _metaSaved = false;
+    for(let _mr=0; _mr<2 && !_metaSaved; _mr++){
+      try { await jsonpSave('scMeta', {
       chunkCount: chunks.length,
       extra:      c.extra,
       equip:      c.equip,
@@ -4556,7 +4585,12 @@ async function _doCloudSave(rosterData){
       extraList:  c.extraList,
       staffList:  c.staffList,
     });
-    await delay(300);
+        _metaSaved = true;
+      } catch(_me) {
+        console.warn('scMeta save attempt', _mr+1, 'failed:', _me);
+        if(_mr === 0) await delay(1000); // wait 1s before retry
+      }
+    }    await delay(300);
 
     // ── Save orders ───────────────────────────────────────────────────────
     await jsonpSave('orders', DB.openOrders||[]);
@@ -5607,7 +5641,7 @@ If info is missing, ask: How many days? Which cost code? Pour day?`;
     const response=await fetch(
       `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${geminiKey}`,
       {method:'POST',headers:{'Content-Type':'application/json'},
-       body:JSON.stringify({contents:messages,generationConfig:{maxOutputTokens:1000,temperature:0.7}})}
+       body:JSON.stringify({contents:messages,generationConfig:{maxOutputTokens:4096,temperature:0.7}})}
     );
     if(!response.ok){
       const err=await response.json();
