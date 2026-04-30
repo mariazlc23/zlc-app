@@ -5565,10 +5565,30 @@ async function sendAIMessage(){
     const nxtWorkDays = new Date(nextD.getFullYear(), nextD.getMonth()+1, 0).getDate();
     const nxtAssigned = nxtKeys.filter(k=>{const v=e.a[k]; return v&&v!=='OFF';}).length;
     const nxtAvail    = Math.max(0, nxtWorkDays - nxtAssigned - nxtOff);
+    // Build day-by-day free days for next month (so AI knows exact available dates)
+    const daysInNext = new Date(nextD.getFullYear(), nextD.getMonth()+1, 0).getDate();
+    const freeDaysNext = [];
+    for(let d=1; d<=daysInNext; d++){
+      const dt = new Date(nextD.getFullYear(), nextD.getMonth(), d);
+      const dow = dt.getDay();
+      if(dow===0||dow===6) continue; // skip weekends
+      const k = `${nextD.getFullYear()}-${nextD.getMonth()+1}-${d}`;
+      const v = e.a?.[k];
+      if(!v || v==='') freeDaysNext.push(d); // free day
+    }
+    const DOW_SHORT=['Su','Mo','Tu','We','Th','Fr','Sa'];
+    // Format free days as date ranges for compactness
+    const freeStr = freeDaysNext.length > 0
+      ? freeDaysNext.slice(0,10).map(d=>{
+          const dt=new Date(nextD.getFullYear(),nextD.getMonth(),d);
+          return `${DOW_SHORT[dt.getDay()]}${d}`;
+        }).join(',') + (freeDaysNext.length>10?`...+${freeDaysNext.length-10}more`:'')
+      : 'fully booked';
+
     return [
       `• ${e.name} | ${e.role||'laborer'} | Team: ${e.team||'?'} | Certs: ${(e.certs||[]).join(',')||'none'}`,
       `  ${curMonthLabel}: ${curProjs.join(', ')||'unassigned'}${curOff?' | '+curOff+' days OFF':''}`,
-      `  ${nextMonthLabel}: ${nxtProjs.join(', ')||'unassigned'}${nxtOff?' | '+nxtOff+' days OFF':''}${nxtAvail>0?' | ~'+nxtAvail+' days available':''}`,
+      `  ${nextMonthLabel}: ${nxtProjs.join(', ')||'unassigned'} | Free days: ${freeStr}`,
     ].join('\n');
   }).join('\n');
 
@@ -5657,7 +5677,7 @@ If info is missing, ask: How many days? Which cost code? Pour day?`;
   }
   try{
     // Google Gemini API — FREE tier: 1500 requests/day, no credit card needed
-    const messages=[{role:'user',parts:[{text:systemPrompt}]},{role:'model',parts:[{text:'Entendido. Soy el asistente de scheduling de ZLC Corp. ¿En qué puedo ayudarte?'}]}];
+    const messages=[{role:'user',parts:[{text:systemPrompt}]},{role:'model',parts:[{text:`Understood. I'm the ZLC Corp scheduling assistant. I can see the full roster for ${curMonthLabel} AND ${nextMonthLabel}. What would you like to plan?`}]}];
     // Add conversation history
     _aiChatHistory.slice(0,-1).forEach(m=>{
       messages.push({role:m.role==='user'?'user':'model',parts:[{text:m.content}]});
