@@ -886,44 +886,17 @@ async function sheetRead(gid) {
 }
 
 // Fetch a specific sheet by its gid using the spreadsheets.get + batchGet approach
-async // Cache sheet names so we only call the meta API once per session
-let _sheetNameCache = {};
-
-async function _loadSheetNameCache() {
-  if(Object.keys(_sheetNameCache).length > 0) return; // already loaded
-  const metaRes = await fetch(
-    `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}?key=${API_KEY}&fields=sheets.properties`
-  );
-  if(!metaRes.ok) throw new Error(`Meta API ${metaRes.status}`);
-  const meta = await metaRes.json();
-  (meta.sheets||[]).forEach(s => {
-    _sheetNameCache[String(s.properties.sheetId)] = s.properties.title;
-  });
-}
-
 async function fetchSheetByGid(gid) {
-  // Load name cache once (shared across all 4 parallel calls)
-  await _loadSheetNameCache();
-  const sheetName = _sheetNameCache[String(gid)];
-  if(!sheetName) throw new Error(`Sheet gid ${gid} not found in cache`);
+  // First get sheet names to map gid → name
+  const metaRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}?key=${API_KEY}&fields=sheets.properties`);
+  if (!metaRes.ok) throw new Error(`Meta API ${metaRes.status}: ${await metaRes.text()}`);
+  const meta = await metaRes.json();
+  const sheet = (meta.sheets||[]).find(s => String(s.properties.sheetId) === String(gid));
+  if (!sheet) throw new Error(`Sheet gid ${gid} not found`);
+  const sheetName = sheet.properties.title;
   const encName = encodeURIComponent(sheetName);
-  const valRes = await fetch(
-    `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/${encName}!A:Z?key=${API_KEY}&valueRenderOption=FORMATTED_VALUE&dateTimeRenderOption=FORMATTED_STRING`
-  );
-  if(!valRes.ok) {
-    const errText = await valRes.text();
-    // On quota error, wait and retry once
-    if(valRes.status === 429) {
-      await new Promise(r => setTimeout(r, 3000));
-      const retry = await fetch(
-        `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/${encName}!A:Z?key=${API_KEY}&valueRenderOption=FORMATTED_VALUE&dateTimeRenderOption=FORMATTED_STRING`
-      );
-      if(!retry.ok) throw new Error(`Values API 429 quota exceeded`);
-      const val = await retry.json();
-      return { name: sheetName, rows: val.values || [] };
-    }
-    throw new Error(`Values API ${valRes.status}: ${errText.slice(0,100)}`);
-  }
+  const valRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/${encName}!A:Z?key=${API_KEY}&valueRenderOption=FORMATTED_VALUE&dateTimeRenderOption=FORMATTED_STRING`);
+  if (!valRes.ok) throw new Error(`Values API ${valRes.status}: ${await valRes.text()}`);
   const val = await valRes.json();
   return { name: sheetName, rows: val.values || [] };
 }
@@ -1457,18 +1430,7 @@ async function syncFromSheets(silent=false) {
     syncStatus = 'error';
     updateSyncBadge();
     console.error('Sync error:', err);
-    const msg = err.message || String(err);
-    if(msg.includes('429')) {
-      toast('⚠ Google Sheets quota exceeded — will retry in 10 min', 5000);
-      // Clear name cache so next sync gets fresh data
-      _sheetNameCache = {};
-    } else if(msg.includes('403')) {
-      toast('⚠ Sheets access denied — check API key permissions', 5000);
-    } else if(msg.includes('Failed to fetch') || msg.includes('NetworkError')) {
-      toast('⚠ Network error — check internet connection', 4000);
-    } else {
-      toast('⚠ Sync error: ' + msg.slice(0,60), 5000);
-    }
+    toast('Could not load from Sheets — check API key & sharing settings');
   }
 }
 
@@ -2264,8 +2226,7 @@ function dashApproveCO(pid,cid,num){
   const co=p.cos.find(c=>c.id===cid||c.num===num);
   if(co){
     co.status='Approved';
-    co.approvalDate = co.approvalDate || todate();
-    p.history.push({date:todate(),text:num+' APPROVED — '+fmt(co.value||0),type:'approved'});
+    p.history.push({date:todate(),text:num+' APPROVED',type:'approved'});
     // Add CO man-days to project cost code
     if((co.foremanDays||0)+(co.laborerDays||0)>0 && co.code){
       const tc=p.codes.find(c=>c.code===co.code);
@@ -2275,23 +2236,8 @@ function dashApproveCO(pid,cid,num){
       }
     }
   }
-  // 1. Update CO status in "Change Orders / Work Orders" sheet
-  sheetWrite('updateCO',{projectId:pid,num,newStatus:'Approved',approvalDate:(co&&co.approvalDate)||todate()});
-  // 2. Add approved CO value to "Whole data Won / Approved" sheet (THIS was missing!)
-  const _now=new Date();
-  const _coApprJ=`1/${_now.getMonth()+1}/${_now.getFullYear()}`;
-  if(co && co.value){
-    sheetWrite('addApprovedCO',{
-      projectId:pid,
-      projectName:p.name,
-      coNum:num,
-      desc:co.desc||'',
-      code:co.code||'',
-      value:co.value||0,
-      approvalDate:_coApprJ,
-    });
-  }
-  saveLocal();renderCOList();renderOverview();toast('✓ '+num+' approved → Sheet updated');
+  sheetWrite('updateCO',{projectId:pid,num,newStatus:'Approved'});
+  saveLocal();renderCOList();renderOverview();toast('✓ '+num+' approved');
 }
 function dashCancelCO(pid,cid,num){
   const p=DB.projects.find(x=>x.id===pid);if(!p)return;
@@ -6339,13 +6285,8 @@ function pasteFromClipboard(anchorItemId, anchorDateKey, anchorType) {
     const tKey = `${targetDate.getFullYear()}-${targetDate.getMonth()+1}-${targetDate.getDate()}`;
 
     const snap = {
-      a:         item.a?.[tKey]         || null,
-      notes:     item.notes?.[tKey]     || null,
-      wh:        item.wh?.[tKey]        || null,
-      cc:        item.cc?.[tKey]        || null,
-      co:        item.co?.[tKey]        || null,
-      confirmed: item.confirmed?.[tKey],
-      pour:      item.pour?.[tKey]      || null,
+      a: item.a?.[tKey], notes: item.notes?.[tKey], wh: item.wh?.[tKey],
+      cc: item.cc?.[tKey], co: item.co?.[tKey], confirmed: item.confirmed?.[tKey], pour: item.pour?.[tKey],
     };
     snapshots.push({ itemId: tgtId, dateKey: tKey, type: tgtType, ...snap });
     // Push to undo stack so Ctrl+Z works
@@ -6436,7 +6377,7 @@ setInterval(async ()=>{
 // Auto-sync from Sheets every 5 minutes in background
 setInterval(() => {
   syncFromSheets(true); // true = silent mode
-}, 10 * 60 * 1000);
+}, 5 * 60 * 1000);
 
 // Show loading screen while cloud data loads
 (async () => {
@@ -6738,46 +6679,29 @@ function _updateUndoBtn() {
 
 function performUndo() {
   const entry = _undoStack.pop();
-  if (!entry) { toast('Nothing to undo'); _updateUndoBtn(); return; }
-
+  if (!entry) { toast('Nothing to undo'); return; }
   const item = getItem(entry.id, entry.type)
     || getItem(entry.id,'staff') || getItem(entry.id,'extra')
     || getItem(entry.id,'equip') || getItem(entry.id,'rental');
-  if (!item) { toast('Nothing to undo'); _updateUndoBtn(); return; }
-
-  const key = entry.key;
-  const s   = entry.snapshot;
-
-  // Helper: restore a field — if snapshot had a value, set it; if not, delete it
-  const restore = (obj, field) => {
-    if(!obj) return;
-    if(s[field]) obj[key] = s[field];
-    else         delete obj[key];
-  };
-
-  if(!item.a)         item.a         = {};
-  if(!item.notes)     item.notes     = {};
-  if(!item.wh)        item.wh        = {};
-  if(!item.cc)        item.cc        = {};
-  if(!item.co)        item.co        = {};
-  if(!item.confirmed) item.confirmed = {};
-  if(!item.pour)      item.pour      = {};
-
-  restore(item.a,         'a');
-  restore(item.notes,     'notes');
-  restore(item.wh,        'wh');
-  restore(item.cc,        'cc');
-  restore(item.co,        'co');
-  restore(item.pour,      'pour');
-
-  // confirmed is a boolean — restore it explicitly
-  if('confirmed' in s) item.confirmed[key] = s.confirmed;
-  else                 delete item.confirmed[key];
-
-  saveLocal();
-  renderRoster();
+  if (!item) return;
+  const { key, snapshot: s } = entry;
+  if (!item.a) item.a = {};
+  if (!item.notes) item.notes = {};
+  if (!item.wh) item.wh = {};
+  if (!item.cc) item.cc = {};
+  if (!item.co) item.co = {};
+  if (!item.confirmed) item.confirmed = {};
+  if (!item.pour) item.pour = {};
+  s.a         !== undefined ? (s.a ? item.a[key]=s.a : delete item.a[key]) : null;
+  s.notes     !== undefined ? (s.notes ? item.notes[key]=s.notes : delete item.notes[key]) : null;
+  s.wh        !== undefined ? (s.wh ? item.wh[key]=s.wh : delete item.wh[key]) : null;
+  s.cc        !== undefined ? (s.cc ? item.cc[key]=s.cc : delete item.cc[key]) : null;
+  s.co        !== undefined ? (s.co ? item.co[key]=s.co : delete item.co[key]) : null;
+  s.pour      !== undefined ? (s.pour ? item.pour[key]=s.pour : delete item.pour[key]) : null;
+  if (s.confirmed !== undefined) item.confirmed[key] = s.confirmed;
+  saveLocal(); renderRoster();
   _updateUndoBtn();
-  toast('↩ Undone: ' + key);
+  toast('↩ Undone');
 }
 
 // Keyboard shortcut: Ctrl+Z / Cmd+Z
