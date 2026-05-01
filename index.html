@@ -886,44 +886,17 @@ async function sheetRead(gid) {
 }
 
 // Fetch a specific sheet by its gid using the spreadsheets.get + batchGet approach
-async // Cache sheet names so we only call the meta API once per session
-let _sheetNameCache = {};
-
-async function _loadSheetNameCache() {
-  if(Object.keys(_sheetNameCache).length > 0) return; // already loaded
-  const metaRes = await fetch(
-    `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}?key=${API_KEY}&fields=sheets.properties`
-  );
-  if(!metaRes.ok) throw new Error(`Meta API ${metaRes.status}`);
-  const meta = await metaRes.json();
-  (meta.sheets||[]).forEach(s => {
-    _sheetNameCache[String(s.properties.sheetId)] = s.properties.title;
-  });
-}
-
 async function fetchSheetByGid(gid) {
-  // Load name cache once (shared across all 4 parallel calls)
-  await _loadSheetNameCache();
-  const sheetName = _sheetNameCache[String(gid)];
-  if(!sheetName) throw new Error(`Sheet gid ${gid} not found in cache`);
+  // First get sheet names to map gid → name
+  const metaRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}?key=${API_KEY}&fields=sheets.properties`);
+  if (!metaRes.ok) throw new Error(`Meta API ${metaRes.status}: ${await metaRes.text()}`);
+  const meta = await metaRes.json();
+  const sheet = (meta.sheets||[]).find(s => String(s.properties.sheetId) === String(gid));
+  if (!sheet) throw new Error(`Sheet gid ${gid} not found`);
+  const sheetName = sheet.properties.title;
   const encName = encodeURIComponent(sheetName);
-  const valRes = await fetch(
-    `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/${encName}!A:Z?key=${API_KEY}&valueRenderOption=FORMATTED_VALUE&dateTimeRenderOption=FORMATTED_STRING`
-  );
-  if(!valRes.ok) {
-    const errText = await valRes.text();
-    // On quota error, wait and retry once
-    if(valRes.status === 429) {
-      await new Promise(r => setTimeout(r, 3000));
-      const retry = await fetch(
-        `https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/${encName}!A:Z?key=${API_KEY}&valueRenderOption=FORMATTED_VALUE&dateTimeRenderOption=FORMATTED_STRING`
-      );
-      if(!retry.ok) throw new Error(`Values API 429 quota exceeded`);
-      const val = await retry.json();
-      return { name: sheetName, rows: val.values || [] };
-    }
-    throw new Error(`Values API ${valRes.status}: ${errText.slice(0,100)}`);
-  }
+  const valRes = await fetch(`https://sheets.googleapis.com/v4/spreadsheets/${SHEET_ID}/values/${encName}!A:Z?key=${API_KEY}&valueRenderOption=FORMATTED_VALUE&dateTimeRenderOption=FORMATTED_STRING`);
+  if (!valRes.ok) throw new Error(`Values API ${valRes.status}: ${await valRes.text()}`);
   const val = await valRes.json();
   return { name: sheetName, rows: val.values || [] };
 }
@@ -1407,7 +1380,15 @@ async function syncFromSheets(silent=false) {
     manualProjects.forEach(mp => {
       if (!DB.projects.find(p => p.id === mp.id)) DB.projects.push(mp);
     });
-
+    // Also merge manual projects from cloud (created by OTHER users on other PCs)
+    if(d.manualProjects && Array.isArray(d.manualProjects)){
+      d.manualProjects.forEach(mp=>{
+        if(!DB.projects.find(p=>p.id===mp.id) && !DB._deletedProjects?.includes(mp.id)){
+          DB.projects.push(mp);
+          console.log('☁️ Loaded manual project from cloud:', mp.id);
+        }
+      });
+    }
 
     // Restore foremanDays/laborerDays from localStorage for all projects
     try {
@@ -1449,18 +1430,7 @@ async function syncFromSheets(silent=false) {
     syncStatus = 'error';
     updateSyncBadge();
     console.error('Sync error:', err);
-    const msg = err.message || String(err);
-    if(msg.includes('429')) {
-      toast('⚠ Google Sheets quota exceeded — will retry in 10 min', 5000);
-      // Clear name cache so next sync gets fresh data
-      _sheetNameCache = {};
-    } else if(msg.includes('403')) {
-      toast('⚠ Sheets access denied — check API key permissions', 5000);
-    } else if(msg.includes('Failed to fetch') || msg.includes('NetworkError')) {
-      toast('⚠ Network error — check internet connection', 4000);
-    } else {
-      toast('⚠ Sync error: ' + msg.slice(0,60), 5000);
-    }
+    toast('Could not load from Sheets — check API key & sharing settings');
   }
 }
 
@@ -6428,7 +6398,7 @@ setInterval(async ()=>{
 // Auto-sync from Sheets every 5 minutes in background
 setInterval(() => {
   syncFromSheets(true); // true = silent mode
-}, 10 * 60 * 1000);
+}, 5 * 60 * 1000);
 
 // Show loading screen while cloud data loads
 (async () => {
@@ -7401,7 +7371,7 @@ function ganttDownloadPDF() {
 </head>
 <body>
   ${svgContent}
-  \x3cscript>
+  <script>
     window.onload = function() { setTimeout(function(){ window.print(); }, 400); };
   <\/script>
 
