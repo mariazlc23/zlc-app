@@ -903,6 +903,81 @@ async function fetchSheetByGid(gid) {
 // Apps Script doGet returns the callback with the result
 let _zlcCbIdx = 0;
 
+// Retries sheetWrite up to maxRetries times with 2s delay between attempts
+async function _sheetWriteWithRetry(action, payload, maxRetries=3){
+  for(let attempt=1; attempt<=maxRetries; attempt++){
+    try{
+      await new Promise((resolve, reject)=>{
+        if(!APPS_SCRIPT_URL){ reject(new Error('No Apps Script URL')); return; }
+        const cbName = '_zlcCb' + (++_zlcCbIdx);
+        const body   = JSON.stringify({action, ...payload});
+        const encoded= encodeURIComponent(body);
+        const url    = APPS_SCRIPT_URL + '?data=' + encoded + '&callback=' + cbName;
+
+        let done = false;
+        window[cbName] = function(result){
+          done = true;
+          delete window[cbName];
+          const el = document.getElementById('_zlc_script_'+cbName); if(el) el.remove();
+          if(result && result.error) reject(new Error(result.error));
+          else resolve(result);
+        };
+        const script = document.createElement('script');
+        script.id    = '_zlc_script_'+cbName;
+        script.src   = url;
+        script.onerror = ()=>{ done=true; delete window[cbName]; script.remove(); reject(new Error('Network error')); };
+        document.head.appendChild(script);
+        setTimeout(()=>{ if(!done){ delete window[cbName]; const el=document.getElementById('_zlc_script_'+cbName); if(el)el.remove(); reject(new Error('Timeout')); }}, 12000);
+      });
+      // Success
+      console.log(`✓ sheetWrite '${action}' succeeded on attempt ${attempt}`);
+      const log = document.getElementById('write-log');
+      if(log){ log.style.display='block'; log.textContent=`✓ ${action} saved to Sheet`; log.style.color='#3DAA6E'; }
+      if(attempt > 1) toast(`✓ Saved to Google Sheet (attempt ${attempt})`);
+      return; // done
+    } catch(err){
+      console.warn(`sheetWrite '${action}' attempt ${attempt} failed:`, err.message);
+      if(attempt < maxRetries){
+        await new Promise(r=>setTimeout(r, 2000 * attempt)); // wait 2s, 4s...
+      } else {
+        // All retries failed — queue for retry when online
+        _queueFailedSheetWrite(action, payload);
+        showBanner(`⚠️ Could not save to Google Sheet after ${maxRetries} attempts. Will retry when connection improves.`, 'error');
+        toast(`✗ Sheet save failed — queued for retry`, 5000);
+      }
+    }
+  }
+}
+
+// Queue failed writes and retry periodically
+let _failedSheetQueue = JSON.parse(localStorage.getItem('zlc_failed_sheet_queue')||'[]');
+function _queueFailedSheetWrite(action, payload){
+  _failedSheetQueue.push({action, payload, ts: new Date().toISOString(), attempts:0});
+  localStorage.setItem('zlc_failed_sheet_queue', JSON.stringify(_failedSheetQueue.slice(-20)));
+}
+async function _retryFailedSheetWrites(){
+  if(!_failedSheetQueue.length || !APPS_SCRIPT_URL || !navigator.onLine) return;
+  const pending = [..._failedSheetQueue];
+  _failedSheetQueue = [];
+  localStorage.removeItem('zlc_failed_sheet_queue');
+  for(const item of pending){
+    try{
+      await _sheetWriteWithRetry(item.action, item.payload, 1);
+      console.log('✓ Retried queued write:', item.action);
+    } catch(e){
+      _failedSheetQueue.push(item); // put back if still failing
+    }
+  }
+  if(_failedSheetQueue.length){
+    localStorage.setItem('zlc_failed_sheet_queue', JSON.stringify(_failedSheetQueue));
+  } else if(pending.length > 0){
+    toast('✓ Pending Google Sheet writes completed');
+  }
+}
+// Retry queued writes every 5 minutes and on page focus
+setInterval(_retryFailedSheetWrites, 5*60*1000);
+window.addEventListener('focus', ()=>setTimeout(_retryFailedSheetWrites, 1000));
+
 function sheetWrite(action, payload) {
   if (!APPS_SCRIPT_URL) { console.warn('No Apps Script URL'); return; }
   const log     = document.getElementById('write-log');
@@ -1302,6 +1377,15 @@ async function syncFromSheets(silent=false) {
     manualProjects.forEach(mp => {
       if (!DB.projects.find(p => p.id === mp.id)) DB.projects.push(mp);
     });
+    // Also merge manual projects from cloud (created by OTHER users on other PCs)
+    if(d.manualProjects && Array.isArray(d.manualProjects)){
+      d.manualProjects.forEach(mp=>{
+        if(!DB.projects.find(p=>p.id===mp.id) && !DB._deletedProjects?.includes(mp.id)){
+          DB.projects.push(mp);
+          console.log('☁️ Loaded manual project from cloud:', mp.id);
+        }
+      });
+    }
 
     // Restore foremanDays/laborerDays from localStorage for all projects
     try {
@@ -2425,10 +2509,17 @@ function renderSub(p,tab){
     const base=bv(p); const byCode={};
     (p.cos||[]).filter(c=>c.status==='Approved').forEach(c=>{byCode[c.code]=(byCode[c.code]||0)+c.value;});
     let out='';
-    if(!(p.codes||[]).length){
+    if(!(p.codes||[]).length && !Object.keys(byCode).length){
       return '<div class="empty">No cost codes — edit this project to add codes.</div>';
     }
-    (p.codes||[]).forEach(c=>{
+    // Merge p.codes with any CO-added codes not yet in p.codes
+    const allCodes=[...(p.codes||[])];
+    Object.keys(byCode).forEach(coCode=>{
+      if(!allCodes.find(c=>c.code===coCode)){
+        allCodes.push({code:coCode,value:0,foremanDays:0,laborerDays:0,_fromCO:true});
+      }
+    });
+    allCodes.forEach(c=>{
       const extra=byCode[c.code]||0,tot=c.value+extra,pct=base>0?Math.round((c.value/base)*100):0,col=CODE_COLORS[c.code]||'#888';
       // Include CO man-days for this cost code
       const coCOs=(p.cos||[]).filter(co=>co.code===c.code&&/approv/i.test(co.status||'')&&((co.foremanDays||0)+(co.laborerDays||0)>0));
@@ -4212,9 +4303,15 @@ function saveProject(){
   const yr=new Date().getFullYear();
   const mi=moIdx[month]??new Date().getMonth();
   const fullDate=`${mi+1}/1/${yr}`;
-  DB.projects.push({id:num,name,pm,pmEmail,address,client,codes,month,year:yr,status,notes:'',cos:[],rfis:[],subs:[],history:[{date:todate(),text:`Project created — ${name}`,type:'created'}],_manual:true,superInfo,acctInfo});
-  sheetWrite('addProject',{id:num,name,pm,pmEmail,address,client,codes,month:fullDate,status,superInfo,acctInfo});
-  saveLocal();closeModal();toast(`Project ${num} saved → Sheets`);renderProjTable();renderOverview();selProject(num);
+  const newProj = {id:num,name,pm,pmEmail,address,client,codes,month,year:yr,status,notes:'',cos:[],rfis:[],subs:[],history:[{date:todate(),text:`Project created — ${name}`,type:'created'}],_manual:true,superInfo,acctInfo};
+  DB.projects.push(newProj);
+  saveLocal(); // saves to cloud (roster cloud) so all users see it immediately
+  renderProjTable();renderOverview();selProject(num);
+  closeModal();
+  toast(`✓ Project ${num} created — syncing to Google Sheet…`);
+
+  // Write to Google Sheet — with retry on failure
+  _sheetWriteWithRetry('addProject',{id:num,name,pm,pmEmail,address,client,codes,month:fullDate,status,superInfo,acctInfo}, 3);
 }
 function saveEditProject(pid){
   const p=DB.projects.find(x=>x.id===pid);
@@ -4319,7 +4416,11 @@ function saveCO(){
   console.log('addCO payload:', JSON.stringify(coPayload));
   sheetWrite('addCO', coPayload);
   saveLocal();
-  closeModal();toast(`${num} saved → Sheets`);if(selProj===pid){subTab='cos';renderDetail();}renderOverview();
+  closeModal();
+  // Refresh codes tab to show new code in SOV breakdown
+  if(selProj===pid){subTab='codes';renderDetail();}
+  renderOverview();
+  toast(`${num} saved → Sheets · Code ${code} ${!p.codes.find(c=>c.code===code)?'added to SOV':'updated'}`);
 }
 function saveRFI(){
   const pid=document.getElementById('f-proj').value,num=document.getElementById('f-rnum').value.trim(),desc=document.getElementById('f-rdesc').value.trim(),dr=document.getElementById('f-rdate').value;
@@ -4977,9 +5078,12 @@ function getItemRole(item) {
 // role: 'foreman', 'laborer', or undefined (count all)
 function countAssignedDays(projId, code, role) {
   let count = 0;
+  const proj = DB.projects.find(p => p.id === projId);
+  const projCodes = (proj?.codes || []).map(c => c.code);
+  const isOnlyCode = projCodes.length === 1; // if only 1 cost code, count all days to it
   const allItems = [...STAFF, ...EXTRA, ...EQUIP, ...RENTALS];
+
   allItems.forEach(item => {
-    // If role filter specified, check item role
     if(role) {
       const itemRole = getItemRole(item);
       if(itemRole !== role) return;
@@ -4988,10 +5092,14 @@ function countAssignedDays(projId, code, role) {
       if(!asgn) return;
       const pids = getAsgnPids(asgn);
       if(!pids.includes(projId)) return;
-      // Check cost code if specified
       if(code) {
         const cc = item.cc?.[key];
-        if(cc !== code) return;
+        // Count if: cell is tagged with this code, OR no code tag and this is the only/first code
+        if(cc && cc !== code) return; // tagged with different code — skip
+        if(!cc && !isOnlyCode) {
+          // No tag: distribute to first code only (avoid double-counting)
+          if(code !== projCodes[0]) return;
+        }
       }
       count++;
     });
@@ -5942,6 +6050,13 @@ function resetCellColor(pid){
   saveLocal();
   markModalDirty();
   toast('↺ Color reset to default');
+}
+
+function updateCOTotalDays(){
+  const f = +(document.getElementById('f-co-foreman')?.value||0);
+  const l = +(document.getElementById('f-co-laborer')?.value||0);
+  const t = document.getElementById('f-co-total-days');
+  if(t) t.value = (f+l) + ' days';
 }
 
 // ─── INIT ─────────────────────────────────────────────────────────────────────
