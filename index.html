@@ -642,6 +642,9 @@ body.select-mode .day-cell:hover { filter: brightness(1.15) !important; }
   <div class="page-header">
     <div><div class="page-title">Staff roster</div><div class="page-subtitle">Monthly schedule by team, equipment &amp; rentals</div></div>
     <div class="toolbar">
+      <button id="undo-btn" class="btn btn-ghost btn-sm" onclick="performUndo()" title="Undo last change (Ctrl+Z)" style="gap:5px;opacity:.5" disabled>
+        ↩ Undo
+      </button>
       <button class="btn btn-primary btn-sm" onclick="openModal('assign')">Assign project</button>
       
       <div style="position:relative;display:inline-block" id="util-wrap">
@@ -667,7 +670,7 @@ body.select-mode .day-cell:hover { filter: brightness(1.15) !important; }
           <button onclick="loadFromCloud();closeUtilMenu()" style="width:100%;padding:9px 14px;border:none;background:none;cursor:pointer;font-size:12px;color:var(--text);text-align:left;display:flex;align-items:center;gap:8px" onmouseover="this.style.background='var(--bg2)'" onmouseout="this.style.background='none'">↺ Sync from cloud</button>
         </div>
       </div>
-      <button id="select-mode-btn" class="btn btn-ghost btn-sm" onclick="toggleSelectMode()" title="Select multiple cells to delete">☑ Select</button>
+      
       <button class="btn btn-ghost btn-sm" onclick="toggleAIChat()" title="AI scheduling assistant" style="background:linear-gradient(135deg,#185FA5,#6E2C7B);color:#fff;border:none">🤖 AI Schedule</button>
     </div>
   </div>
@@ -1709,7 +1712,7 @@ function goTab(n,b){
   if(b) b.classList.add('active');
   if(n==='dashboard'){if(activeDash==='analytics')renderAnalytics();else renderOverview();}
   if(n==='projects'){renderProjTable();if(selProj)renderDetail();}
-  if(n==='roster')renderRoster();
+  if(n==='roster'){renderRoster(); setTimeout(_updateUndoBtn, 100);}
   if(n==='schedule')initScheduleView();
 }
 
@@ -2223,7 +2226,8 @@ function dashApproveCO(pid,cid,num){
   const co=p.cos.find(c=>c.id===cid||c.num===num);
   if(co){
     co.status='Approved';
-    p.history.push({date:todate(),text:num+' APPROVED',type:'approved'});
+    co.approvalDate = co.approvalDate || todate();
+    p.history.push({date:todate(),text:num+' APPROVED — '+fmt(co.value||0),type:'approved'});
     // Add CO man-days to project cost code
     if((co.foremanDays||0)+(co.laborerDays||0)>0 && co.code){
       const tc=p.codes.find(c=>c.code===co.code);
@@ -2233,8 +2237,23 @@ function dashApproveCO(pid,cid,num){
       }
     }
   }
-  sheetWrite('updateCO',{projectId:pid,num,newStatus:'Approved'});
-  saveLocal();renderCOList();renderOverview();toast('✓ '+num+' approved');
+  // 1. Update CO status in "Change Orders / Work Orders" sheet
+  sheetWrite('updateCO',{projectId:pid,num,newStatus:'Approved',approvalDate:(co&&co.approvalDate)||todate()});
+  // 2. Add approved CO value to "Whole data Won / Approved" sheet (THIS was missing!)
+  const _now=new Date();
+  const _coApprJ=`1/${_now.getMonth()+1}/${_now.getFullYear()}`;
+  if(co && co.value){
+    sheetWrite('addApprovedCO',{
+      projectId:pid,
+      projectName:p.name,
+      coNum:num,
+      desc:co.desc||'',
+      code:co.code||'',
+      value:co.value||0,
+      approvalDate:_coApprJ,
+    });
+  }
+  saveLocal();renderCOList();renderOverview();toast('✓ '+num+' approved → Sheet updated');
 }
 function dashCancelCO(pid,cid,num){
   const p=DB.projects.find(x=>x.id===pid);if(!p)return;
@@ -3178,7 +3197,7 @@ function renderRoster(){
       // Build title from project names only
       const titlePids = getAsgnPids(asgn);
       const titleTxt = titlePids.map(pid=>{ const p=DB.projects.find(x=>x.id===pid); return p?`${pid} — ${p.name}`:pid; }).join(', ');
-      return`<td class="day-cell${isT?' today-col':''}${wk?' cell-weekend':''}${!conf&&asgn?' cell-conflict':''}" style="position:relative;background:${bg0||'var(--bg3)'};${wk?'filter:brightness(0.97)':''}" draggable="${asgn?'true':'false'}" data-sel-key="${item.id}|${key}|${type}" onclick="_bulkPasteActive?bulkPasteToCell('${item.id}','${key}','${type}'):_selectMode?bulkToggleCell('${item.id}','${key}','${type}',this):clickCell('${item.id}','${key}','${d}','${type}')" ondragstart="!_selectMode&&rosterDragStart('${item.id}','${key}','${type}',this)" ondragend="rosterDragEnd(this)" ondragover="rosterDragOver(event,this)" ondrop="rosterDrop(event,'${item.id}','${key}','${type}',this)" title="${(titleTxt+(note?' — '+note:'')).replace(/"/g,'&quot;')}${!conf?' ⚠️ NOT CONFIRMED':''}"><div style="display:flex;flex-direction:column;gap:1px;align-items:center">${inner}</div>${noteDot}${warnIcon}</td>`;
+      return`<td class="day-cell${isT?' today-col':''}${wk?' cell-weekend':''}${!conf&&asgn?' cell-conflict':''}" style="position:relative;background:${bg0||'var(--bg3)'};${wk?'filter:brightness(0.97)':''}" draggable="${asgn?'true':'false'}" data-sel-key="${item.id}|${key}|${type}" onclick="rosterCellClick(event,'${item.id}','${key}','${d}','${type}',this)" ondblclick="rosterCellDblClick('${item.id}','${key}','${d}','${type}')" ondragstart="rosterDragStart('${item.id}','${key}','${type}',this)" ondragend="rosterDragEnd(this)" ondragover="rosterDragOver(event,this)" ondrop="rosterDrop(event,'${item.id}','${key}','${type}',this)" title="${(titleTxt+(note?' — '+note:'')).replace(/"/g,'&quot;')}${!conf?' ⚠️ NOT CONFIRMED':''}"><div style="display:flex;flex-direction:column;gap:1px;align-items:center">${inner}</div>${noteDot}${warnIcon}</td>`;
     }
     const bg=asgn==='NEW'?'#FFEBEE':asgn?(()=>{ const pid=getAsgnFirstPid(asgn); return pc(pid||asgn); })():'';
     const tc=bg?ptc(bg):'';
@@ -3193,7 +3212,7 @@ function renderRoster(){
       return asgn.split('-')[1]||asgn.slice(0,4);
     })();
     const cellBorder=!conf&&asgn?'outline:2px solid #E24B4A;':'';
-    return`<td class="day-cell${isT?' today-col':''}${wk?' cell-weekend':''}${!conf&&asgn?' cell-conflict':''}" style="position:relative;${bg?`background:${bg};`:''}${wk&&!bg?'background:rgba(0,0,0,0.02);':''}" draggable="${asgn?'true':'false'}" data-sel-key="${item.id}|${key}|${type}" onclick="_bulkPasteActive?bulkPasteToCell('${item.id}','${key}','${type}'):_selectMode?bulkToggleCell('${item.id}','${key}','${type}',this):clickCell('${item.id}','${key}','${d}','${type}')" ondragstart="!_selectMode&&rosterDragStart('${item.id}','${key}','${type}',this)" ondragend="rosterDragEnd(this)" ondragover="rosterDragOver(event,this)" ondrop="rosterDrop(event,'${item.id}','${key}','${type}',this)" title="${titleText.replace(/"/g,'&quot;')}${!conf?' ⚠️ NOT CONFIRMED':''}">${asgn?`<div class="day-block" style="color:${asgn==='NEW'?'#C62828':tc}">${dispLabel}</div>`:''}${noteDot}${warnIcon}${pourIcon}</td>`;
+    return`<td class="day-cell${isT?' today-col':''}${wk?' cell-weekend':''}${!conf&&asgn?' cell-conflict':''}" style="position:relative;${bg?`background:${bg};`:''}${wk&&!bg?'background:rgba(0,0,0,0.02);':''}" draggable="${asgn?'true':'false'}" data-sel-key="${item.id}|${key}|${type}" onclick="rosterCellClick(event,'${item.id}','${key}','${d}','${type}',this)" ondblclick="rosterCellDblClick('${item.id}','${key}','${d}','${type}')" ondragstart="rosterDragStart('${item.id}','${key}','${type}',this)" ondragend="rosterDragEnd(this)" ondragover="rosterDragOver(event,this)" ondrop="rosterDrop(event,'${item.id}','${key}','${type}',this)" title="${titleText.replace(/"/g,'&quot;')}${!conf?' ⚠️ NOT CONFIRMED':''}">${asgn?`<div class="day-block" style="color:${asgn==='NEW'?'#C62828':tc}">${dispLabel}</div>`:''}${noteDot}${warnIcon}${pourIcon}</td>`;
   }).join('');
 
   // Render a row — returns '' if day mode and no assignment/note
@@ -5250,6 +5269,12 @@ function bulkDeleteSelected() {
       confirmed: item.confirmed?.[dateKey],
       pour:      item.pour?.[dateKey],
     });
+    // Push to undo stack BEFORE clearing
+    undoPush({ id: itemId, key: dateKey, type, snapshot: {
+      a: item.a?.[dateKey], notes: item.notes?.[dateKey], wh: item.wh?.[dateKey],
+      cc: item.cc?.[dateKey], co: item.co?.[dateKey],
+      confirmed: item.confirmed?.[dateKey], pour: item.pour?.[dateKey],
+    }});
     // Clear the cell
     if (item.a)         delete item.a[dateKey];
     if (item.notes)     delete item.notes[dateKey];
@@ -5261,7 +5286,7 @@ function bulkDeleteSelected() {
   });
 
   saveLocal();
-  toggleSelectMode(); // exit select mode
+  _clearCellSelection(); // clear selection after delete
   renderRoster();
 
   // Undo support
@@ -5659,6 +5684,20 @@ async function sendAIMessage(){
   const nextMonthLabel = nextD.toLocaleDateString('en-US',{month:'long',year:'numeric'});
   const curMonthLabel  = nowD.toLocaleDateString('en-US',{month:'long',year:'numeric'});
 
+  // Build Gantt summary for AI context
+  const ganttSummary = (() => {
+    const entries = Object.entries(GANTT.tasks||{});
+    if(!entries.length) return 'No Gantt data yet.';
+    return entries.map(([pid, tasks])=>{
+      const proj = DB.projects.find(p=>p.id===pid);
+      const taskStr = (tasks||[]).map(t=>{
+        const dates = Object.keys(t.cells||{}).sort().slice(0,3);
+        return `  - ${t.name} (${dates.length} days${dates.length?' starting '+dates[0]:''})`; 
+      }).join('\n');
+      return `${pid} — ${proj?.name||''}:\n${taskStr||'  (no tasks yet)'}`;
+    }).join('\n');
+  })();
+
   const staffInfo=STAFF.map(e=>{
     const allKeys = Object.keys(e.a||{});
     // Current month assignments
@@ -5747,15 +5786,25 @@ Each person shows: this month's projects, next month's projects, and estimated a
 ${staffInfo}
 
 == YOUR JOB ==
-Help Maria (project manager) plan the weekly crew schedule.
+Help Maria (project manager) plan the weekly crew schedule AND the Gantt chart.
 When suggesting assignments be specific: name + project ID + days (Mon/Tue/Wed/Thu/Fri) + cost code.
 Never assign the same person to two projects on the same day (except Francisco/Driver 2).
 Always pair a foreman with their team unless asked otherwise.
 If a project needs concrete (004), ask what day the pour is scheduled.
-You can see assignments for ${curMonthLabel} AND ${nextMonthLabel}.
+You can see assignments for \${curMonthLabel} AND \${nextMonthLabel}.
 When planning, check both months to avoid double-booking.
 Respond in English. Be concise. Use a table when suggesting a week or multi-week schedule.
-If info is missing, ask: How many days? Which cost code? Pour day?`;
+If info is missing, ask: How many days? Which cost code? Pour day?
+
+== GANTT CHART ==
+The Gantt chart shows project tasks on a calendar timeline. Each project has task rows.
+Current Gantt: \${ganttSummary}
+
+To fill the Gantt when asked, respond with this EXACT format after your explanation:
+\`\`\`gantt-fill
+{"projId":"26-010","tasks":[{"name":"001 Hard Demo","dates":["2026-5-1","2026-5-2","2026-5-5"]},{"name":"004 Concrete","dates":["2026-5-6","2026-5-7"]}]}
+\`\`\`
+Rules: skip weekends unless asked, use cost code names (001 Hard Demo, 002 Soft Demo, 003 Excavation, 004 Concrete, 005 Utilities, 006 Paving), dates format is YYYY-M-D.`;
 
   const geminiKey = localStorage.getItem('zlc_gemini_key') || window.ZLC_GEMINI_KEY || '';
   if(!geminiKey){
@@ -6057,6 +6106,253 @@ function updateCOTotalDays(){
   const l = +(document.getElementById('f-co-laborer')?.value||0);
   const t = document.getElementById('f-co-total-days');
   if(t) t.value = (f+l) + ' days';
+}
+
+
+// ─── AI GANTT FILL ────────────────────────────────────────────────────────────
+function applyAIGanttFill(cmd) {
+  const { projId, tasks } = cmd;
+  if(!projId || !tasks || !tasks.length){ toast('⚠️ Invalid Gantt data from AI'); return; }
+
+  if(!GANTT.tasks[projId]) GANTT.tasks[projId] = [];
+  let added = 0;
+
+  tasks.forEach((t, idx) => {
+    // Check if task with same name already exists
+    let task = GANTT.tasks[projId].find(x => x.name === t.name);
+    if(!task){
+      task = {
+        id: 't' + (++GANTT.nextId),
+        name: t.name,
+        color: ganttTaskColor(GANTT.tasks[projId].length),
+        cells: {},
+      };
+      GANTT.tasks[projId].push(task);
+    }
+    // Add the date cells
+    (t.dates || []).forEach(dateStr => {
+      // dateStr could be "2026-5-4" — normalize to proper key
+      const parts = dateStr.split('-').map(Number);
+      const key = parts[0] + '-' + parts[1] + '-' + parts[2];
+      task.cells[key] = true;
+      added++;
+    });
+  });
+
+  // Save and refresh Gantt if it's open
+  ganttSaveToCloud();
+  if(GANTT.projId === projId && document.getElementById('gantt-body')){
+    ganttRender();
+  }
+
+  // Show confirm message with action button
+  const msgDiv = document.getElementById('ai-chat-messages');
+  if(msgDiv){
+    const confirmDiv = document.createElement('div');
+    confirmDiv.style.cssText = 'background:rgba(61,170,110,.1);border:1px solid rgba(61,170,110,.3);border-radius:8px;padding:10px 12px;font-size:12px;margin-top:4px';
+    confirmDiv.innerHTML = `
+      <div style="font-weight:600;color:#3DAA6E;margin-bottom:6px">✓ Gantt updated — ${tasks.length} tasks, ${added} day slots filled</div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap">
+        <button onclick="openGanttForProj('${projId}')" 
+          style="padding:4px 10px;background:#3DAA6E;border:none;border-radius:4px;color:#fff;font-size:11px;cursor:pointer;font-weight:600">
+          📅 Open Gantt for ${projId}
+        </button>
+        <button onclick="undoAIGanttFill('${projId}',${JSON.stringify(tasks.map(t=>t.name))})"
+          style="padding:4px 10px;background:none;border:1px solid #3DAA6E;border-radius:4px;color:#3DAA6E;font-size:11px;cursor:pointer">
+          ↩ Undo
+        </button>
+      </div>`;
+    msgDiv.appendChild(confirmDiv);
+    msgDiv.scrollTop = msgDiv.scrollHeight;
+  }
+  toast('✓ Gantt filled by AI — ' + tasks.length + ' tasks for ' + projId);
+}
+
+function openGanttForProj(projId){
+  // Switch to roster view and open Gantt for this project
+  GANTT.projId = projId;
+  goTab('roster', document.querySelector('[onclick*="roster"]'));
+  setTimeout(()=>{
+    const btn = document.querySelector('[onclick="openGanttView(this)"]');
+    if(btn) openGanttView(btn);
+    // Select the project in gantt dropdown
+    const sel = document.getElementById('gantt-proj-select');
+    if(sel){ sel.value = projId; ganttSelectProject(projId); }
+  }, 300);
+}
+
+function undoAIGanttFill(projId, taskNames){
+  if(!GANTT.tasks[projId]) return;
+  GANTT.tasks[projId] = GANTT.tasks[projId].filter(t => !taskNames.includes(t.name));
+  ganttSaveToCloud();
+  if(GANTT.projId === projId && document.getElementById('gantt-body')) ganttRender();
+  toast('↩ AI Gantt fill undone');
+}
+
+
+// ═══════════════════════════════════════════════════════════════
+// ROSTER CELL INTERACTION — new model:
+//   single click  → select / shift-click for range
+//   double click  → open assignment modal
+//   Ctrl+C/V/Z    → copy / paste / undo
+// ═══════════════════════════════════════════════════════════════
+
+let _lastClickedCell = null; // {itemId, key, type, el} — anchor for shift-select
+
+function rosterCellClick(event, itemId, key, day, type, el) {
+  // If paste mode active → paste here
+  if(_bulkPasteActive) { bulkPasteToCell(itemId, key, type); return; }
+
+  // Shift+click → select range from _lastClickedCell to this cell
+  if(event.shiftKey && _lastClickedCell) {
+    _rangeSelect(_lastClickedCell, {itemId, key, type, el});
+    return;
+  }
+
+  // Ctrl/Cmd+click → toggle this cell on/off without clearing others
+  if(event.ctrlKey || event.metaKey) {
+    _toggleCellSelect(itemId, key, type, el);
+    _lastClickedCell = {itemId, key, type, el};
+    rosterSelectCell(itemId, key, type);
+    return;
+  }
+
+  // Plain click → clear selection, select only this cell
+  _clearCellSelection();
+  _toggleCellSelect(itemId, key, type, el);
+  _lastClickedCell = {itemId, key, type, el};
+  rosterSelectCell(itemId, key, type); // track for Ctrl+C
+}
+
+function rosterCellDblClick(itemId, key, day, type) {
+  // Double click → open assignment modal
+  _clearCellSelection();
+  clickCell(itemId, key, day, type);
+}
+
+function _toggleCellSelect(itemId, key, type, el) {
+  const cellKey = itemId + '|' + key + '|' + type;
+  if(_selectedCells.has(cellKey)) {
+    _selectedCells.delete(cellKey);
+    if(el) el.classList.remove('cell-selected');
+  } else {
+    _selectedCells.set(cellKey, {itemId, dateKey:key, type});
+    if(el) el.classList.add('cell-selected');
+  }
+  updateBulkBar();
+}
+
+function _clearCellSelection() {
+  _selectedCells.clear();
+  document.querySelectorAll('.cell-selected').forEach(el => el.classList.remove('cell-selected'));
+  updateBulkBar();
+}
+
+function _rangeSelect(from, to) {
+  // Select all cells between from and to for the SAME row (same itemId+type)
+  // or across multiple rows if different items
+  if(from.itemId === to.itemId && from.type === to.type) {
+    // Same row — select date range
+    const allCells = [...document.querySelectorAll(
+      `[data-id="${from.itemId}"][data-key]`
+    )];
+    const keys = allCells.map(el => el.dataset.key).sort();
+    const fromIdx = keys.indexOf(from.key);
+    const toIdx   = keys.indexOf(to.key);
+    if(fromIdx < 0 || toIdx < 0) return;
+    const [lo, hi] = fromIdx <= toIdx ? [fromIdx, toIdx] : [toIdx, fromIdx];
+    allCells.forEach(el => {
+      const kIdx = keys.indexOf(el.dataset.key);
+      if(kIdx >= lo && kIdx <= hi) {
+        const cellKey = from.itemId + '|' + el.dataset.key + '|' + from.type;
+        _selectedCells.set(cellKey, {itemId:from.itemId, dateKey:el.dataset.key, type:from.type});
+        el.classList.add('cell-selected');
+      }
+    });
+  } else {
+    // Different rows — just toggle the target cell
+    _toggleCellSelect(to.itemId, to.key, to.type, to.el);
+  }
+  updateBulkBar();
+}
+
+
+// ── Direct paste from clipboard (called by Ctrl+V) ───────────────────────────
+function pasteFromClipboard(anchorItemId, anchorDateKey, anchorType) {
+  if(!_bulkClipboard || !_bulkClipboard.length) {
+    toast('Nothing to paste — copy cells first with Ctrl+C'); return;
+  }
+
+  const parts    = anchorDateKey.split('-').map(Number);
+  const startMs  = new Date(parts[0], parts[1]-1, parts[2]).getTime();
+  const srcIds   = [...new Set(_bulkClipboard.map(c => c.itemId))];
+  const isCrossPersonPaste = srcIds.length === 1 && srcIds[0] !== anchorItemId;
+
+  let pasted = 0;
+  const snapshots = [];
+
+  _bulkClipboard.forEach(({itemId: srcId, type: srcType, relDays, data}) => {
+    const tgtId   = isCrossPersonPaste ? anchorItemId : srcId;
+    const tgtType = isCrossPersonPaste ? anchorType   : srcType;
+    const item    = getItem(tgtId, tgtType);
+    if(!item) return;
+
+    const targetDate = new Date(startMs + relDays * 86400000);
+    const tKey = `${targetDate.getFullYear()}-${targetDate.getMonth()+1}-${targetDate.getDate()}`;
+
+    const snap = {
+      a:         item.a?.[tKey]         || null,
+      notes:     item.notes?.[tKey]     || null,
+      wh:        item.wh?.[tKey]        || null,
+      cc:        item.cc?.[tKey]        || null,
+      co:        item.co?.[tKey]        || null,
+      confirmed: item.confirmed?.[tKey],
+      pour:      item.pour?.[tKey]      || null,
+    };
+    snapshots.push({ itemId: tgtId, dateKey: tKey, type: tgtType, ...snap });
+    // Push to undo stack so Ctrl+Z works
+    undoPush({ id: tgtId, key: tKey, type: tgtType, snapshot: snap });
+
+    if(!item.a)         item.a         = {};
+    if(!item.notes)     item.notes     = {};
+    if(!item.wh)        item.wh        = {};
+    if(!item.cc)        item.cc        = {};
+    if(!item.co)        item.co        = {};
+    if(!item.confirmed) item.confirmed = {};
+    if(!item.pour)      item.pour      = {};
+
+    if(data.a !== undefined)     item.a[tKey]         = data.a;     else delete item.a[tKey];
+    if(data.notes !== undefined) item.notes[tKey]     = data.notes; else delete item.notes[tKey];
+    if(data.wh !== undefined)    item.wh[tKey]        = data.wh;    else delete item.wh[tKey];
+    if(data.cc !== undefined)    item.cc[tKey]        = data.cc;    else delete item.cc[tKey];
+    if(data.co !== undefined)    item.co[tKey]        = data.co;    else delete item.co[tKey];
+    if(data.pour !== undefined)  item.pour[tKey]      = data.pour;  else delete item.pour[tKey];
+    item.confirmed[tKey] = data.confirmed !== undefined ? data.confirmed : true;
+    pasted++;
+  });
+
+  if(pasted === 0) { toast('Nothing pasted — check selection'); return; }
+
+  _clearCellSelection();
+  saveLocal();
+  renderRoster();
+
+  const label = isCrossPersonPaste
+    ? `✓ Pasted ${pasted} cell${pasted!==1?'s':''} to new row`
+    : `✓ Pasted ${pasted} cell${pasted!==1?'s':''}`;
+
+  showUndo(label + ' — Undo?', () => {
+    snapshots.forEach(s => {
+      const item = getItem(s.itemId, s.type); if(!item) return;
+      if(s.a !== undefined)         item.a[s.dateKey]         = s.a;         else if(item.a)         delete item.a[s.dateKey];
+      if(s.notes !== undefined)     item.notes[s.dateKey]     = s.notes;     else if(item.notes)     delete item.notes[s.dateKey];
+      if(s.cc !== undefined)        item.cc[s.dateKey]        = s.cc;        else if(item.cc)         delete item.cc[s.dateKey];
+      if(s.pour !== undefined)      item.pour[s.dateKey]      = s.pour;      else if(item.pour)       delete item.pour[s.dateKey];
+      if(item.confirmed) item.confirmed[s.dateKey] = s.confirmed;
+    });
+    saveLocal(); renderRoster(); toast('↩ Paste undone');
+  });
+  toast(label);
 }
 
 // ─── INIT ─────────────────────────────────────────────────────────────────────
@@ -6378,37 +6674,72 @@ function updateCOBadge() {
 
 // ─── UNDO ──────────────────────────────────────────────────────────────────────
 const _undoStack = [];
-const UNDO_LIMIT = 10;
+const UNDO_LIMIT = 50;
 
 function undoPush(entry) {
   _undoStack.push(entry);
   if (_undoStack.length > UNDO_LIMIT) _undoStack.shift();
+  _updateUndoBtn();
+}
+
+function _updateUndoBtn() {
+  const btn = document.getElementById('undo-btn');
+  if(!btn) return;
+  if(_undoStack.length > 0) {
+    btn.disabled = false;
+    btn.style.opacity = '1';
+    const last = _undoStack[_undoStack.length-1];
+    const proj = last?.snapshot?.a || '';
+    btn.title = `Undo: ${last?.key || ''} ${proj ? '('+proj+')' : ''} (Ctrl+Z)`;
+  } else {
+    btn.disabled = true;
+    btn.style.opacity = '.4';
+    btn.title = 'Nothing to undo';
+  }
 }
 
 function performUndo() {
   const entry = _undoStack.pop();
-  if (!entry) { toast('Nothing to undo'); return; }
+  if (!entry) { toast('Nothing to undo'); _updateUndoBtn(); return; }
+
   const item = getItem(entry.id, entry.type)
     || getItem(entry.id,'staff') || getItem(entry.id,'extra')
     || getItem(entry.id,'equip') || getItem(entry.id,'rental');
-  if (!item) return;
-  const { key, snapshot: s } = entry;
-  if (!item.a) item.a = {};
-  if (!item.notes) item.notes = {};
-  if (!item.wh) item.wh = {};
-  if (!item.cc) item.cc = {};
-  if (!item.co) item.co = {};
-  if (!item.confirmed) item.confirmed = {};
-  if (!item.pour) item.pour = {};
-  s.a         !== undefined ? (s.a ? item.a[key]=s.a : delete item.a[key]) : null;
-  s.notes     !== undefined ? (s.notes ? item.notes[key]=s.notes : delete item.notes[key]) : null;
-  s.wh        !== undefined ? (s.wh ? item.wh[key]=s.wh : delete item.wh[key]) : null;
-  s.cc        !== undefined ? (s.cc ? item.cc[key]=s.cc : delete item.cc[key]) : null;
-  s.co        !== undefined ? (s.co ? item.co[key]=s.co : delete item.co[key]) : null;
-  s.pour      !== undefined ? (s.pour ? item.pour[key]=s.pour : delete item.pour[key]) : null;
-  if (s.confirmed !== undefined) item.confirmed[key] = s.confirmed;
-  saveLocal(); renderRoster();
-  toast('↩ Undone');
+  if (!item) { toast('Nothing to undo'); _updateUndoBtn(); return; }
+
+  const key = entry.key;
+  const s   = entry.snapshot;
+
+  // Helper: restore a field — if snapshot had a value, set it; if not, delete it
+  const restore = (obj, field) => {
+    if(!obj) return;
+    if(s[field]) obj[key] = s[field];
+    else         delete obj[key];
+  };
+
+  if(!item.a)         item.a         = {};
+  if(!item.notes)     item.notes     = {};
+  if(!item.wh)        item.wh        = {};
+  if(!item.cc)        item.cc        = {};
+  if(!item.co)        item.co        = {};
+  if(!item.confirmed) item.confirmed = {};
+  if(!item.pour)      item.pour      = {};
+
+  restore(item.a,         'a');
+  restore(item.notes,     'notes');
+  restore(item.wh,        'wh');
+  restore(item.cc,        'cc');
+  restore(item.co,        'co');
+  restore(item.pour,      'pour');
+
+  // confirmed is a boolean — restore it explicitly
+  if('confirmed' in s) item.confirmed[key] = s.confirmed;
+  else                 delete item.confirmed[key];
+
+  saveLocal();
+  renderRoster();
+  _updateUndoBtn();
+  toast('↩ Undone: ' + key);
 }
 
 // Keyboard shortcut: Ctrl+Z / Cmd+Z
@@ -6420,11 +6751,26 @@ document.addEventListener('keydown', e => {
     e.preventDefault(); performUndo(); return;
   }
 
+  // Escape — clear selection
+  if (e.key === 'Escape') {
+    if(_selectedCells.size > 0) { _clearCellSelection(); e.preventDefault(); return; }
+  }
+
+  // Delete / Backspace — delete selected cells
+  if ((e.key === 'Delete' || e.key === 'Backspace') && _selectedCells.size > 0 && !modal) {
+    e.preventDefault(); bulkDeleteSelected(); return;
+  }
+
   // Block other shortcuts when modal is open
   if (modal) return;
-  // Ctrl+C — Copy selected roster cell DATA
+  // Ctrl+C — Copy selected cells
   if ((e.ctrlKey || e.metaKey) && e.key === 'c') {
-    if (_rosterSelected) {
+    e.preventDefault();
+    // If multi-cell selection exists, use it
+    if(_selectedCells.size > 0) {
+      bulkCopySelected();
+    } else if(_rosterSelected) {
+      // Single cell fallback
       const { id, key, type } = _rosterSelected;
       const item = getItem(id, type)
         || getItem(id,'staff') || getItem(id,'extra')
@@ -6441,27 +6787,34 @@ document.addEventListener('keydown', e => {
         };
         const proj = item.a?.[key] || '(empty)';
         toast('📋 Copied: ' + (proj === '(empty)' ? 'empty cell' : proj));
-        e.preventDefault();
       }
     } else {
-      toast('Click a cell first, then Ctrl+C to copy');
+      toast('Click a cell first to select, then Ctrl+C to copy');
     }
   }
-  // Ctrl+V — Paste to selected roster cell
+  // Ctrl+V — Paste to selected cells
   if ((e.ctrlKey || e.metaKey) && e.key === 'v') {
-    if (_rosterClipboard && _rosterSelected) {
+    e.preventDefault();
+    if(_bulkClipboard && _bulkClipboard.length > 0) {
+      // Have multi-cell clipboard — need a destination anchor
+      if(_selectedCells.size > 0) {
+        const first = [..._selectedCells.values()][0];
+        pasteFromClipboard(first.itemId, first.dateKey, first.type);
+      } else if(_rosterSelected) {
+        pasteFromClipboard(_rosterSelected.id, _rosterSelected.key, _rosterSelected.type);
+      } else {
+        // Show paste mode — click a cell to paste
+        _bulkPasteActive = true;
+        document.querySelectorAll('.ic:not(.sticky-col)').forEach(td => {
+          td.style.outline = '2px dashed var(--blue)';
+          setTimeout(() => td.style.outline = '', 3000);
+        });
+        toast('📋 Click the cell where you want to paste (top-left corner)', 3000);
+      }
+    } else if(_rosterClipboard && _rosterSelected) {
       rosterPasteCell(_rosterSelected.id, _rosterSelected.key, _rosterSelected.type);
-      e.preventDefault();
-    } else if (_rosterClipboard && !_rosterSelected) {
-      toast('📋 Ready to paste — click any roster cell to paste into it', 3000);
-      e.preventDefault();
-      // Highlight cells to show paste mode
-      document.querySelectorAll('.ic:not(.sticky-col)').forEach(td => {
-        td.style.outline = '2px dashed var(--blue)';
-        setTimeout(() => td.style.outline = '', 2500);
-      });
     } else {
-      toast('Copy a cell first with Ctrl+C');
+      toast('Select cells then Ctrl+C to copy, then click destination and Ctrl+V');
     }
   }
 });
