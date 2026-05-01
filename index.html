@@ -1380,15 +1380,7 @@ async function syncFromSheets(silent=false) {
     manualProjects.forEach(mp => {
       if (!DB.projects.find(p => p.id === mp.id)) DB.projects.push(mp);
     });
-    // Also merge manual projects from cloud (created by OTHER users on other PCs)
-    if(d.manualProjects && Array.isArray(d.manualProjects)){
-      d.manualProjects.forEach(mp=>{
-        if(!DB.projects.find(p=>p.id===mp.id) && !DB._deletedProjects?.includes(mp.id)){
-          DB.projects.push(mp);
-          console.log('☁️ Loaded manual project from cloud:', mp.id);
-        }
-      });
-    }
+
 
     // Restore foremanDays/laborerDays from localStorage for all projects
     try {
@@ -7371,7 +7363,7 @@ function ganttDownloadPDF() {
 </head>
 <body>
   ${svgContent}
-  <script>
+  \x3cscript>
     window.onload = function() { setTimeout(function(){ window.print(); }, 400); };
   <\/script>
 
