@@ -1524,7 +1524,7 @@ const ALL_ROSTER_ITEMS=()=>[
 ];
 
 let selProj=null, subTab='codes', activeDash='analytics', rosterSect='all';
-let calYear=2026, calMonth=3, calView='month';
+let _now=new Date(), calYear=_now.getFullYear(), calMonth=_now.getMonth(), calView='month';
 let rosterDensity='comfortable';
 let annualChart=null, codeRowIdx=1;
 let assignSelected=new Set();
@@ -2253,13 +2253,14 @@ function dashCancelCO(pid,cid,num){
   const co=p.cos.find(c=>c.id===cid||c.num===num);
   if(co){co.status='Canceled';p.history.push({date:todate(),text:num+' canceled',type:'canceled'});}
   sheetWrite('updateCO',{projectId:pid,num,newStatus:'Canceled'});
-  renderCOList();renderOverview();toast('✕ '+num+' canceled');
+  saveLocal();renderCOList();renderOverview();toast('✕ '+num+' canceled');
 }
 function dashSetCOWork(pid,cid,workVal){
   const sc=(DB.allSheetCOs||[]).find(c=>c.id===cid&&c.pid===pid);if(sc)sc.work=workVal;
   const p=DB.projects.find(x=>x.id===pid);
   if(p){const co=p.cos.find(c=>c.id===cid);if(co)co.work=workVal;}
   sheetWrite('updateCO',{projectId:pid,num:(sc&&sc.num)||'',newStatus:(sc&&sc.status)||'',work:workVal});
+  saveLocal();
   renderCOList();
 }
 function renderOpenItems(){
@@ -2285,8 +2286,8 @@ function renderOpenItems(){
     return`<div style="padding:8px 0;border-bottom:0.5px solid var(--border);font-size:12px"><div style="display:flex;align-items:center;gap:5px;margin-bottom:3px;flex-wrap:wrap"><span class="badge ${it.cls}">${it.t}</span><strong>${it.num}</strong>${xtra}<span style="font-size:10px;color:var(--text3)">${it.pid} — ${it.pname}</span></div><div style="color:var(--text2);font-size:11px;margin-bottom:4px">${it.desc||''}</div><select onchange="${fn}('${it.pid}','${it.id}',this.value)" style="font-size:10px;padding:2px 6px;border-radius:4px;border:0.5px solid var(--border2);background:var(--bg);color:var(--text);cursor:pointer">${so}</select>${it.submitted?` <span style="font-size:10px;color:var(--text3)">Sub: ${it.submitted}</span>`:''}</div>`;
   }).join('');
 }
-function dashUpdateSub(pid,sid,ns){const p=DB.projects.find(x=>x.id===pid);if(!p)return;const s=p.subs.find(x=>x.id===sid);if(!s)return;const o=s.status;s.status=ns;p.history.push({date:todate(),text:s.num+': '+o+' → '+ns,type:'sub'});sheetWrite('updateSub',{projectId:pid,num:s.num,newStatus:ns});toast(s.num+' → '+ns);renderOverview();}
-function dashUpdateRFI(pid,rid,ns){const p=DB.projects.find(x=>x.id===pid);if(!p)return;const r=p.rfis.find(x=>x.id===rid);if(!r)return;const o=r.status;r.status=ns;p.history.push({date:todate(),text:r.num+': '+o+' → '+ns,type:'rfi'});sheetWrite('updateRFI',{projectId:pid,num:r.num,newStatus:ns});toast(r.num+' → '+ns);renderOverview();}
+function dashUpdateSub(pid,sid,ns){const p=DB.projects.find(x=>x.id===pid);if(!p)return;const s=p.subs.find(x=>x.id===sid);if(!s)return;const o=s.status;s.status=ns;p.history.push({date:todate(),text:s.num+': '+o+' → '+ns,type:'sub'});sheetWrite('updateSub',{projectId:pid,num:s.num,newStatus:ns});saveLocal();toast(s.num+' → '+ns);renderOverview();}
+function dashUpdateRFI(pid,rid,ns){const p=DB.projects.find(x=>x.id===pid);if(!p)return;const r=p.rfis.find(x=>x.id===rid);if(!r)return;const o=r.status;r.status=ns;p.history.push({date:todate(),text:r.num+': '+o+' → '+ns,type:'rfi'});sheetWrite('updateRFI',{projectId:pid,num:r.num,newStatus:ns});saveLocal();toast(r.num+' → '+ns);renderOverview();}
 
 function renderOrders(){
   const el = document.getElementById('orders-list');
