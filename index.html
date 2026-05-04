@@ -6432,7 +6432,7 @@ function renderWeeklySchedule() {
       <button class="btn btn-ghost btn-sm" onclick="weeklyNavWeek(1)">Next &#8250;</button>
       <button class="btn btn-ghost btn-sm" onclick="weeklyGoToday()">Today</button>
       <button class="btn btn-sm" style="background:var(--blue);color:#fff;border:none;padding:5px 14px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;margin-left:auto" onclick="printWeeklySchedule()">&#128424; Print</button>
-      <button class="btn btn-ghost btn-sm" onclick="setCV('month',document.querySelector('.vt-btn'))" style="border:1.5px solid var(--border2);font-weight:700" title="Exit weekly view">&#10005; Exit</button>
+      <button class="btn btn-ghost btn-sm" onclick="exitWeeklyView()" style="border:1.5px solid var(--border2);font-weight:700" title="Back to Month view">&#8592; Month view</button>
     </div>`;
 
   let teamsHtml = '';
@@ -6687,6 +6687,17 @@ function weeklyTaskSave(el) {
     el.style.background = 'rgba(61,170,110,.15)';
     setTimeout(() => { el.style.background = ''; }, 600);
   }
+}
+
+
+function exitWeeklyView() {
+  calView = 'month';
+  // Update the active state on the toolbar buttons
+  document.querySelectorAll('.vt-btn').forEach(b => {
+    b.classList.remove('active');
+    if(b.textContent.trim() === 'Month') b.classList.add('active');
+  });
+  renderRoster();
 }
 
 // ─── INIT ─────────────────────────────────────────────────────────────────────
