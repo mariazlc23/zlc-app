@@ -721,6 +721,7 @@ body.select-mode .day-cell:hover { filter: brightness(1.15) !important; }
   </div>
   <div id="pdf-print-header"></div>
   <div class="roster-wrap comfortable" id="roster-wrap"><table class="rt" id="roster-tbl"></table></div>
+  <div id="weekly-view-container" style="display:none;padding:4px 0"></div>
 
   <!-- ── GANTT PANEL ── -->
   <div id="gantt-view">
@@ -2888,7 +2889,19 @@ function saveNameEdit(id, type) {
 }
 function prevM(){calMonth--;if(calMonth<0){calMonth=11;calYear--;}renderRoster();}
 function nextM(){calMonth++;if(calMonth>11){calMonth=0;calYear++;}renderRoster();}
-function setCV(v,b){calView=v;document.querySelectorAll('.vt-btn').forEach(x=>x.classList.remove('active'));b.classList.add('active');renderRoster();}
+function setCV(v,b){
+  // Hide weekly container when switching away
+  const weekly = document.getElementById('weekly-view-container');
+  const roster = document.getElementById('roster-wrap');
+  if(v !== 'weekly'){
+    if(weekly) weekly.style.display = 'none';
+    if(roster) roster.style.display = '';
+  }
+  calView=v;
+  document.querySelectorAll('.vt-btn').forEach(x=>x.classList.remove('active'));
+  if(b) b.classList.add('active');
+  renderRoster();
+}
 function setSect(s,b){rosterSect=s;document.querySelectorAll('.ft').forEach(x=>x.classList.remove('active'));b.classList.add('active');renderRoster();}
 function setRosterProjFilter(pid, toggle){
   // If clicking the already-active filter, clear it (toggle off)
@@ -6414,13 +6427,17 @@ function pasteFromClipboard(anchorItemId, anchorDateKey, anchorType) {
 // ═══════════════════════════════════════════════════════════════
 
 function renderWeeklySchedule() {
-  const container = document.getElementById('roster-wrap');
+  // Show weekly container, hide normal roster table
+  const rosterWrap = document.getElementById('roster-wrap');
+  const container  = document.getElementById('weekly-view-container');
   if(!container) return;
+  if(rosterWrap) rosterWrap.style.display = 'none';
+  container.style.display = 'block';
 
   const weekDays  = getWeekDays();
   const weekStart = weekDays[0];
   const weekEnd   = weekDays[weekDays.length-1];
-  const weekLabel = `${MONTHS[weekStart.m]} ${weekStart.d} \u2013 ${MONTHS[weekEnd.m]} ${weekEnd.d}, ${weekStart.y}`;
+  const weekLabel = `${MONTHS[weekStart.m]} ${weekStart.d} – ${MONTHS[weekEnd.m]} ${weekEnd.d}, ${weekStart.y}`;
   const teamOrder = ['Xolos','Chingones','Lobos','Poblanos','Warriors','Guerreros Z','Aguilas'];
   const DOW_FULL  = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
 
@@ -6442,7 +6459,7 @@ function renderWeeklySchedule() {
     if(!members.length) return;
 
     const teamColor  = TEAM_COLORS[teamName] || '#4A306D';
-    const memberNames = members.map(m => m.name).join(' \u00b7 ');
+    const memberNames = members.map(m => m.name).join(' · ');
 
     // Grid: Day | Project+Code | Daily Task | Crew
     const GRID = 'display:grid;grid-template-columns:100px 190px 1fr 180px;gap:0';
@@ -6450,9 +6467,9 @@ function renderWeeklySchedule() {
     const colHdr = `
       <div style="${GRID};background:rgba(0,0,0,.18);font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:rgba(255,255,255,.8)">
         <div style="padding:5px 10px">Day</div>
-        <div style="padding:5px 10px">Project \u00b7 Code</div>
+        <div style="padding:5px 10px">Project · Code</div>
         <div style="padding:5px 10px">Daily Task + Notes (click to edit)</div>
-        <div style="padding:5px 10px">Crew \u00b7 Equipment</div>
+        <div style="padding:5px 10px">Crew · Equipment</div>
       </div>`;
 
     let rowsHtml = '';
@@ -6492,16 +6509,16 @@ function renderWeeklySchedule() {
         // 2. Pour notes
         const pourNotes = grpMembers.flatMap(m => {
           const p = m.pour?.[key];
-          return p ? [`\u{1F9F1} Pour: ${p}`] : [];
+          return p ? [`🧱 Pour: ${p}`] : [];
         });
         // 3. Warehouse notes (materials, equipment, inspections)
         const whLines = [...new Set(
           grpMembers.flatMap(m => (m.wh?.[key]||'').split('\n').map(s=>s.trim()).filter(Boolean))
         )];
         const whFormatted = whLines.map(n => {
-          if(/inspect/i.test(n)) return `\u{1F6A8} ${n}`;
-          if(/lift|truck|plate|compactor|saw|machine|rental|cresco|sunbelt|shoring/i.test(n)) return `\u{1F528} ${n}`;
-          return `\u{1F4E6} ${n}`;
+          if(/inspect/i.test(n)) return `🚨 ${n}`;
+          if(/lift|truck|plate|compactor|saw|machine|rental|cresco|sunbelt|shoring/i.test(n)) return `🔧 ${n}`;
+          return `📦 ${n}`;
         });
 
         // Combined task text (editable part = just notes; rest shown below)
@@ -6510,7 +6527,7 @@ function renderWeeklySchedule() {
 
         // Cost code
         const cc     = grpMembers.map(m => m.cc?.[key]).find(Boolean) || '';
-        const ccName = cc ? (CODE_NAMES?.[cc] || cc) : '';
+        const ccName = cc ? (CODES_MAP?.[cc] || cc) : '';
 
         // ── Crew column content ───────────────────────────────────────────
         // Laborer names in this group
@@ -6527,7 +6544,7 @@ function renderWeeklySchedule() {
 
         // Who label when split
         const whoLabel = isSplit
-          ? `<div style="font-size:9px;font-weight:700;color:${teamColor};letter-spacing:.03em;margin-bottom:3px">\u21B3 ${grpMembers.map(m=>m.name.split(' ')[0]).join(' + ')}</div>`
+          ? `<div style="font-size:9px;font-weight:700;color:${teamColor};letter-spacing:.03em;margin-bottom:3px">↳ ${grpMembers.map(m=>m.name.split(' ')[0]).join(' + ')}</div>`
           : '';
 
         // ── Cells ─────────────────────────────────────────────────────────
@@ -6535,7 +6552,7 @@ function renderWeeklySchedule() {
           <div style="padding:8px 10px;background:${rowBg};${borderB}font-size:12px;font-weight:${isToday?700:600};color:${isToday?'#7A5800':'var(--text)'}">
             ${DOW_FULL[day.dow]}
             ${isToday ? '<div style="font-size:9px;display:inline-block;background:var(--gold);color:#fff;padding:1px 5px;border-radius:3px;margin-left:4px">TODAY</div>' : ''}
-            ${isSplit ? '<div style="font-size:9px;color:var(--blue);margin-top:2px">\u2195 Split</div>' : ''}
+            ${isSplit ? '<div style="font-size:9px;color:var(--blue);margin-top:2px">↕ Split</div>' : ''}
           </div>` : `<div style="padding:8px 10px;background:${rowBg};${borderB}"></div>`;
 
         const projCell = `
@@ -6562,10 +6579,10 @@ function renderWeeklySchedule() {
           </div>`;
 
         const crewLines = [];
-        if(foremen.length)     crewLines.push(`<span style="font-weight:700">\u{1D54F} ${foremen.join(', ')}</span>`);
+        if(foremen.length)     crewLines.push(`<span style="font-weight:700">X ${foremen.join(', ')}</span>`);
         if(laborers.length)    crewLines.push(laborers.map(n=>`&#128100; ${n}`).join('<br>'));
         if(extraWorkers.length) crewLines.push(extraWorkers.map(n=>`<span style="color:var(--blue)">+${n}</span>`).join('<br>'));
-        if(rentalsToday.length) crewLines.push(rentalsToday.map(n=>`<span style="color:var(--text3)">\u{1F69C} ${n}</span>`).join('<br>'));
+        if(rentalsToday.length) crewLines.push(rentalsToday.map(n=>`<span style="color:var(--text3)">🚛 ${n}</span>`).join('<br>'));
 
         const crewCell = `
           <div style="padding:7px 10px;background:${rowBg};${borderB}font-size:11px;line-height:1.6">
@@ -6691,8 +6708,13 @@ function weeklyTaskSave(el) {
 
 
 function exitWeeklyView() {
+  // Hide weekly container, restore roster table
+  const weekly = document.getElementById('weekly-view-container');
+  const roster = document.getElementById('roster-wrap');
+  if(weekly) weekly.style.display = 'none';
+  if(roster) roster.style.display = '';
   calView = 'month';
-  // Update the active state on the toolbar buttons
+  // Update toolbar active state
   document.querySelectorAll('.vt-btn').forEach(b => {
     b.classList.remove('active');
     if(b.textContent.trim() === 'Month') b.classList.add('active');
