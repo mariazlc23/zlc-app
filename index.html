@@ -6420,147 +6420,187 @@ function renderWeeklySchedule() {
   const weekDays  = getWeekDays();
   const weekStart = weekDays[0];
   const weekEnd   = weekDays[weekDays.length-1];
-  const weekLabel = `${MONTHS[weekStart.m]} ${weekStart.d} – ${MONTHS[weekEnd.m]} ${weekEnd.d}, ${weekStart.y}`;
-
+  const weekLabel = `${MONTHS[weekStart.m]} ${weekStart.d} \u2013 ${MONTHS[weekEnd.m]} ${weekEnd.d}, ${weekStart.y}`;
   const teamOrder = ['Xolos','Chingones','Lobos','Poblanos','Warriors','Guerreros Z','Aguilas'];
-  const allItems  = [...STAFF, ...EXTRA];
+  const DOW_FULL  = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
 
-  // ── Build rows grouped by team ──────────────────────────────────────────────
-  // For each team, for each day, check if members split across projects
-  // If split: show one sub-row per unique project assignment
-  // If together: show one row for the whole team
+  // ── Nav bar ─────────────────────────────────────────────────────────────────
+  const nav = `
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:14px;flex-wrap:wrap">
+      <button class="btn btn-ghost btn-sm" onclick="weeklyNavWeek(-1)">&#8249; Prev</button>
+      <span style="font-weight:700;font-size:15px;text-align:center;min-width:180px">&#128203; ${weekLabel}</span>
+      <button class="btn btn-ghost btn-sm" onclick="weeklyNavWeek(1)">Next &#8250;</button>
+      <button class="btn btn-ghost btn-sm" onclick="weeklyGoToday()">Today</button>
+      <button class="btn btn-sm" style="background:var(--blue);color:#fff;border:none;padding:5px 14px;border-radius:6px;cursor:pointer;font-size:12px;font-weight:600;margin-left:auto" onclick="printWeeklySchedule()">&#128424; Print</button>
+      <button class="btn btn-ghost btn-sm" onclick="setCV('month',document.querySelector('.vt-btn'))" style="border:1.5px solid var(--border2);font-weight:700" title="Exit weekly view">&#10005; Exit</button>
+    </div>`;
 
   let teamsHtml = '';
-  const DOW_FULL = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
-  const GRID = 'display:grid;grid-template-columns:80px 90px 1fr 150px 100px 90px 120px 120px 140px;gap:0';
 
   teamOrder.forEach(teamName => {
-    const members = allItems.filter(e => e.team === teamName);
+    const members = [...STAFF, ...EXTRA].filter(e => e.team === teamName);
     if(!members.length) return;
 
-    // Header row for this team
-    const teamColor = TEAM_COLORS[teamName] || '#4A306D';
-    let dayRowsHtml = '';
+    const teamColor  = TEAM_COLORS[teamName] || '#4A306D';
+    const memberNames = members.map(m => m.name).join(' \u00b7 ');
+
+    // Grid: Day | Project+Code | Daily Task | Crew
+    const GRID = 'display:grid;grid-template-columns:100px 190px 1fr 180px;gap:0';
+
+    const colHdr = `
+      <div style="${GRID};background:rgba(0,0,0,.18);font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:rgba(255,255,255,.8)">
+        <div style="padding:5px 10px">Day</div>
+        <div style="padding:5px 10px">Project \u00b7 Code</div>
+        <div style="padding:5px 10px">Daily Task + Notes (click to edit)</div>
+        <div style="padding:5px 10px">Crew \u00b7 Equipment</div>
+      </div>`;
+
+    let rowsHtml = '';
 
     weekDays.forEach((day, dayIdx) => {
-      const key   = `${day.y}-${day.m+1}-${day.d}`;
-      const isSat = day.dow === 6;
-      const isToday = new Date().toDateString() === new Date(day.y,day.m,day.d).toDateString();
-      const rowBg = isToday ? 'background:rgba(255,243,205,.5);'
-                  : isSat   ? 'background:var(--bg3);'
-                  : dayIdx%2===0 ? 'background:var(--bg);' : 'background:var(--bg2);';
+      const key    = `${day.y}-${day.m+1}-${day.d}`;
+      const isSat  = day.dow === 6;
+      const isToday = new Date().toDateString() === new Date(day.y, day.m, day.d).toDateString();
+      const rowBg  = isToday ? 'rgba(255,243,205,.45)' : isSat ? 'rgba(0,0,0,.04)' : dayIdx%2===0 ? 'transparent' : 'rgba(0,0,0,.025)';
+      const borderB = 'border-bottom:1px solid var(--border);';
 
-      // ── Detect split: group members by their project assignment ───────────
-      const byProject = {}; // projKey → [{member, note, wh, cc}]
-
+      // Group members by project
+      const byProj = {};
       members.forEach(m => {
         const asgn = m.a?.[key] || '';
         const isOff = asgn === 'OFF';
         const pids  = asgn && !isOff ? getAsgnPids(asgn) : [];
-        const projKey = isOff ? '_OFF_' : (pids[0] || '_NONE_');
-
-        if(!byProject[projKey]) byProject[projKey] = [];
-        byProject[projKey].push({
-          member: m,
-          note:   m.notes?.[key] || '',
-          wh:     m.wh?.[key]    || '',
-          cc:     m.cc?.[key]    || '',
-          asgn,
-          pids,
-        });
+        const pk    = isOff ? '__OFF__' : (pids[0] || '__NONE__');
+        if(!byProj[pk]) byProj[pk] = [];
+        byProj[pk].push(m);
       });
 
-      const projGroups = Object.entries(byProject);
-      const isSplit    = projGroups.length > 1;
+      const groups  = Object.entries(byProj);
+      const isSplit = groups.length > 1;
 
-      // ── Render a sub-row for each project group ──────────────────────────
-      projGroups.forEach(([projKey, entries], gIdx) => {
-        const isOff   = projKey === '_OFF_';
-        const isNone  = projKey === '_NONE_';
-        const mainPid = isOff || isNone ? '' : projKey;
-        const proj    = mainPid ? DB.projects.find(p=>p.id===mainPid) : null;
-        const memberNames = entries.map(e => e.member.name).join(', ');
+      groups.forEach(([pk, grpMembers], gIdx) => {
+        const isOff  = pk === '__OFF__';
+        const isNone = pk === '__NONE__';
+        const mainPid = (!isOff && !isNone) ? pk : '';
+        const proj   = mainPid ? DB.projects.find(p => p.id === mainPid) : null;
 
-        // Collect unique notes
-        const notes    = [...new Set(entries.map(e=>e.note).filter(Boolean).join('\n').split('\n').map(s=>s.trim()).filter(Boolean))];
-        const allWh    = [...new Set(entries.flatMap(e=>e.wh.split('\n').map(s=>s.trim()).filter(Boolean)))];
-        const ccSet    = [...new Set(entries.map(e=>e.cc).filter(Boolean))];
-        const ccLabel  = ccSet.join('/');
+        // ── Collect Daily Task content ────────────────────────────────────
+        // 1. Regular notes
+        const notes = [...new Set(
+          grpMembers.flatMap(m => (m.notes?.[key]||'').split('\n').map(s=>s.trim()).filter(Boolean))
+        )];
+        // 2. Pour notes
+        const pourNotes = grpMembers.flatMap(m => {
+          const p = m.pour?.[key];
+          return p ? [`\u{1F9F1} Pour: ${p}`] : [];
+        });
+        // 3. Warehouse notes (materials, equipment, inspections)
+        const whLines = [...new Set(
+          grpMembers.flatMap(m => (m.wh?.[key]||'').split('\n').map(s=>s.trim()).filter(Boolean))
+        )];
+        const whFormatted = whLines.map(n => {
+          if(/inspect/i.test(n)) return `\u{1F6A8} ${n}`;
+          if(/lift|truck|plate|compactor|saw|machine|rental|cresco|sunbelt|shoring/i.test(n)) return `\u{1F528} ${n}`;
+          return `\u{1F4E6} ${n}`;
+        });
 
-        // Parse warehouse notes
-        const materials   = allWh.filter(n => !n.toLowerCase().includes('inspect') && !/lift|truck|plate|compactor|saw|machine|rental|cresco|sunbelt/i.test(n));
-        const equipment   = allWh.filter(n => /lift|truck|plate|compactor|saw|machine|rental|cresco|sunbelt/i.test(n) && !n.toLowerCase().includes('inspect'));
-        const inspections = allWh.filter(n => n.toLowerCase().includes('inspect'));
+        // Combined task text (editable part = just notes; rest shown below)
+        const editableNotes = notes.join('\n');
+        const extraInfo = [...pourNotes, ...whFormatted];
 
-        // Extra workers
-        const extras = EXTRA.filter(e => !e.team && (e.a?.[key]) && getAsgnPids(e.a[key]).includes(mainPid)).map(e=>e.name);
+        // Cost code
+        const cc     = grpMembers.map(m => m.cc?.[key]).find(Boolean) || '';
+        const ccName = cc ? (CODE_NAMES?.[cc] || cc) : '';
 
-        // Day label only on first group of first project occurrence
-        const dayLabel = gIdx === 0
-          ? `<div style="padding:6px 8px;${rowBg}border-bottom:1px solid var(--border);font-size:12px;font-weight:600;vertical-align:top;${isSplit?'border-left:3px solid '+teamColor:''}">${DOW_FULL[day.dow]}</div>`
-          : `<div style="padding:6px 8px;${rowBg}border-bottom:1px solid var(--border);font-size:11px;color:var(--text3)"></div>`;
+        // ── Crew column content ───────────────────────────────────────────
+        // Laborer names in this group
+        const laborers = grpMembers.filter(m => m.role !== 'foreman').map(m => m.name);
+        const foremen  = grpMembers.filter(m => m.role === 'foreman').map(m => m.name);
 
-        // Split indicator: show member names when split
-        const splitBadge = isSplit
-          ? `<div style="font-size:9px;color:${teamColor};font-weight:700;margin-bottom:2px;text-transform:uppercase">↳ ${memberNames}</div>`
+        // Extra workers assigned to same project today
+        const extraWorkers = EXTRA.filter(e =>
+          !e.team && e.a?.[key] && getAsgnPids(e.a[key]).includes(mainPid)
+        ).map(e => e.name);
+
+        // Rentals/equipment on this project today
+        const rentalsToday = RENTALS.filter(r => r.a?.[key] && getAsgnPids(r.a[key]).includes(mainPid)).map(r => r.name);
+
+        // Who label when split
+        const whoLabel = isSplit
+          ? `<div style="font-size:9px;font-weight:700;color:${teamColor};letter-spacing:.03em;margin-bottom:3px">\u21B3 ${grpMembers.map(m=>m.name.split(' ')[0]).join(' + ')}</div>`
           : '';
 
-        const projDisplay = proj
-          ? `<div style="font-weight:700;font-size:11px">${proj.id}</div><div style="font-size:10px;color:var(--text2);line-height:1.2">${proj.name}</div>`
-          : isOff ? '<span style="color:var(--red);font-size:11px;font-weight:700">OFF</span>' : '';
+        // ── Cells ─────────────────────────────────────────────────────────
+        const dayCell = gIdx === 0 ? `
+          <div style="padding:8px 10px;background:${rowBg};${borderB}font-size:12px;font-weight:${isToday?700:600};color:${isToday?'#7A5800':'var(--text)'}">
+            ${DOW_FULL[day.dow]}
+            ${isToday ? '<div style="font-size:9px;display:inline-block;background:var(--gold);color:#fff;padding:1px 5px;border-radius:3px;margin-left:4px">TODAY</div>' : ''}
+            ${isSplit ? '<div style="font-size:9px;color:var(--blue);margin-top:2px">\u2195 Split</div>' : ''}
+          </div>` : `<div style="padding:8px 10px;background:${rowBg};${borderB}"></div>`;
 
-        const ccDisplay = ccLabel
-          ? `<span style="background:${CODE_COLORS[ccLabel]||'#666'};color:#fff;padding:1px 5px;border-radius:3px;font-size:10px;font-weight:700">${ccLabel}</span>`
-          : '';
+        const projCell = `
+          <div style="padding:8px 10px;background:${rowBg};${borderB}font-size:11px">
+            ${isOff ? '<span style="color:var(--red);font-weight:700">OFF / Holiday</span>'
+              : isNone ? '<span style="color:var(--text3);font-size:10px">No assignment</span>'
+              : proj ? `<div style="font-weight:700">${proj.id}</div>
+                <div style="font-size:10px;color:var(--text2);line-height:1.3;margin-bottom:4px">${proj.name}</div>
+                ${cc ? `<span style="background:${CODE_COLORS?.[cc]||'#555'};color:#fff;font-size:9px;font-weight:700;padding:1px 6px;border-radius:3px">${cc} ${ccName}</span>` : ''}` : ''}
+          </div>`;
 
-        dayRowsHtml += `
-          ${dayLabel}
-          <div style="padding:6px 8px;${rowBg}border-bottom:1px solid var(--border);font-size:11px;white-space:pre-wrap;line-height:1.4">
-            ${splitBadge}${isOff ? '' : notes.join('\n')}
-          </div>
-          <div style="padding:6px 8px;${rowBg}border-bottom:1px solid var(--border);font-size:11px">${projDisplay}</div>
-          <div style="padding:6px 8px;${rowBg}border-bottom:1px solid var(--border);font-size:11px">${ccDisplay}</div>
-          <div style="padding:6px 8px;${rowBg}border-bottom:1px solid var(--border);font-size:11px;color:var(--text2)">${extras.join('<br>')}</div>
-          <div style="padding:6px 8px;${rowBg}border-bottom:1px solid var(--border);font-size:11px;color:var(--text2);white-space:pre-wrap">${materials.join('\n')}</div>
-          <div style="padding:6px 8px;${rowBg}border-bottom:1px solid var(--border);font-size:11px;color:var(--text2);white-space:pre-wrap">${equipment.join('\n')}</div>
-          <div style="padding:6px 8px;${rowBg}border-bottom:1px solid var(--border);font-size:11px;color:${inspections.length?'#c62828':'var(--text2)'};font-weight:${inspections.length?700:400};white-space:pre-wrap">${inspections.join('\n')}</div>`;
+        const taskCell = `
+          <div style="background:${rowBg};${borderB}padding:6px 8px">
+            ${whoLabel}
+            <div contenteditable="true"
+              data-weekly-edit="1"
+              data-members="${grpMembers.map(m=>m.id).join(',')}"
+              data-key="${key}"
+              data-team="${teamName}"
+              style="min-height:24px;font-size:12px;color:var(--text);line-height:1.5;outline:none;white-space:pre-wrap;border-radius:4px;padding:2px 4px"
+              placeholder="Add notes..."
+            >${editableNotes}</div>
+            ${extraInfo.length ? `<div style="margin-top:4px;font-size:10px;color:var(--text2);border-top:1px dashed var(--border);padding-top:4px;line-height:1.6">${extraInfo.join('<br>')}</div>` : ''}
+          </div>`;
+
+        const crewLines = [];
+        if(foremen.length)     crewLines.push(`<span style="font-weight:700">\u{1D54F} ${foremen.join(', ')}</span>`);
+        if(laborers.length)    crewLines.push(laborers.map(n=>`&#128100; ${n}`).join('<br>'));
+        if(extraWorkers.length) crewLines.push(extraWorkers.map(n=>`<span style="color:var(--blue)">+${n}</span>`).join('<br>'));
+        if(rentalsToday.length) crewLines.push(rentalsToday.map(n=>`<span style="color:var(--text3)">\u{1F69C} ${n}</span>`).join('<br>'));
+
+        const crewCell = `
+          <div style="padding:7px 10px;background:${rowBg};${borderB}font-size:11px;line-height:1.6">
+            ${crewLines.join('<br>') || '<span style="color:var(--text3);font-size:10px">—</span>'}
+          </div>`;
+
+        rowsHtml += `<div style="${GRID}">${dayCell}${projCell}${taskCell}${crewCell}</div>`;
       });
     });
 
     teamsHtml += `
-      <div style="margin-bottom:16px;border:1px solid var(--border);border-radius:8px;overflow:hidden">
-        <!-- Team header -->
-        <div style="background:${teamColor};color:#fff;padding:8px 14px;font-weight:700;font-size:13px;display:flex;align-items:center;gap:10px">
-          <span>${teamName}</span>
-          <span style="font-size:10px;opacity:.75;font-weight:400">${members.map(m=>m.name).join(' · ')}</span>
+      <div style="margin-bottom:18px;border:1.5px solid ${teamColor};border-radius:10px;overflow:hidden;box-shadow:0 2px 8px rgba(0,0,0,.07)">
+        <div style="background:${teamColor};padding:9px 14px;display:flex;align-items:center;gap:10px">
+          <span style="color:#fff;font-weight:700;font-size:14px">${teamName}</span>
+          <span style="color:rgba(255,255,255,.65);font-size:11px">${memberNames}</span>
         </div>
-        <!-- Column headers -->
-        <div style="${GRID};background:var(--bg3);font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text2);border-bottom:2px solid ${teamColor}">
-          <div style="padding:5px 8px">Day</div>
-          <div style="padding:5px 8px">Daily Task</div>
-          <div style="padding:5px 8px">Project</div>
-          <div style="padding:5px 8px">Code</div>
-          <div style="padding:5px 8px">Extras</div>
-          <div style="padding:5px 8px">Materials</div>
-          <div style="padding:5px 8px">Equipment</div>
-          <div style="padding:5px 8px">Inspections</div>
-        </div>
-        <!-- Day rows -->
-        <div style="${GRID}">${dayRowsHtml}</div>
+        ${colHdr}
+        <div>${rowsHtml}</div>
       </div>`;
   });
 
-  // ── Nav ────────────────────────────────────────────────────────────────────
-  const nav = `
-    <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;padding-bottom:10px;border-bottom:1px solid var(--border)">
-      <button class="btn btn-ghost btn-sm" onclick="weeklyNavWeek(-1)">‹ Prev week</button>
-      <span style="font-weight:700;font-size:14px">${weekLabel}</span>
-      <button class="btn btn-ghost btn-sm" onclick="weeklyNavWeek(1)">Next week ›</button>
-      <button class="btn btn-ghost btn-sm" onclick="weeklyGoToday()" style="margin-left:4px">Today</button>
-      <button class="btn btn-sm" style="margin-left:auto;background:var(--blue);color:#fff;border:none;padding:5px 14px;border-radius:6px;cursor:pointer;font-size:12px" onclick="printWeeklySchedule()">🖨 Print / PDF</button>
-    </div>`;
+  container.innerHTML = nav + (teamsHtml || '<div class="empty" style="padding:40px">No assignments this week</div>');
 
-  container.innerHTML = nav + (teamsHtml || '<div class="empty">No assignments this week</div>');
+  // Wire up contenteditable save on blur
+  container.querySelectorAll('[data-weekly-edit]').forEach(el => {
+    el.addEventListener('focus', () => {
+      el.style.background = 'rgba(59,125,216,.08)';
+      el.style.outline    = '1.5px solid var(--blue)';
+    });
+    el.addEventListener('blur', () => {
+      el.style.background = '';
+      el.style.outline    = '';
+      weeklyTaskSave(el);
+    });
+  });
 }
 
 
@@ -6608,6 +6648,45 @@ function printWeeklySchedule() {
     <style>body{font-family:Arial,sans-serif;margin:20px}@media print{body{margin:0}}</style>
     </head><body>${body.outerHTML}<script>window.onload=()=>window.print()<\/script></body></html>`);
   win.document.close();
+}
+
+
+// ── Weekly view: save edited Daily Task back to roster data ───────────────────
+function weeklyTaskSave(el) {
+  const newText    = el.innerText.trim();
+  const key        = el.dataset.key;
+  const memberIds  = (el.dataset.members || '').split(',').map(s=>s.trim()).filter(Boolean);
+  const teamName   = el.dataset.team;
+
+  if(!key || !memberIds.length) return;
+
+  // Save notes to ALL members in this group for this day
+  let changed = false;
+  memberIds.forEach(id => {
+    const item = getItem(id,'staff') || getItem(id,'extra');
+    if(!item) return;
+    if(!item.notes) item.notes = {};
+    const old = item.notes[key] || '';
+    if(old !== newText) {
+      // Push to undo stack
+      undoPush({ id, key, type: item._type || 'staff', snapshot: {
+        a: item.a?.[key], notes: old, wh: item.wh?.[key], cc: item.cc?.[key],
+        confirmed: item.confirmed?.[key], pour: item.pour?.[key]
+      }});
+      item.notes[key] = newText;
+      // Add to history
+      rosterHistoryPush(id, key, old, newText);
+      changed = true;
+    }
+  });
+
+  if(changed) {
+    saveLocal();
+    _updateUndoBtn();
+    // Brief flash to confirm save
+    el.style.background = 'rgba(61,170,110,.15)';
+    setTimeout(() => { el.style.background = ''; }, 600);
+  }
 }
 
 // ─── INIT ─────────────────────────────────────────────────────────────────────
