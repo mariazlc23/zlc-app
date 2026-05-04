@@ -684,6 +684,7 @@ body.select-mode .day-cell:hover { filter: brightness(1.15) !important; }
       <div class="view-toggle">
         <button class="vt-btn active" onclick="setCV('month',this)">Month</button>
         <button class="vt-btn" onclick="setCV('week',this)">2 weeks</button>
+        <button class="vt-btn" onclick="setCV('weekly',this)">📋 Weekly</button>
       </div>
       <div class="roster-density">
         <button id="density-comfortable" class="active" onclick="setRosterDensity('comfortable',this)">Comfortable</button>
@@ -1368,7 +1369,34 @@ async function syncFromSheets(silent=false) {
     projects.forEach(p => {
       p.cos  = cosByProj[p.id]  || [];
       p.rfis = rfisByProj[p.id] || [];
-      p.subs = subsByProj[p.id] || [];
+      // Merge subs: use Sheet data but preserve any locally-updated statuses
+      const sheetSubs = subsByProj[p.id] || [];
+      const localSubs = p.subs || [];
+      p.subs = sheetSubs.map(ss => {
+        const local = localSubs.find(ls => ls.num === ss.num || ls.id === ss.id);
+        // If local has a more recent status change, keep it
+        if(local && local._statusUpdated && local.status !== ss.status) {
+          return { ...ss, status: local.status, _statusUpdated: local._statusUpdated };
+        }
+        return ss;
+      });
+      // Also preserve any local subs not in Sheet yet
+      localSubs.forEach(ls => {
+        if(ls._manual && !p.subs.find(ss => ss.num === ls.num)) p.subs.push(ls);
+      });
+      // Same for RFIs
+      const sheetRfis = rfisByProj[p.id] || [];
+      const localRfis = p.rfis || [];
+      p.rfis = sheetRfis.map(sr => {
+        const local = localRfis.find(lr => lr.num === sr.num || lr.id === sr.id);
+        if(local && local._statusUpdated && local.status !== sr.status) {
+          return { ...sr, status: local.status, _statusUpdated: local._statusUpdated };
+        }
+        return sr;
+      });
+      localRfis.forEach(lr => {
+        if(lr._manual && !p.rfis.find(sr => sr.num === lr.num)) p.rfis.push(lr);
+      });
     });
 
     // Preserve historical data (already in DB)
@@ -2286,8 +2314,34 @@ function renderOpenItems(){
     return`<div style="padding:8px 0;border-bottom:0.5px solid var(--border);font-size:12px"><div style="display:flex;align-items:center;gap:5px;margin-bottom:3px;flex-wrap:wrap"><span class="badge ${it.cls}">${it.t}</span><strong>${it.num}</strong>${xtra}<span style="font-size:10px;color:var(--text3)">${it.pid} — ${it.pname}</span></div><div style="color:var(--text2);font-size:11px;margin-bottom:4px">${it.desc||''}</div><select onchange="${fn}('${it.pid}','${it.id}',this.value)" style="font-size:10px;padding:2px 6px;border-radius:4px;border:0.5px solid var(--border2);background:var(--bg);color:var(--text);cursor:pointer">${so}</select>${it.submitted?` <span style="font-size:10px;color:var(--text3)">Sub: ${it.submitted}</span>`:''}</div>`;
   }).join('');
 }
-function dashUpdateSub(pid,sid,ns){const p=DB.projects.find(x=>x.id===pid);if(!p)return;const s=p.subs.find(x=>x.id===sid);if(!s)return;const o=s.status;s.status=ns;p.history.push({date:todate(),text:s.num+': '+o+' → '+ns,type:'sub'});sheetWrite('updateSub',{projectId:pid,num:s.num,newStatus:ns});saveLocal();toast(s.num+' → '+ns);renderOverview();}
-function dashUpdateRFI(pid,rid,ns){const p=DB.projects.find(x=>x.id===pid);if(!p)return;const r=p.rfis.find(x=>x.id===rid);if(!r)return;const o=r.status;r.status=ns;p.history.push({date:todate(),text:r.num+': '+o+' → '+ns,type:'rfi'});sheetWrite('updateRFI',{projectId:pid,num:r.num,newStatus:ns});saveLocal();toast(r.num+' → '+ns);renderOverview();}
+function dashUpdateSub(pid,sid,ns){
+  const p=DB.projects.find(x=>x.id===pid);if(!p)return;
+  const s=p.subs.find(x=>x.id===sid);if(!s)return;
+  const o=s.status;
+  s.status=ns;
+  s._statusUpdated = Date.now(); // mark so sync doesn't overwrite
+  p.history.push({date:todate(),text:s.num+': '+o+' → '+ns,type:'sub'});
+  saveLocal(); // save to cloud immediately
+  toast(s.num+' → '+ns);
+  renderOverview();
+  // Write to Sheet with retry feedback
+  _sheetWriteWithRetry('updateSub',{projectId:pid,num:s.num,newStatus:ns},3)
+    .then(()=>{ toast('✓ '+s.num+' saved to Sheet'); })
+    .catch(err=>{ toast('⚠ Sheet save failed — status saved locally: '+err.message, 5000); });
+}
+function dashUpdateRFI(pid,rid,ns){
+  const p=DB.projects.find(x=>x.id===pid);if(!p)return;
+  const r=p.rfis.find(x=>x.id===rid);if(!r)return;
+  const o=r.status;
+  r.status=ns;
+  p.history.push({date:todate(),text:r.num+': '+o+' → '+ns,type:'rfi'});
+  saveLocal(); // save to cloud immediately
+  toast(r.num+' → '+ns);
+  renderOverview();
+  _sheetWriteWithRetry('updateRFI',{projectId:pid,num:r.num,newStatus:ns},3)
+    .then(()=>{ toast('✓ '+r.num+' saved to Sheet'); })
+    .catch(err=>{ toast('⚠ Sheet save failed — status saved locally: '+err.message, 5000); });
+}
 
 function renderOrders(){
   const el = document.getElementById('orders-list');
@@ -3025,6 +3079,9 @@ function renderDayButtons(){
 
 function renderRoster(){
   document.getElementById('month-lbl').textContent=`${MONTHS[calMonth]} ${calYear}`;
+  
+  // Weekly Logistics Schedule view
+  if(calView==='weekly'){ renderWeeklySchedule(); return; }
   
   populateRosterDayFilter();
   const days=getVisDays();
@@ -6346,6 +6403,211 @@ function pasteFromClipboard(anchorItemId, anchorDateKey, anchorType) {
     saveLocal(); renderRoster(); toast('↩ Paste undone');
   });
   toast(label);
+}
+
+
+// ═══════════════════════════════════════════════════════════════
+// WEEKLY LOGISTICS SCHEDULE — renders like the Excel sheet
+// One section per team (Xolos, Chingones, etc.)
+// Columns: Team | Day | Daily Task | Project | Class Code | 
+//          Extra Workers | Materials | Small Equipment | Inspections
+// ═══════════════════════════════════════════════════════════════
+
+function renderWeeklySchedule() {
+  const container = document.getElementById('roster-wrap');
+  if(!container) return;
+
+  const weekDays  = getWeekDays();
+  const weekStart = weekDays[0];
+  const weekEnd   = weekDays[weekDays.length-1];
+  const weekLabel = `${MONTHS[weekStart.m]} ${weekStart.d} – ${MONTHS[weekEnd.m]} ${weekEnd.d}, ${weekStart.y}`;
+
+  const teamOrder = ['Xolos','Chingones','Lobos','Poblanos','Warriors','Guerreros Z','Aguilas'];
+  const allItems  = [...STAFF, ...EXTRA];
+
+  // ── Build rows grouped by team ──────────────────────────────────────────────
+  // For each team, for each day, check if members split across projects
+  // If split: show one sub-row per unique project assignment
+  // If together: show one row for the whole team
+
+  let teamsHtml = '';
+  const DOW_FULL = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
+  const GRID = 'display:grid;grid-template-columns:80px 90px 1fr 150px 100px 90px 120px 120px 140px;gap:0';
+
+  teamOrder.forEach(teamName => {
+    const members = allItems.filter(e => e.team === teamName);
+    if(!members.length) return;
+
+    // Header row for this team
+    const teamColor = TEAM_COLORS[teamName] || '#4A306D';
+    let dayRowsHtml = '';
+
+    weekDays.forEach((day, dayIdx) => {
+      const key   = `${day.y}-${day.m+1}-${day.d}`;
+      const isSat = day.dow === 6;
+      const isToday = new Date().toDateString() === new Date(day.y,day.m,day.d).toDateString();
+      const rowBg = isToday ? 'background:rgba(255,243,205,.5);'
+                  : isSat   ? 'background:var(--bg3);'
+                  : dayIdx%2===0 ? 'background:var(--bg);' : 'background:var(--bg2);';
+
+      // ── Detect split: group members by their project assignment ───────────
+      const byProject = {}; // projKey → [{member, note, wh, cc}]
+
+      members.forEach(m => {
+        const asgn = m.a?.[key] || '';
+        const isOff = asgn === 'OFF';
+        const pids  = asgn && !isOff ? getAsgnPids(asgn) : [];
+        const projKey = isOff ? '_OFF_' : (pids[0] || '_NONE_');
+
+        if(!byProject[projKey]) byProject[projKey] = [];
+        byProject[projKey].push({
+          member: m,
+          note:   m.notes?.[key] || '',
+          wh:     m.wh?.[key]    || '',
+          cc:     m.cc?.[key]    || '',
+          asgn,
+          pids,
+        });
+      });
+
+      const projGroups = Object.entries(byProject);
+      const isSplit    = projGroups.length > 1;
+
+      // ── Render a sub-row for each project group ──────────────────────────
+      projGroups.forEach(([projKey, entries], gIdx) => {
+        const isOff   = projKey === '_OFF_';
+        const isNone  = projKey === '_NONE_';
+        const mainPid = isOff || isNone ? '' : projKey;
+        const proj    = mainPid ? DB.projects.find(p=>p.id===mainPid) : null;
+        const memberNames = entries.map(e => e.member.name).join(', ');
+
+        // Collect unique notes
+        const notes    = [...new Set(entries.map(e=>e.note).filter(Boolean).join('\n').split('\n').map(s=>s.trim()).filter(Boolean))];
+        const allWh    = [...new Set(entries.flatMap(e=>e.wh.split('\n').map(s=>s.trim()).filter(Boolean)))];
+        const ccSet    = [...new Set(entries.map(e=>e.cc).filter(Boolean))];
+        const ccLabel  = ccSet.join('/');
+
+        // Parse warehouse notes
+        const materials   = allWh.filter(n => !n.toLowerCase().includes('inspect') && !/lift|truck|plate|compactor|saw|machine|rental|cresco|sunbelt/i.test(n));
+        const equipment   = allWh.filter(n => /lift|truck|plate|compactor|saw|machine|rental|cresco|sunbelt/i.test(n) && !n.toLowerCase().includes('inspect'));
+        const inspections = allWh.filter(n => n.toLowerCase().includes('inspect'));
+
+        // Extra workers
+        const extras = EXTRA.filter(e => !e.team && (e.a?.[key]) && getAsgnPids(e.a[key]).includes(mainPid)).map(e=>e.name);
+
+        // Day label only on first group of first project occurrence
+        const dayLabel = gIdx === 0
+          ? `<div style="padding:6px 8px;${rowBg}border-bottom:1px solid var(--border);font-size:12px;font-weight:600;vertical-align:top;${isSplit?'border-left:3px solid '+teamColor:''}">${DOW_FULL[day.dow]}</div>`
+          : `<div style="padding:6px 8px;${rowBg}border-bottom:1px solid var(--border);font-size:11px;color:var(--text3)"></div>`;
+
+        // Split indicator: show member names when split
+        const splitBadge = isSplit
+          ? `<div style="font-size:9px;color:${teamColor};font-weight:700;margin-bottom:2px;text-transform:uppercase">↳ ${memberNames}</div>`
+          : '';
+
+        const projDisplay = proj
+          ? `<div style="font-weight:700;font-size:11px">${proj.id}</div><div style="font-size:10px;color:var(--text2);line-height:1.2">${proj.name}</div>`
+          : isOff ? '<span style="color:var(--red);font-size:11px;font-weight:700">OFF</span>' : '';
+
+        const ccDisplay = ccLabel
+          ? `<span style="background:${CODE_COLORS[ccLabel]||'#666'};color:#fff;padding:1px 5px;border-radius:3px;font-size:10px;font-weight:700">${ccLabel}</span>`
+          : '';
+
+        dayRowsHtml += `
+          ${dayLabel}
+          <div style="padding:6px 8px;${rowBg}border-bottom:1px solid var(--border);font-size:11px;white-space:pre-wrap;line-height:1.4">
+            ${splitBadge}${isOff ? '' : notes.join('\n')}
+          </div>
+          <div style="padding:6px 8px;${rowBg}border-bottom:1px solid var(--border);font-size:11px">${projDisplay}</div>
+          <div style="padding:6px 8px;${rowBg}border-bottom:1px solid var(--border);font-size:11px">${ccDisplay}</div>
+          <div style="padding:6px 8px;${rowBg}border-bottom:1px solid var(--border);font-size:11px;color:var(--text2)">${extras.join('<br>')}</div>
+          <div style="padding:6px 8px;${rowBg}border-bottom:1px solid var(--border);font-size:11px;color:var(--text2);white-space:pre-wrap">${materials.join('\n')}</div>
+          <div style="padding:6px 8px;${rowBg}border-bottom:1px solid var(--border);font-size:11px;color:var(--text2);white-space:pre-wrap">${equipment.join('\n')}</div>
+          <div style="padding:6px 8px;${rowBg}border-bottom:1px solid var(--border);font-size:11px;color:${inspections.length?'#c62828':'var(--text2)'};font-weight:${inspections.length?700:400};white-space:pre-wrap">${inspections.join('\n')}</div>`;
+      });
+    });
+
+    teamsHtml += `
+      <div style="margin-bottom:16px;border:1px solid var(--border);border-radius:8px;overflow:hidden">
+        <!-- Team header -->
+        <div style="background:${teamColor};color:#fff;padding:8px 14px;font-weight:700;font-size:13px;display:flex;align-items:center;gap:10px">
+          <span>${teamName}</span>
+          <span style="font-size:10px;opacity:.75;font-weight:400">${members.map(m=>m.name).join(' · ')}</span>
+        </div>
+        <!-- Column headers -->
+        <div style="${GRID};background:var(--bg3);font-size:10px;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text2);border-bottom:2px solid ${teamColor}">
+          <div style="padding:5px 8px">Day</div>
+          <div style="padding:5px 8px">Daily Task</div>
+          <div style="padding:5px 8px">Project</div>
+          <div style="padding:5px 8px">Code</div>
+          <div style="padding:5px 8px">Extras</div>
+          <div style="padding:5px 8px">Materials</div>
+          <div style="padding:5px 8px">Equipment</div>
+          <div style="padding:5px 8px">Inspections</div>
+        </div>
+        <!-- Day rows -->
+        <div style="${GRID}">${dayRowsHtml}</div>
+      </div>`;
+  });
+
+  // ── Nav ────────────────────────────────────────────────────────────────────
+  const nav = `
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:14px;padding-bottom:10px;border-bottom:1px solid var(--border)">
+      <button class="btn btn-ghost btn-sm" onclick="weeklyNavWeek(-1)">‹ Prev week</button>
+      <span style="font-weight:700;font-size:14px">${weekLabel}</span>
+      <button class="btn btn-ghost btn-sm" onclick="weeklyNavWeek(1)">Next week ›</button>
+      <button class="btn btn-ghost btn-sm" onclick="weeklyGoToday()" style="margin-left:4px">Today</button>
+      <button class="btn btn-sm" style="margin-left:auto;background:var(--blue);color:#fff;border:none;padding:5px 14px;border-radius:6px;cursor:pointer;font-size:12px" onclick="printWeeklySchedule()">🖨 Print / PDF</button>
+    </div>`;
+
+  container.innerHTML = nav + (teamsHtml || '<div class="empty">No assignments this week</div>');
+}
+
+
+
+// ── Week navigation ────────────────────────────────────────────────────────
+let _weeklyAnchor = null; // null = current week
+
+function getWeekDays() {
+  // Returns Mon–Sat of the target week
+  const anchor = _weeklyAnchor ? new Date(_weeklyAnchor) : new Date();
+  const dow = anchor.getDay(); // 0=Sun
+  const backToMon = (dow + 6) % 7;
+  const mon = new Date(anchor);
+  mon.setDate(anchor.getDate() - backToMon);
+  const days = [];
+  for(let i=0; i<6; i++) { // Mon–Sat
+    const d = new Date(mon);
+    d.setDate(mon.getDate() + i);
+    days.push({
+      y: d.getFullYear(), m: d.getMonth(), d: d.getDate(),
+      dow: d.getDay(),
+      label: ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'][d.getDay()],
+    });
+  }
+  return days;
+}
+
+function weeklyNavWeek(dir) {
+  const base = _weeklyAnchor ? new Date(_weeklyAnchor) : new Date();
+  base.setDate(base.getDate() + dir * 7);
+  _weeklyAnchor = base;
+  renderWeeklySchedule();
+}
+
+function weeklyGoToday() {
+  _weeklyAnchor = null;
+  renderWeeklySchedule();
+}
+
+function printWeeklySchedule() {
+  const body = document.getElementById('weekly-sched-body');
+  if(!body) return;
+  const win = window.open('','_blank','width=1400,height=800');
+  win.document.write(`<html><head><title>Weekly Logistics Schedule</title>
+    <style>body{font-family:Arial,sans-serif;margin:20px}@media print{body{margin:0}}</style>
+    </head><body>${body.outerHTML}<script>window.onload=()=>window.print()<\/script></body></html>`);
+  win.document.close();
 }
 
 // ─── INIT ─────────────────────────────────────────────────────────────────────
