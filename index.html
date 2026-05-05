@@ -1368,8 +1368,28 @@ async function syncFromSheets(silent=false) {
     const subsByProj = parseSubRows(subData.rows);
 
     projects.forEach(p => {
-      p.cos  = cosByProj[p.id]  || [];
-      p.rfis = rfisByProj[p.id] || [];
+      // Merge COs: preserve locally-approved/canceled statuses
+      const sheetCos  = cosByProj[p.id]  || [];
+      const localCos  = p.cos || [];
+      p.cos = sheetCos.map(sc => {
+        const local = localCos.find(lc => lc.num === sc.num || lc.id === sc.id);
+        if(local && local._statusUpdated && local.status !== sc.status) {
+          return { ...sc, status: local.status, work: local.work, _statusUpdated: local._statusUpdated };
+        }
+        return sc;
+      });
+
+      // Merge RFIs: preserve locally-updated statuses
+      const sheetRfisForCO = rfisByProj[p.id] || [];
+      const localRfisForCO = p.rfis || [];
+      p.rfis = sheetRfisForCO.map(sr => {
+        const local = localRfisForCO.find(lr => lr.num === sr.num || lr.id === sr.id);
+        if(local && local._statusUpdated && local.status !== sr.status) {
+          return { ...sr, status: local.status, _statusUpdated: local._statusUpdated };
+        }
+        return sr;
+      });
+
       // Merge subs: use Sheet data but preserve any locally-updated statuses
       const sheetSubs = subsByProj[p.id] || [];
       const localSubs = p.subs || [];
@@ -2248,6 +2268,7 @@ function dashApproveCO(pid,cid,num){
   if(co){
     co.status='Approved';
     co.approvalDate = co.approvalDate || todate();
+    co._statusUpdated = Date.now();
     p.history.push({date:todate(),text:num+' APPROVED — '+fmt(co.value||0),type:'approved'});
     // Add CO man-days to project cost code
     if((co.foremanDays||0)+(co.laborerDays||0)>0 && co.code){
@@ -2280,14 +2301,14 @@ function dashCancelCO(pid,cid,num){
   const p=DB.projects.find(x=>x.id===pid);if(!p)return;
   const sc=(DB.allSheetCOs||[]).find(c=>(c.id===cid||c.num===num)&&c.pid===pid);if(sc)sc.status='Canceled';
   const co=p.cos.find(c=>c.id===cid||c.num===num);
-  if(co){co.status='Canceled';p.history.push({date:todate(),text:num+' canceled',type:'canceled'});}
+  if(co){co.status='Canceled';co._statusUpdated=Date.now();p.history.push({date:todate(),text:num+' canceled',type:'canceled'});}
   sheetWrite('updateCO',{projectId:pid,num,newStatus:'Canceled'});
   saveLocal();renderCOList();renderOverview();toast('✕ '+num+' canceled');
 }
 function dashSetCOWork(pid,cid,workVal){
   const sc=(DB.allSheetCOs||[]).find(c=>c.id===cid&&c.pid===pid);if(sc)sc.work=workVal;
   const p=DB.projects.find(x=>x.id===pid);
-  if(p){const co=p.cos.find(c=>c.id===cid);if(co)co.work=workVal;}
+  if(p){const co=p.cos.find(c=>c.id===cid);if(co){co.work=workVal;co._statusUpdated=Date.now();}}
   sheetWrite('updateCO',{projectId:pid,num:(sc&&sc.num)||'',newStatus:(sc&&sc.status)||'',work:workVal});
   saveLocal();
   renderCOList();
@@ -4617,13 +4638,25 @@ function buildRosterData(){
     confirmed: e.confirmed||{},
     pour: e.pour||{},
   });
+  // Map rental/equip record (includes full metadata so new items persist)
+  const mapRentalRecord = e => ({
+    id: e.id, name: e.name||'', cat: e.cat||'Rental',
+    notes_meta: e.notes_meta||'',
+    a: e.a||{}, notes: e.notes||{}, wh: e.wh||{},
+    cc: e.cc||{}, co: e.co||{}, confirmed: e.confirmed||{}, pour: e.pour||{},
+  });
+  const DEFAULT_RENTAL_IDS = new Set(['r1','r2','r3','r4','r5','r6','r7','r8','r9','r10']);
+  const DEFAULT_EQUIP_IDS  = new Set(['eq1','eq2','eq3','eq4','eq5']);
+
   return {
-    staff:     STAFF.map(mapItem),
-    extra:     EXTRA.map(mapItemExtra),
-    equip:     EQUIP.map(mapItemExtra),
-    rentals:   RENTALS.map(mapItemExtra),
-    extraList: EXTRA.filter(e=>!DEFAULT_EXTRA_IDS.has(e.id)).map(mapExtraRecord),
-    staffList: STAFF.filter(e=>!DEFAULT_STAFF_IDS.has(e.id)).map(mapStaffRecord),
+    staff:      STAFF.map(mapItem),
+    extra:      EXTRA.map(mapItemExtra),
+    equip:      EQUIP.map(mapItemExtra),
+    rentals:    RENTALS.map(mapItemExtra),
+    extraList:  EXTRA.filter(e=>!DEFAULT_EXTRA_IDS.has(e.id)).map(mapExtraRecord),
+    staffList:  STAFF.filter(e=>!DEFAULT_STAFF_IDS.has(e.id)).map(mapStaffRecord),
+    rentalList: RENTALS.filter(e=>!DEFAULT_RENTAL_IDS.has(e.id)).map(mapRentalRecord),
+    equipList:  EQUIP.filter(e=>!DEFAULT_EQUIP_IDS.has(e.id)).map(mapRentalRecord),
   };
 }
 
@@ -4646,8 +4679,10 @@ function compressRoster(rd){
     extra:     c(rd.extra),
     equip:     c(rd.equip),
     rentals:   c(rd.rentals),
-    extraList: rd.extraList||[],
-    staffList: rd.staffList||[],
+    extraList:  rd.extraList||[],
+    staffList:  rd.staffList||[],
+    rentalList: rd.rentalList||[],
+    equipList:  rd.equipList||[],
   };
 }
 
@@ -5080,6 +5115,20 @@ function applyRosterData(rd) {
       role:s.role||'',
       certs:s.certs||[],
       veh:s.veh||'',
+      a:s.a||{}, notes:s.notes||{}, wh:s.wh||{}, cc:s.cc||{}, co:s.co||{}, confirmed:s.confirmed||{}, pour:s.pour||{},
+    });
+  });
+  // Restore user-added rentals
+  (rd.rentalList||[]).forEach(s=>{
+    if(!RENTALS.find(r=>r.id===s.id)) RENTALS.push({
+      id:s.id, name:s.name||'Unnamed', cat:s.cat||'Rental', notes_meta:s.notes_meta||'',
+      a:s.a||{}, notes:s.notes||{}, wh:s.wh||{}, cc:s.cc||{}, co:s.co||{}, confirmed:s.confirmed||{}, pour:s.pour||{},
+    });
+  });
+  // Restore user-added equipment
+  (rd.equipList||[]).forEach(s=>{
+    if(!EQUIP.find(e=>e.id===s.id)) EQUIP.push({
+      id:s.id, name:s.name||'Unnamed', cat:s.cat||'Equipment', notes_meta:s.notes_meta||'',
       a:s.a||{}, notes:s.notes||{}, wh:s.wh||{}, cc:s.cc||{}, co:s.co||{}, confirmed:s.confirmed||{}, pour:s.pour||{},
     });
   });
