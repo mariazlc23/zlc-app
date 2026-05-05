@@ -847,7 +847,7 @@ const CAT_COLORS={staff:'#185FA5',extra:'#BA7517',equip:'#3B6D11',rental:'#88878
 const DEFAULT_CONFIG = {
   SHEET_ID: '1Y35oa2ebgCisj3PzVs2dTMUN5dY2Hhci4RIt55Kn44Y',
   API_KEY: 'AIzaSyCCuKyfurmT2w-L2dn6-XbvupaOmlHufUE',
-  APPS_SCRIPT_URL: 'https://script.google.com/macros/s/AKfycbylgsY5Nd3F3DlPQijFjwlNz3D11i2Jz2lET4F5QfjCuPbuTxCEqLlGWrcSArfmf9dGrQ/exec'
+  APPS_SCRIPT_URL: 'https://script.google.com/macros/s/AKfycbyouaZzlhceAs7vs7HJG0bb9mIul84DGHAQ8g-Tjm93meyeu-gvB1QArlBTXDm2Cg7e/exec'
 };
 
 function getRuntimeConfig() {
@@ -6085,20 +6085,72 @@ function openEstimatingSystem(){
   window.open(base + '/ZLC_Estimating_System.html', '_blank');
 }
 
-function checkWonQueue(){
-  // Check if Estimating System has any Won projects waiting to be imported
-  try {
-    const queue = JSON.parse(localStorage.getItem('zlc_est_won_queue') || '[]');
-    const badge = document.getElementById('est-won-badge');
+// sheetCall — lightweight wrapper to call Apps Script action
+function sheetCall(action, payload){
+  return new Promise((resolve, reject) => {
+    if(!APPS_SCRIPT_URL){ reject('No URL'); return; }
+    const body    = JSON.stringify({action, ...payload});
+    const cbName  = '_sc_'+Date.now()+'_'+Math.random().toString(36).slice(2);
+    const script  = document.createElement('script');
+    const timer   = setTimeout(()=>{ delete window[cbName]; script.remove(); reject('timeout'); }, 20000);
+    window[cbName] = (r) => { clearTimeout(timer); delete window[cbName]; script.remove(); resolve(r); };
+    script.src    = APPS_SCRIPT_URL+'?data='+encodeURIComponent(body)+'&callback='+cbName;
+    script.onerror= ()=>{ clearTimeout(timer); delete window[cbName]; reject('error'); };
+    document.head.appendChild(script);
+  });
+}
 
+async function checkWonQueue(){
+  try {
+    // 1. Check localStorage (same browser — fast)
+    let queue = JSON.parse(localStorage.getItem('zlc_est_won_queue') || '[]');
+
+    // 2. Also check cloud sheet for Won projects not yet imported
+    //    (catches projects marked Won in a different browser/device)
+    if(APPS_SCRIPT_URL){
+      try{
+        const res = await sheetCall('loadWonQueue', {});
+        if(res && res.ok && res.rows && res.rows.length){
+          // Convert sheet rows to queue format
+          const cloudItems = res.rows.map(r => ({
+            _estimatingId: String(r['Estimating ID']||''),
+            id:    String(r['Job #']||r['Estimating ID']||''),
+            num:   String(r['Job #']||''),
+            name:  String(r['Project Name']||''),
+            client:String(r['Client']||''),
+            pm:    String(r['PM']||''),
+            pmEmail:String(r['PM Email']||''),
+            pmPhone:String(r['PM Phone']||''),
+            address:String(r['Address']||''),
+            wonDate:String(r['Won Date']||''),
+            codes: (r['Scopes JSON']||[]).map(s=>({
+              code:  s.scopeCode||'',
+              value: s.total||0,
+              foremanDays: s.foremanDays||0,
+              laborerDays: s.laborerDays||0,
+            })),
+            cos: [],
+          }));
+          // Merge: add cloud items not already in localStorage queue
+          cloudItems.forEach(ci => {
+            if(!queue.find(q => q._estimatingId === ci._estimatingId)) {
+              queue.push(ci);
+            }
+          });
+        }
+      } catch(e){ /* cloud check failed silently — localStorage still works */ }
+    }
+
+    const badge = document.getElementById('est-won-badge');
     if(queue.length === 0){ if(badge) badge.style.display='none'; return; }
 
-    // Show badge
     if(badge){ badge.textContent = queue.length; badge.style.display='inline-block'; }
 
-    // Show notification banner
     const existing = document.getElementById('est-won-banner');
-    if(existing) return; // already showing
+    if(existing) return;
+
+    // Store merged queue back so importWonProjects() can read it
+    try{ localStorage.setItem('zlc_est_won_queue', JSON.stringify(queue)); }catch(e){}
 
     const banner = document.createElement('div');
     banner.id = 'est-won-banner';
@@ -6144,14 +6196,14 @@ function importWonProjects(){
           id:       p.num || p.id,
           name:     p.name,
           client:   p.client || '',
-          pm:       p.pm || '',          // PM app uses 'pm' not 'pmName'
+          pm:       p.pm || '',
           pmEmail:  p.pmEmail || '',
           pmPhone:  p.pmPhone || '',
           status:   'Active',
           address:  p.address || '',
           codes:    (p.codes || []).map(c => ({
             code:  c.code,
-            value: Math.round(c.value || c.estimatedValue || 0),  // round — no decimals
+            value: Math.round(c.value || c.estimatedValue || 0),
             foremanDays: c.foremanDays || 0,
             laborerDays: c.laborerDays || 0,
           })),
@@ -6169,6 +6221,7 @@ function importWonProjects(){
           history:  [{ date: new Date().toISOString().split('T')[0], text: 'Project won — imported from Estimating System', type:'created' }],
           _fromEstimating: true,
           _estimatingId:   p._estimatingId,
+          _manual:  true,   // ← makes it save to cloud via manualProjects
           wonDate:  p.wonDate,
           created:  new Date().toISOString(),
         };
@@ -6177,11 +6230,11 @@ function importWonProjects(){
       }
     });
 
-    // Clear the queue
+    // Clear the local queue
     localStorage.removeItem('zlc_est_won_queue');
     localStorage.removeItem('zlc_est_won_time');
 
-    saveLocal();
+    saveLocal();  // saves imported projects to cloud via manualProjects
     renderProjTable();
     renderOverview();
     renderAnalytics();
@@ -6190,6 +6243,13 @@ function importWonProjects(){
 
     const msg = [imported && `${imported} imported`, updated && `${updated} updated`].filter(Boolean).join(', ');
     toast(`✓ ${msg} from Estimating System`);
+
+    // Mark as imported in Estimator sheet so it doesn't show again
+    queue.forEach(p => {
+      if(p._estimatingId) {
+        sheetCall('markImportedToPM', { estimatingId: p._estimatingId }).catch(()=>{});
+      }
+    });
 
     // Switch to projects view to show the new ones
     if(imported > 0){
