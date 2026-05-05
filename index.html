@@ -4161,7 +4161,10 @@ function openModal(type,pid,extra){
     const acctParts=(ep.acctInfo||'').split(',');
     showModal(`<div class="modal-title">Edit project — ${ep.id}</div>
       <div class="fg2">
+        <div class="fg" style="margin-bottom:0"><label>Job Number</label><input id="ep-num" value="${escHtml(ep.id)}" placeholder="26-011"></div>
         <div class="fg" style="margin-bottom:0"><label>Name</label><input id="ep-name" value="${escHtml(ep.name)}"></div>
+      </div>
+      <div class="fg2">
         <div class="fg" style="margin-bottom:0"><label>Status</label><select id="ep-status">
           <option${ep.status==='Active'?' selected':''}>Active</option>
           <option${ep.status==='Pending'?' selected':''}>Pending</option>
@@ -4419,6 +4422,12 @@ function saveProject(){
 function saveEditProject(pid){
   const p=DB.projects.find(x=>x.id===pid);
   if(!p){toast('Project not found');return;}
+  // Update job number if changed
+  const newNum=document.getElementById('ep-num')?.value.trim();
+  if(newNum&&newNum!==pid){
+    if(DB.projects.find(x=>x.id===newNum&&x!==p)){toast('Job number already exists');return;}
+    p.id=newNum;
+  }
   p.name    = document.getElementById('ep-name')?.value.trim()||p.name;
   p.pm      = document.getElementById('ep-pm')?.value.trim()||p.pm;
   p.pmEmail = document.getElementById('ep-email')?.value.trim()||p.pmEmail;
@@ -6135,12 +6144,14 @@ function importWonProjects(){
           id:       p.num || p.id,
           name:     p.name,
           client:   p.client || '',
-          pmName:   p.pm || '',
+          pm:       p.pm || '',          // PM app uses 'pm' not 'pmName'
+          pmEmail:  p.pmEmail || '',
+          pmPhone:  p.pmPhone || '',
           status:   'Active',
           address:  p.address || '',
           codes:    (p.codes || []).map(c => ({
             code:  c.code,
-            value: c.value || c.estimatedValue || 0,
+            value: Math.round(c.value || c.estimatedValue || 0),  // round — no decimals
             foremanDays: c.foremanDays || 0,
             laborerDays: c.laborerDays || 0,
           })),
