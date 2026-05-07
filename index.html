@@ -4589,7 +4589,7 @@ function setCloudStatus(msg) {
 }
 
 
-const DEFAULT_STAFF_IDS = new Set(['e1','e2','e3','e4','e5','e6','e7','e8','e9','e10','e11','e12','e13','e14','e15','e16','e17','e18']);
+const DEFAULT_STAFF_IDS = new Set(['e1','e2','e3','e4','e5','e6','e7','e8','e9','e10','e11','e12','e13','e19','e17','e18']);
 const DEFAULT_EXTRA_IDS = new Set(['ew1','ew2','ew3','ew4','ew5','ew6','ew7','ew8']);
 
 function buildRosterData(){
@@ -4641,8 +4641,8 @@ function buildRosterData(){
     a: e.a||{}, notes: e.notes||{}, wh: e.wh||{},
     cc: e.cc||{}, co: e.co||{}, confirmed: e.confirmed||{}, pour: e.pour||{},
   });
-  const DEFAULT_RENTAL_IDS = new Set(['r1','r2','r3','r4','r5','r6','r7','r8','r9','r10']);
-  const DEFAULT_EQUIP_IDS  = new Set(['eq1','eq2','eq3','eq4','eq5']);
+  const DEFAULT_RENTAL_IDS = new Set(['r1','r2','r3','r4','r5']);
+  const DEFAULT_EQUIP_IDS  = new Set(['ss1','ss2','ss3','ss4','ex1','ex3','ex4','ex7','ex8']);
 
   return {
     staff:      STAFF.map(mapItem),
