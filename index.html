@@ -5641,7 +5641,7 @@ function bulkCopySelected(){
   });
   const pasteBtn=document.getElementById('bulk-paste-btn');
   if(pasteBtn) pasteBtn.style.display='inline-block';
-  toast(`📋 Copied ${_bulkClipboard.length} cell${_bulkClipboard.length!==1?'s':''}  — click destination cell then Ctrl+V to paste`);
+  toast(`📋 Copied ${_bulkClipboard.length} cell${_bulkClipboard.length!==1?'s':''}. Click "Paste to date…" to paste.`);
 }
 
 function bulkEnterPasteMode(){
@@ -6752,11 +6752,9 @@ function printWeeklySchedule() {
   const body = document.getElementById('weekly-sched-body');
   if(!body) return;
   const win = window.open('','_blank','width=1400,height=800');
-  win.document.write('<html><head><title>Weekly Logistics Schedule</title>'
-    + '<style>body{font-family:Arial,sans-serif;margin:20px}@media print{body{margin:0}}</style>'
-    + '</head><body>' + body.outerHTML
-    + '<scr' + 'ipt>window.onload=()=>window.print()</scr' + 'ipt>'
-    + '</body></html>');
+  win.document.write(`<html><head><title>Weekly Logistics Schedule</title>
+    <style>body{font-family:Arial,sans-serif;margin:20px}@media print{body{margin:0}}</style>
+    </head><body>${body.outerHTML}<script>window.onload=()=>window.print()<\/script></body></html>`);
   win.document.close();
 }
 
