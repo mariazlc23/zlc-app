@@ -847,7 +847,7 @@ const CAT_COLORS={staff:'#185FA5',extra:'#BA7517',equip:'#3B6D11',rental:'#88878
 const DEFAULT_CONFIG = {
   SHEET_ID: '1Y35oa2ebgCisj3PzVs2dTMUN5dY2Hhci4RIt55Kn44Y',
   API_KEY: 'AIzaSyCCuKyfurmT2w-L2dn6-XbvupaOmlHufUE',
-  APPS_SCRIPT_URL: 'https://script.google.com/macros/s/AKfycbyouaZzlhceAs7vs7HJG0bb9mIul84DGHAQ8g-Tjm93meyeu-gvB1QArlBTXDm2Cg7e/exec'
+  APPS_SCRIPT_URL: 'https://script.google.com/macros/s/AKfycbylgsY5Nd3F3DlPQijFjwlNz3D11i2Jz2lET4F5QfjCuPbuTxCEqLlGWrcSArfmf9dGrQ/exec'
 };
 
 function getRuntimeConfig() {
@@ -3737,12 +3737,8 @@ function saveCell(id,key,type){
   const colorPicker = document.getElementById('cp-color');
   const projSel = document.getElementById('cp-proj');
   if(colorPicker && projSel && projSel.value && projSel.value !== 'OFF' && projSel.value !== 'Warehouse' && projSel.value !== 'NEW') {
-    const oldColor = PROJ_COLORS[projSel.value];
     PROJ_COLORS[projSel.value] = colorPicker.value;
-    // If color changed, trigger cloud save immediately so other users see it
-    if(oldColor !== colorPicker.value) {
-      saveLocal(); // triggers cloud save via debounce
-    }
+    _colorsDirty = true; // mark for cloud save
   }
   // Snapshot for undo
   undoPush({id,key,type, snapshot:{
@@ -4161,10 +4157,7 @@ function openModal(type,pid,extra){
     const acctParts=(ep.acctInfo||'').split(',');
     showModal(`<div class="modal-title">Edit project — ${ep.id}</div>
       <div class="fg2">
-        <div class="fg" style="margin-bottom:0"><label>Job Number</label><input id="ep-num" value="${escHtml(ep.id)}" placeholder="26-011"></div>
         <div class="fg" style="margin-bottom:0"><label>Name</label><input id="ep-name" value="${escHtml(ep.name)}"></div>
-      </div>
-      <div class="fg2">
         <div class="fg" style="margin-bottom:0"><label>Status</label><select id="ep-status">
           <option${ep.status==='Active'?' selected':''}>Active</option>
           <option${ep.status==='Pending'?' selected':''}>Pending</option>
@@ -4422,12 +4415,6 @@ function saveProject(){
 function saveEditProject(pid){
   const p=DB.projects.find(x=>x.id===pid);
   if(!p){toast('Project not found');return;}
-  // Update job number if changed
-  const newNum=document.getElementById('ep-num')?.value.trim();
-  if(newNum&&newNum!==pid){
-    if(DB.projects.find(x=>x.id===newNum&&x!==p)){toast('Job number already exists');return;}
-    p.id=newNum;
-  }
   p.name    = document.getElementById('ep-name')?.value.trim()||p.name;
   p.pm      = document.getElementById('ep-pm')?.value.trim()||p.pm;
   p.pmEmail = document.getElementById('ep-email')?.value.trim()||p.pmEmail;
@@ -4704,13 +4691,17 @@ let _cloudTimer = null;
 let _cloudSaveInProgress = false;
 let _cloudPendingSnapshot = null;
 let _saveFailCount = 0; // tracks consecutive save failures
+// Dirty flags — only save static data when it actually changes
+let _ordersDirty   = true; // true on first load
+let _projsDirty    = true;
+let _colorsDirty   = true;
 
 // Called by saveLocal() — debounce 2s then save the latest snapshot
 function saveToCloud(rosterData){
   if(!APPS_SCRIPT_URL) return;
   _cloudPendingSnapshot = rosterData;
   clearTimeout(_cloudTimer);
-  _cloudTimer = setTimeout(()=>flushPendingCloudSave(), 3000); // 3s debounce — batches rapid edits
+  _cloudTimer = setTimeout(()=>flushPendingCloudSave(), 5000); // 5s debounce — batches rapid edits
 }
 
 async function flushPendingCloudSave(force=false, _retryCount=0){
@@ -4755,7 +4746,7 @@ async function _doCloudSave(rosterData){
       for(let i=0;i<arr.length;i+=size) out.push(arr.slice(i,i+size));
       return out;
     }
-    let chunks = makeChunks(c.staff, 1); // 1 person per chunk = smaller, faster saves
+    let chunks = makeChunks(c.staff, 3); // 3 people per chunk = fewer API calls
     // Re-split any chunk that's too large into size-1
     const safeChunks = [];
     for(const ch of chunks){
@@ -4811,6 +4802,8 @@ async function _doCloudSave(rosterData){
       rentals:    c.rentals,
       extraList:  c.extraList,
       staffList:  c.staffList,
+      rentalList: c.rentalList || [],
+      equipList:  c.equipList  || [],
     });
         _metaSaved = true;
       } catch(_me) {
@@ -4819,19 +4812,28 @@ async function _doCloudSave(rosterData){
       }
     }    await delay(300);
 
-    // ── Save orders ───────────────────────────────────────────────────────
-    await jsonpSave('orders', DB.openOrders||[]);
-    await delay(200);
-    await jsonpSave('deletedProjects', DB._deletedProjects||[]);
-    await delay(200);
-
-    // ── Save custom project colors ────────────────────────────────────────
-    // Filter to only user-customized colors (not the defaults hardcoded in PROJ_COLORS)
-    await jsonpSave('projColors', PROJ_COLORS);
-    await delay(200);
-
-    // ── Save manually-added projects ──────────────────────────────────────
-    await jsonpSave('manualProjects', DB.projects.filter(p=>p._manual)||[]);
+    // ── Save static data only when dirty ─────────────────────────────────────
+    if(_ordersDirty) {
+      await jsonpSave('orders', DB.openOrders||[]);
+      await delay(150);
+      _ordersDirty = false;
+    }
+    if(_projsDirty) {
+      await jsonpSave('deletedProjects', DB._deletedProjects||[]);
+      await jsonpSave('manualProjects', DB.projects.filter(p=>p._manual)||[]);
+      await delay(150);
+      _projsDirty = false;
+    }
+    if(_colorsDirty) {
+      await jsonpSave('projColors', PROJ_COLORS);
+      await delay(150);
+      _colorsDirty = false;
+    }
+    if(_historyDirty && _persistedHistory.length > 0) {
+      await jsonpSave('rosterHistory', _persistedHistory.slice(0,500));
+      await delay(150);
+      _historyDirty = false;
+    }
 
     if(failedChunks.length === 0){
       _saveFailCount = 0; // reset on success
@@ -5008,8 +5010,10 @@ async function loadFromCloud(){
         extra:     meta.extra||[],
         equip:     meta.equip||[],
         rentals:   meta.rentals||[],
-        extraList: meta.extraList||[],
-        staffList: meta.staffList||[],
+        extraList:  meta.extraList||[],
+        staffList:  meta.staffList||[],
+        rentalList: meta.rentalList||[],
+        equipList:  meta.equipList||[],
       });
       console.log('☁️ Loaded '+allStaff.length+' staff from cloud');
     }
@@ -6085,72 +6089,20 @@ function openEstimatingSystem(){
   window.open(base + '/ZLC_Estimating_System.html', '_blank');
 }
 
-// sheetCall — lightweight wrapper to call Apps Script action
-function sheetCall(action, payload){
-  return new Promise((resolve, reject) => {
-    if(!APPS_SCRIPT_URL){ reject('No URL'); return; }
-    const body    = JSON.stringify({action, ...payload});
-    const cbName  = '_sc_'+Date.now()+'_'+Math.random().toString(36).slice(2);
-    const script  = document.createElement('script');
-    const timer   = setTimeout(()=>{ delete window[cbName]; script.remove(); reject('timeout'); }, 20000);
-    window[cbName] = (r) => { clearTimeout(timer); delete window[cbName]; script.remove(); resolve(r); };
-    script.src    = APPS_SCRIPT_URL+'?data='+encodeURIComponent(body)+'&callback='+cbName;
-    script.onerror= ()=>{ clearTimeout(timer); delete window[cbName]; reject('error'); };
-    document.head.appendChild(script);
-  });
-}
-
-async function checkWonQueue(){
+function checkWonQueue(){
+  // Check if Estimating System has any Won projects waiting to be imported
   try {
-    // 1. Check localStorage (same browser — fast)
-    let queue = JSON.parse(localStorage.getItem('zlc_est_won_queue') || '[]');
-
-    // 2. Also check cloud sheet for Won projects not yet imported
-    //    (catches projects marked Won in a different browser/device)
-    if(APPS_SCRIPT_URL){
-      try{
-        const res = await sheetCall('loadWonQueue', {});
-        if(res && res.ok && res.rows && res.rows.length){
-          // Convert sheet rows to queue format
-          const cloudItems = res.rows.map(r => ({
-            _estimatingId: String(r['Estimating ID']||''),
-            id:    String(r['Job #']||r['Estimating ID']||''),
-            num:   String(r['Job #']||''),
-            name:  String(r['Project Name']||''),
-            client:String(r['Client']||''),
-            pm:    String(r['PM']||''),
-            pmEmail:String(r['PM Email']||''),
-            pmPhone:String(r['PM Phone']||''),
-            address:String(r['Address']||''),
-            wonDate:String(r['Won Date']||''),
-            codes: (r['Scopes JSON']||[]).map(s=>({
-              code:  s.scopeCode||'',
-              value: s.total||0,
-              foremanDays: s.foremanDays||0,
-              laborerDays: s.laborerDays||0,
-            })),
-            cos: [],
-          }));
-          // Merge: add cloud items not already in localStorage queue
-          cloudItems.forEach(ci => {
-            if(!queue.find(q => q._estimatingId === ci._estimatingId)) {
-              queue.push(ci);
-            }
-          });
-        }
-      } catch(e){ /* cloud check failed silently — localStorage still works */ }
-    }
-
+    const queue = JSON.parse(localStorage.getItem('zlc_est_won_queue') || '[]');
     const badge = document.getElementById('est-won-badge');
+
     if(queue.length === 0){ if(badge) badge.style.display='none'; return; }
 
+    // Show badge
     if(badge){ badge.textContent = queue.length; badge.style.display='inline-block'; }
 
+    // Show notification banner
     const existing = document.getElementById('est-won-banner');
-    if(existing) return;
-
-    // Store merged queue back so importWonProjects() can read it
-    try{ localStorage.setItem('zlc_est_won_queue', JSON.stringify(queue)); }catch(e){}
+    if(existing) return; // already showing
 
     const banner = document.createElement('div');
     banner.id = 'est-won-banner';
@@ -6196,14 +6148,12 @@ function importWonProjects(){
           id:       p.num || p.id,
           name:     p.name,
           client:   p.client || '',
-          pm:       p.pm || '',
-          pmEmail:  p.pmEmail || '',
-          pmPhone:  p.pmPhone || '',
+          pmName:   p.pm || '',
           status:   'Active',
           address:  p.address || '',
           codes:    (p.codes || []).map(c => ({
             code:  c.code,
-            value: Math.round(c.value || c.estimatedValue || 0),
+            value: c.value || c.estimatedValue || 0,
             foremanDays: c.foremanDays || 0,
             laborerDays: c.laborerDays || 0,
           })),
@@ -6221,7 +6171,6 @@ function importWonProjects(){
           history:  [{ date: new Date().toISOString().split('T')[0], text: 'Project won — imported from Estimating System', type:'created' }],
           _fromEstimating: true,
           _estimatingId:   p._estimatingId,
-          _manual:  true,   // ← makes it save to cloud via manualProjects
           wonDate:  p.wonDate,
           created:  new Date().toISOString(),
         };
@@ -6230,11 +6179,11 @@ function importWonProjects(){
       }
     });
 
-    // Clear the local queue
+    // Clear the queue
     localStorage.removeItem('zlc_est_won_queue');
     localStorage.removeItem('zlc_est_won_time');
 
-    saveLocal();  // saves imported projects to cloud via manualProjects
+    saveLocal();
     renderProjTable();
     renderOverview();
     renderAnalytics();
@@ -6243,13 +6192,6 @@ function importWonProjects(){
 
     const msg = [imported && `${imported} imported`, updated && `${updated} updated`].filter(Boolean).join(', ');
     toast(`✓ ${msg} from Estimating System`);
-
-    // Mark as imported in Estimator sheet so it doesn't show again
-    queue.forEach(p => {
-      if(p._estimatingId) {
-        sheetCall('markImportedToPM', { estimatingId: p._estimatingId }).catch(()=>{});
-      }
-    });
 
     // Switch to projects view to show the new ones
     if(imported > 0){
@@ -6930,18 +6872,7 @@ function rosterHistoryPush(id, key, fromVal, toVal) {
   _persistedHistory.unshift(entry); // newest first
   if(_persistedHistory.length > 500) _persistedHistory.pop(); // keep last 500
   _historyDirty = true;
-  // Debounced cloud save
-  clearTimeout(_historyTimer);
-  _historyTimer = setTimeout(saveHistoryToCloud, 5000);
-}
-let _historyTimer = null;
-
-async function saveHistoryToCloud(){
-  if(!_historyDirty || !APPS_SCRIPT_URL) return;
-  try {
-    await jsonpSave('rosterHistory', _persistedHistory.slice(0, 500));
-    _historyDirty = false;
-  } catch(e) { console.warn('History save failed:', e); }
+  // History will be saved in the next main cloud save cycle (no separate timer needed)
 }
 
 async function loadHistoryFromCloud(){
