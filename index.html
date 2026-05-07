@@ -5130,47 +5130,50 @@ function applyRosterData(rd) {
       if(saved.project !== undefined) item.project = saved.project;
     }
   });
-  // Remove N/A or blank entries from cloud data before applying
-  if(rd.staff) rd.staff=rd.staff.filter(s=>s.name&&s.name!=='N/A'&&s.name.trim()!=='');
-  apply(rd.staff,   STAFF);
-  apply(rd.extra,   EXTRA);
-  apply(rd.equip,   EQUIP);
-  apply(rd.rentals, RENTALS);
-  (rd.extraList||[]).forEach(s=>{
-    if(!EXTRA.find(e=>e.id===s.id)) EXTRA.push({
-      id:s.id,
-      name:s.name||'Unnamed',
-      team:s.team||'',
-      role:s.role||'laborer',
-      project:s.project||'',
-      a:s.a||{}, notes:s.notes||{}, wh:s.wh||{}, cc:s.cc||{}, co:s.co||{}, confirmed:s.confirmed||{}, pour:s.pour||{},
-    });
-  });
+
+  // ── STEP 1: Create new items FIRST (before applying assignments) ──────────
+  // New staff added by user (not in default STAFF array)
   (rd.staffList||[]).forEach(s=>{
     if(!STAFF.find(e=>e.id===s.id)) STAFF.push({
-      id:s.id,
-      name:s.name||'Unnamed',
-      team:s.team||'New team',
-      role:s.role||'',
-      certs:s.certs||[],
-      veh:s.veh||'',
-      a:s.a||{}, notes:s.notes||{}, wh:s.wh||{}, cc:s.cc||{}, co:s.co||{}, confirmed:s.confirmed||{}, pour:s.pour||{},
+      id:s.id, name:s.name||'Unnamed', team:s.team||'New team',
+      role:s.role||'', certs:s.certs||[], veh:s.veh||'',
+      a:{}, notes:{}, wh:{}, cc:{}, co:{}, confirmed:{}, pour:{},
     });
   });
-  // Restore user-added rentals
+  // New extra workers added by user
+  (rd.extraList||[]).forEach(s=>{
+    if(!EXTRA.find(e=>e.id===s.id)) EXTRA.push({
+      id:s.id, name:s.name||'Unnamed', team:s.team||'',
+      role:s.role||'laborer', project:s.project||'',
+      a:{}, notes:{}, wh:{}, cc:{}, co:{}, confirmed:{}, pour:{},
+    });
+  });
+  // New rentals added by user
   (rd.rentalList||[]).forEach(s=>{
     if(!RENTALS.find(r=>r.id===s.id)) RENTALS.push({
-      id:s.id, name:s.name||'Unnamed', cat:s.cat||'Rental', notes_meta:s.notes_meta||'',
-      a:s.a||{}, notes:s.notes||{}, wh:s.wh||{}, cc:s.cc||{}, co:s.co||{}, confirmed:s.confirmed||{}, pour:s.pour||{},
+      id:s.id, name:s.name||'Unnamed', cat:s.cat||'Rental',
+      notes_meta:s.notes_meta||'',
+      a:{}, notes:{}, wh:{}, cc:{}, co:{}, confirmed:{}, pour:{},
     });
   });
-  // Restore user-added equipment
+  // New equipment added by user
   (rd.equipList||[]).forEach(s=>{
     if(!EQUIP.find(e=>e.id===s.id)) EQUIP.push({
-      id:s.id, name:s.name||'Unnamed', cat:s.cat||'Equipment', notes_meta:s.notes_meta||'',
-      a:s.a||{}, notes:s.notes||{}, wh:s.wh||{}, cc:s.cc||{}, co:s.co||{}, confirmed:s.confirmed||{}, pour:s.pour||{},
+      id:s.id, name:s.name||'Unnamed', cat:s.cat||'Equipment',
+      notes_meta:s.notes_meta||'',
+      a:{}, notes:{}, wh:{}, cc:{}, co:{}, confirmed:{}, pour:{},
     });
   });
+
+  // ── STEP 2: Now apply assignments from chunks ─────────────────────────────
+  // Remove N/A or blank entries from cloud data before applying
+  if(rd.staff) rd.staff=rd.staff.filter(s=>s.name&&s.name!=='N/A'&&s.name.trim()!=='');
+  apply(rd.staff,   STAFF);   // applies to both default AND newly-added staff
+  apply(rd.extra,   EXTRA);   // applies to both default AND newly-added extras
+  apply(rd.equip,   EQUIP);
+  apply(rd.rentals, RENTALS);
+
+  // (staffList, extraList, rentalList, equipList already handled in Step 1 above)
 }
 
 
