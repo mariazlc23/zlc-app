@@ -4795,15 +4795,20 @@ async function _doCloudSave(rosterData){
     // Save metadata with retry
     let _metaSaved = false;
     for(let _mr=0; _mr<2 && !_metaSaved; _mr++){
-      try { // scMeta stays lean - no large arrays to avoid URL limit
-      await jsonpSave('scMeta', {
-        chunkCount: chunks.length,
-        extra:      c.extra,
-        equip:      c.equip,
-        rentals:    c.rentals,
-      });
-      // Save item lists as dedicated separate cloud keys
+      try { // Save extra workers as separate chunks (like staff)
+      const extraChunks = [];
+      for(let j=0; j<c.extra.length; j+=3) extraChunks.push(c.extra.slice(j,j+3));
+      for(let j=0; j<extraChunks.length; j++){
+        await jsonpSave('ex'+j, extraChunks[j]);
+        if(j < extraChunks.length-1) await delay(150);
+      }
+      // Save rentals and equip as single keys (usually small)
       await delay(150);
+      await jsonpSave('rentals', c.rentals || []);
+      await delay(150);
+      await jsonpSave('equip',   c.equip   || []);
+      await delay(150);
+      // Save item lists (new items added by user)
       await jsonpSave('extraList',  c.extraList  || []);
       await delay(150);
       await jsonpSave('staffList',  c.staffList  || []);
@@ -4812,6 +4817,11 @@ async function _doCloudSave(rosterData){
       await delay(150);
       await jsonpSave('equipList',  c.equipList  || []);
       await delay(150);
+      // scMeta is now just chunk count + extra chunk count
+      await jsonpSave('scMeta', {
+        chunkCount:      chunks.length,
+        extraChunkCount: extraChunks.length,
+      });
       _metaSaved = true;
       } catch(_me) {
         console.warn('scMeta save attempt', _mr+1, 'failed:', _me);
@@ -5012,12 +5022,20 @@ async function loadFromCloud(){
     for(let i=0; i<chunkCount; i++) allStaff = allStaff.concat(d['sc'+i]||[]);
 
     if(allStaff.length > 0){
+      // Reassemble extra workers from chunks
+      const extraChunkCount = Number(meta.extraChunkCount)||0;
+      let allExtra = [];
+      if(extraChunkCount > 0){
+        for(let j=0; j<extraChunkCount; j++) allExtra = allExtra.concat(d['ex'+j]||[]);
+      } else {
+        // Fallback: try old scMeta.extra format
+        allExtra = meta.extra || [];
+      }
       applyRosterData({
         staff:      allStaff,
-        extra:      meta.extra   || [],
-        equip:      meta.equip   || [],
-        rentals:    meta.rentals || [],
-        // These are saved as separate cloud keys (not inside scMeta)
+        extra:      allExtra,
+        equip:      d.equip     || meta.equip   || [],
+        rentals:    d.rentals   || meta.rentals || [],
         extraList:  d.extraList  || meta.extraList  || [],
         staffList:  d.staffList  || meta.staffList  || [],
         rentalList: d.rentalList || meta.rentalList || [],
@@ -6844,6 +6862,29 @@ setInterval(() => {
   try {
     if (loadMsg) loadMsg.textContent = 'Loading data from cloud…';
     await loadFromCloud();
+    if (loadMsg) loadMsg.textContent = 'Saving…';
+    // Migrate: ensure item lists are saved as dedicated keys
+    try {
+      const rd = buildRosterData();
+      const c  = compressRoster(rd);
+      // Save extra workers as chunks
+      const exChunks = [];
+      for(let j=0; j<c.extra.length; j+=3) exChunks.push(c.extra.slice(j,j+3));
+      for(let j=0; j<exChunks.length; j++){
+        await jsonpSave('ex'+j, exChunks[j]);
+      }
+      await jsonpSave('rentals',    c.rentals    || []);
+      await jsonpSave('equip',      c.equip      || []);
+      await jsonpSave('extraList',  c.extraList  || []);
+      await jsonpSave('staffList',  c.staffList  || []);
+      await jsonpSave('rentalList', c.rentalList || []);
+      await jsonpSave('equipList',  c.equipList  || []);
+      await jsonpSave('scMeta', {
+        chunkCount: (c.staff ? Math.ceil(c.staff.length) : 0),
+        extraChunkCount: exChunks.length,
+      });
+      console.log('☁️ Migration save complete');
+    } catch(e) { console.warn('Migration save failed:', e); }
     if (loadMsg) loadMsg.textContent = 'Ready!';
   } catch(e) {
     if (loadMsg) loadMsg.textContent = 'Loaded from cache';
