@@ -4795,17 +4795,24 @@ async function _doCloudSave(rosterData){
     // Save metadata with retry
     let _metaSaved = false;
     for(let _mr=0; _mr<2 && !_metaSaved; _mr++){
-      try { await jsonpSave('scMeta', {
-      chunkCount: chunks.length,
-      extra:      c.extra,
-      equip:      c.equip,
-      rentals:    c.rentals,
-      extraList:  c.extraList,
-      staffList:  c.staffList,
-      rentalList: c.rentalList || [],
-      equipList:  c.equipList  || [],
-    });
-        _metaSaved = true;
+      try { // scMeta stays lean - no large arrays to avoid URL limit
+      await jsonpSave('scMeta', {
+        chunkCount: chunks.length,
+        extra:      c.extra,
+        equip:      c.equip,
+        rentals:    c.rentals,
+      });
+      // Save item lists as dedicated separate cloud keys
+      await delay(150);
+      await jsonpSave('extraList',  c.extraList  || []);
+      await delay(150);
+      await jsonpSave('staffList',  c.staffList  || []);
+      await delay(150);
+      await jsonpSave('rentalList', c.rentalList || []);
+      await delay(150);
+      await jsonpSave('equipList',  c.equipList  || []);
+      await delay(150);
+      _metaSaved = true;
       } catch(_me) {
         console.warn('scMeta save attempt', _mr+1, 'failed:', _me);
         if(_mr === 0) await delay(1000); // wait 1s before retry
@@ -5006,14 +5013,15 @@ async function loadFromCloud(){
 
     if(allStaff.length > 0){
       applyRosterData({
-        staff:     allStaff,
-        extra:     meta.extra||[],
-        equip:     meta.equip||[],
-        rentals:   meta.rentals||[],
-        extraList:  meta.extraList||[],
-        staffList:  meta.staffList||[],
-        rentalList: meta.rentalList||[],
-        equipList:  meta.equipList||[],
+        staff:      allStaff,
+        extra:      meta.extra   || [],
+        equip:      meta.equip   || [],
+        rentals:    meta.rentals || [],
+        // These are saved as separate cloud keys (not inside scMeta)
+        extraList:  d.extraList  || meta.extraList  || [],
+        staffList:  d.staffList  || meta.staffList  || [],
+        rentalList: d.rentalList || meta.rentalList || [],
+        equipList:  d.equipList  || meta.equipList  || [],
       });
       console.log('☁️ Loaded '+allStaff.length+' staff from cloud');
     }
