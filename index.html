@@ -4659,7 +4659,7 @@ function buildRosterData(){
 function compressRoster(rd){
   const c=arr=>(arr||[]).map(e=>{
     const o={id:e.id};
-    if(e.name)     o.name=e.name;
+    o.name = e.name || ''; // always include name so item is never filtered
     if(e.project)  o.project=e.project;
     if(e.a         && Object.keys(e.a).length)         o.a=e.a;
     if(e.notes     && Object.keys(e.notes).length)     o.notes=e.notes;
@@ -4669,7 +4669,7 @@ function compressRoster(rd){
     if(e.confirmed && Object.keys(e.confirmed).length) o.confirmed=e.confirmed;
     if(e.pour      && Object.keys(e.pour).length)      o.pour=e.pour;
     return o;
-  }).filter(e=>Object.keys(e).length>1);
+  }); // keep all items, even unassigned ones
   return{
     staff:     c(rd.staff),
     extra:     c(rd.extra),
