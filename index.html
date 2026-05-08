@@ -5096,18 +5096,12 @@ function jsonpSave(key, value){
       console.error('☁️', err); reject(err); return;
     }
     console.log(`☁️ jsonpSave key=${key} size=${kb}KB`);
-    const usePost = encoded.length > 5000;
-    if(usePost){
-      fetch(APPS_SCRIPT_URL, {method:'POST', body})
-        .then(r=>r.json())
-        .then(d=>{ if(d&&d.ok) resolve(d); else reject('Apps Script error: '+JSON.stringify(d)); })
-        .catch(()=>reject('Network error saving key='+key+'. Check internet connection.'));
-    } else {
-      fetch(APPS_SCRIPT_URL+'?data='+encoded)
-        .then(r=>r.json())
-        .then(d=>{ if(d&&d.ok) resolve(d); else reject('Apps Script error: '+JSON.stringify(d)); })
-        .catch(()=>reject('Network error saving key='+key+'. Check internet connection.'));
-    }
+    // Always use GET — Apps Script handles CORS for GET automatically
+    // For POST, preflight OPTIONS fails on Apps Script (no CORS header support)
+    fetch(APPS_SCRIPT_URL + '?data=' + encoded)
+      .then(r => r.json())
+      .then(d => { if(d && d.ok) resolve(d); else reject('Save error: ' + JSON.stringify(d)); })
+      .catch(err => reject('Network error saving "' + key + '": ' + err));
   });
 }
 
