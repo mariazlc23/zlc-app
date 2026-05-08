@@ -4799,26 +4799,43 @@ async function _doCloudSave(rosterData){
 
     // ── Save metadata: chunk count + extra/equip/rentals ─────────────────
     // Save metadata with retry
+    // ── Pre-compute chunk arrays so counts are known before saving ──────────────
+    let extraChunks = [];
+    for(let j=0; j<c.extra.length; j+=3) extraChunks.push(c.extra.slice(j,j+3));
+    const safeExtraChunks = [];
+    for(const ch of extraChunks){
+      const enc = encodeURIComponent(JSON.stringify({action:'saveAppData',key:'_test',value:ch}));
+      if(enc.length > LIMIT && ch.length > 1){ for(const e of ch) safeExtraChunks.push([e]); }
+      else safeExtraChunks.push(ch);
+    }
+    extraChunks = safeExtraChunks;
+    let rentalChunks = makeChunks(c.rentals || [], 5);
+
+    // ── Save scMeta FIRST (counts are now correct even if later saves fail) ───
+    try {
+      await jsonpSave('scMeta', {
+        chunkCount:       chunks.length,
+        extraChunkCount:  extraChunks.length,
+        rentalChunkCount: rentalChunks.length,
+      });
+    } catch(e) { console.warn('scMeta pre-save failed:', e); }
+    await delay(150);
+
     let _metaSaved = false;
     for(let _mr=0; _mr<2 && !_metaSaved; _mr++){
-      try { // Save extra workers as separate chunks (like staff)
-      const extraChunks = [];
-      for(let j=0; j<c.extra.length; j+=3) extraChunks.push(c.extra.slice(j,j+3));
+      try {
+      // Save extra worker chunks
       for(let j=0; j<extraChunks.length; j++){
         await jsonpSave('ewc'+j, extraChunks[j]);
         if(j < extraChunks.length-1) await delay(150);
       }
-      // Save rentals as chunks (same safe logic)
-      let rentalChunks = makeChunks(c.rentals || [], 5);
+      // Save rental chunks
       await delay(150);
       for(let j=0; j<rentalChunks.length; j++){
         await jsonpSave('rc'+j, rentalChunks[j]);
         if(j < rentalChunks.length-1) await delay(150);
       }
-      await delay(150);
-      await jsonpSave('equip',   c.equip   || []);
-      await delay(150);
-      // Save item lists (new items added by user)
+      // Save item lists
       await jsonpSave('extraList',  c.extraList  || []);
       await delay(150);
       await jsonpSave('staffList',  c.staffList  || []);
@@ -4827,16 +4844,10 @@ async function _doCloudSave(rosterData){
       await delay(150);
       await jsonpSave('equipList',  c.equipList  || []);
       await delay(150);
-      // scMeta is now just chunk count + extra chunk count
-      await jsonpSave('scMeta', {
-        chunkCount:        chunks.length,
-        extraChunkCount:   extraChunks.length,
-        rentalChunkCount:  rentalChunks.length,
-      });
       _metaSaved = true;
       } catch(_me) {
-        console.warn('scMeta save attempt', _mr+1, 'failed:', _me);
-        if(_mr === 0) await delay(1000); // wait 1s before retry
+        console.warn('Meta save attempt', _mr+1, 'failed:', _me);
+        if(_mr === 0) await delay(1000);
       }
     }    await delay(300);
 
