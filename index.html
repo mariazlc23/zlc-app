@@ -4799,7 +4799,7 @@ async function _doCloudSave(rosterData){
       const extraChunks = [];
       for(let j=0; j<c.extra.length; j+=3) extraChunks.push(c.extra.slice(j,j+3));
       for(let j=0; j<extraChunks.length; j++){
-        await jsonpSave('ex'+j, extraChunks[j]);
+        await jsonpSave('ewc'+j, extraChunks[j]);
         if(j < extraChunks.length-1) await delay(150);
       }
       // Save rentals and equip as single keys (usually small)
@@ -5026,7 +5026,7 @@ async function loadFromCloud(){
       const extraChunkCount = Number(meta.extraChunkCount)||0;
       let allExtra = [];
       if(extraChunkCount > 0){
-        for(let j=0; j<extraChunkCount; j++) allExtra = allExtra.concat(d['ex'+j]||[]);
+        for(let j=0; j<extraChunkCount; j++) allExtra = allExtra.concat(d['ewc'+j]||[]);
       } else {
         // Fallback: try old scMeta.extra format
         allExtra = meta.extra || [];
@@ -6874,7 +6874,7 @@ setInterval(() => {
       const exChunks = [];
       for(let j=0; j<c.extra.length; j+=3) exChunks.push(c.extra.slice(j,j+3));
       for(let j=0; j<exChunks.length; j++){
-        await jsonpSave('ex'+j, exChunks[j]);
+        await jsonpSave('ewc'+j, exChunks[j]);
       }
       await jsonpSave('rentals',    c.rentals    || []);
       await jsonpSave('equip',      c.equip      || []);
