@@ -494,6 +494,10 @@ body.select-mode .day-cell:hover { filter: brightness(1.15) !important; }
     <button id="sync-badge" onclick="throttledSync()" style="width:100%;font-size:11px;font-weight:600;padding:7px 12px;border-radius:var(--radius);border:0.5px solid var(--border2);cursor:pointer;transition:all .15s;background:#f0eeea;color:#9e9c97">↻ Sync from Sheets</button>
     <button onclick="forceSaveToCloud()" id="cloud-save-btn" title="Save roster to cloud" style="width:100%;margin-top:6px;font-size:11px;font-weight:600;padding:6px 12px;border-radius:var(--radius);border:0.5px solid #185FA5;cursor:pointer;background:#E8F0FE;color:#185FA5">☁ Save to cloud</button>
     <button onclick="loadFromCloud()" style="width:100%;margin-top:4px;font-size:11px;font-weight:600;padding:6px 12px;border-radius:var(--radius);border:0.5px solid var(--border2);cursor:pointer;background:var(--bg3);color:var(--text2)">↻ Load from cloud</button>
+    <div style="display:flex;gap:5px;margin-top:5px">
+      <button onclick="exportBackup()" style="flex:1;padding:5px;font-size:11px;border-radius:6px;border:0.5px solid var(--border2);background:var(--bg);cursor:pointer;color:var(--text2)" title="Download backup JSON">⬇ Export</button>
+      <label style="flex:1;padding:5px;font-size:11px;border-radius:6px;border:0.5px solid var(--border2);background:var(--bg);cursor:pointer;color:var(--text2);text-align:center" title="Import backup JSON">⬆ Import<input type="file" accept=".json" style="display:none" onchange="importBackup(this)"></label>
+    </div>
     <div id="cloud-status" style="font-size:10px;color:var(--text3);text-align:center;margin-top:4px"></div>
     <!-- Save diagnostics panel — shows on save errors -->
     <div id="save-diag" style="display:none;margin-top:6px;font-size:10px;background:#FAEEDA;border:0.5px solid #F0C879;border-radius:4px;padding:6px 8px;color:#854F0B;line-height:1.5">
@@ -4739,156 +4743,62 @@ async function _doCloudSave(rosterData){
   _cloudSaveInProgress = true;
   setCloudStatus('⏳ Saving…');
   showSaveIndicator && showSaveIndicator('saving','⏳ Saving…');
-  try{
+
+  try {
     const c = compressRoster(rosterData);
 
-    // ── Dynamic chunk sizing ──────────────────────────────────────────────
-    // Start with chunks of 2 staff. If any chunk exceeds the URL limit,
-    // split down to 1 per chunk automatically. This handles employees with
-    // many assigned days whose serialized data grows large.
-    const LIMIT = 13000; // Apps Script safe URL cap (conservative)
-    function makeChunks(arr, size){
-      const out = [];
-      for(let i=0;i<arr.length;i+=size) out.push(arr.slice(i,i+size));
-      return out;
-    }
-    let chunks = makeChunks(c.staff, 3); // 3 people per chunk = fewer API calls
-    // Re-split any chunk that's too large into size-1
-    const safeChunks = [];
-    for(const ch of chunks){
-      const encoded = encodeURIComponent(JSON.stringify({action:'saveAppData',key:'_test',value:ch}));
-      if(encoded.length > LIMIT && ch.length > 1){
-        // Split this chunk further — one staff per chunk
-        for(const s of ch) safeChunks.push([s]);
-      } else {
-        safeChunks.push(ch);
-      }
-    }
-    chunks = safeChunks;
+    // ── Build monthly key ─────────────────────────────────────────────────────
+    const now     = new Date();
+    const monthKey= `roster_${now.getFullYear()}_${String(now.getMonth()+1).padStart(2,'0')}`;
 
-    // ── Save each staff chunk with per-chunk error reporting ──────────────
-    const failedChunks = [];
-    for(let i=0; i<chunks.length; i++){
-      try{
-        await jsonpSave('sc'+i, chunks[i]);
-        if(i < chunks.length-1) await delay(300);
-      } catch(chunkErr){
-        failedChunks.push({i, err: String(chunkErr)});
-        console.error('☁️ Chunk sc'+i+' failed:', chunkErr);
-      }
-    }
+    // ── Build batch payload: one object with ALL data ─────────────────────────
+    const batch = {
+      [monthKey]: {
+        staff:      c.staff,
+        extra:      c.extra,
+        equip:      c.equip,
+        rentals:    c.rentals,
+        extraList:  c.extraList  || [],
+        staffList:  c.staffList  || [],
+        rentalList: c.rentalList || [],
+        equipList:  c.equipList  || [],
+        savedAt:    now.toISOString(),
+      },
+    };
 
-    if(failedChunks.length > 0){
-      // Some chunks failed — let the user know which ones and why
-      const msg = `⚠️ ${failedChunks.length} of ${chunks.length} save chunk(s) failed. Data may be incomplete. Check console for details.`;
-      console.error('Failed chunks:', failedChunks);
-      showBanner(msg, 'error', 0); // 0 = don't auto-hide, stays until dismissed
-      setCloudStatus('✗ Partial save — click "Run full check"');
-      showSaveIndicator && showSaveIndicator('error','✗ Not fully saved');
-      // Only show diagnostics panel after persistent failures (not transient)
-      _saveFailCount = (_saveFailCount||0) + 1;
-      if(_saveFailCount >= 2) {
-        const diagLines = failedChunks.map(f => `❌ Chunk ${f.i}: ${f.err}`);
-        diagLines.push('👆 Click "Run full check" for full analysis and fix instructions.');
-        showSaveDiag(diagLines.join('<br>'));
-      } else {
-        console.warn('☁️ Save had failures (attempt', _saveFailCount, ') — will retry');
-      }
-      // Still try to save metadata with what we have
-    }
-
-    // ── Save metadata: chunk count + extra/equip/rentals ─────────────────
-    // Save metadata with retry
-    // ── Pre-compute chunk arrays so counts are known before saving ──────────────
-    let extraChunks = [];
-    for(let j=0; j<c.extra.length; j+=3) extraChunks.push(c.extra.slice(j,j+3));
-    const safeExtraChunks = [];
-    for(const ch of extraChunks){
-      const enc = encodeURIComponent(JSON.stringify({action:'saveAppData',key:'_test',value:ch}));
-      if(enc.length > LIMIT && ch.length > 1){ for(const e of ch) safeExtraChunks.push([e]); }
-      else safeExtraChunks.push(ch);
-    }
-    extraChunks = safeExtraChunks;
-    let rentalChunks = makeChunks(c.rentals || [], 5);
-
-    // ── Save scMeta FIRST (counts are now correct even if later saves fail) ───
-    try {
-      await jsonpSave('scMeta', {
-        chunkCount:       chunks.length,
-        extraChunkCount:  extraChunks.length,
-        rentalChunkCount: rentalChunks.length,
-      });
-    } catch(e) { console.warn('scMeta pre-save failed:', e); }
-    await delay(150);
-
-    let _metaSaved = false;
-    for(let _mr=0; _mr<2 && !_metaSaved; _mr++){
-      try {
-      // Save extra worker chunks
-      for(let j=0; j<extraChunks.length; j++){
-        await jsonpSave('ewc'+j, extraChunks[j]);
-        if(j < extraChunks.length-1) await delay(150);
-      }
-      // Save rental chunks
-      await delay(150);
-      for(let j=0; j<rentalChunks.length; j++){
-        await jsonpSave('rc'+j, rentalChunks[j]);
-        if(j < rentalChunks.length-1) await delay(150);
-      }
-      // Save item lists
-      await jsonpSave('extraList',  c.extraList  || []);
-      await delay(150);
-      await jsonpSave('staffList',  c.staffList  || []);
-      await delay(150);
-      await jsonpSave('rentalList', c.rentalList || []);
-      await delay(150);
-      await jsonpSave('equipList',  c.equipList  || []);
-      await delay(150);
-      _metaSaved = true;
-      } catch(_me) {
-        console.warn('Meta save attempt', _mr+1, 'failed:', _me);
-        if(_mr === 0) await delay(1000);
-      }
-    }    await delay(300);
-
-    // ── Save static data only when dirty ─────────────────────────────────────
-    if(_ordersDirty) {
-      await jsonpSave('orders', DB.openOrders||[]);
-      await delay(150);
-      _ordersDirty = false;
-    }
-    if(_projsDirty) {
-      await jsonpSave('deletedProjects', DB._deletedProjects||[]);
-      await jsonpSave('manualProjects', DB.projects.filter(p=>p._manual)||[]);
-      await delay(150);
-      _projsDirty = false;
-    }
-    if(_colorsDirty) {
-      await jsonpSave('projColors', PROJ_COLORS);
-      await delay(150);
-      _colorsDirty = false;
-    }
+    // ── Add static data (only when dirty) ─────────────────────────────────────
+    if(_ordersDirty)  { batch.orders          = DB.openOrders||[];            _ordersDirty  = false; }
+    if(_projsDirty)   { batch.deletedProjects  = DB._deletedProjects||[];
+                        batch.manualProjects   = DB.projects.filter(p=>p._manual)||[]; _projsDirty = false; }
+    if(_colorsDirty)  { batch.projColors       = PROJ_COLORS;                 _colorsDirty  = false; }
     if(_historyDirty && _persistedHistory.length > 0) {
-      await jsonpSave('rosterHistory', _persistedHistory.slice(0,500));
-      await delay(150);
-      _historyDirty = false;
-    }
+                        batch.rosterHistory    = _persistedHistory.slice(0,500); _historyDirty = false; }
 
-    if(failedChunks.length === 0){
-      _saveFailCount = 0; // reset on success
-    const t = new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'});
-      setCloudStatus('✓ Saved '+t);
-      showSaveIndicator && showSaveIndicator('saved','✓ Saved');
-      console.log('☁️ Saved to cloud at', t, '·', chunks.length, 'chunks ·', c.staff.length, 'staff');
-    }
-  }catch(e){
-    console.error('☁️ Save failed:',e);
-    setCloudStatus('✗ Save failed — retrying…');
-    showBanner('⚠️ Roster not saved to cloud. Retrying in 15s…', 'error', 0);
-    showSaveDiag('❌ Save error: '+String(e).slice(0,120)+'<br>👆 Click "Run full check" for diagnosis.<br>🔄 Auto-retrying in 15s…');
-    // Auto-retry once after 15 seconds
-    setTimeout(()=>{ saveToCloud(buildRosterData()); }, 15000);
-  }finally{
+    // ── Single POST call ──────────────────────────────────────────────────────
+    const body = JSON.stringify({ action: 'saveBulk', batch });
+    const kb   = Math.round(body.length / 1024 * 10) / 10;
+    console.log(`☁️ saveBulk POST ${kb}KB (${Object.keys(batch).join(', ')})`);
+
+    const resp = await fetch(APPS_SCRIPT_URL, {
+      method:  'POST',
+      headers: { 'Content-Type': 'text/plain' }, // text/plain avoids CORS preflight
+      body,
+    });
+
+    if(!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    const result = await resp.json();
+    if(!result.ok) throw new Error('Apps Script error: ' + JSON.stringify(result));
+
+    _saveFailCount = 0;
+    setCloudStatus('✓ Saved');
+    showSaveIndicator && showSaveIndicator('ok', '✓ Saved');
+
+  } catch(err) {
+    _saveFailCount++;
+    console.error('☁️ saveBulk failed:', err);
+    setCloudStatus('⚠ Save error');
+    showSaveIndicator && showSaveIndicator('error','⚠ Save error — check connection');
+  } finally {
     _cloudSaveInProgress = false;
   }
 }
@@ -5026,91 +4936,109 @@ function getPrevMonthLabel(){
   return d.toLocaleString('en-US',{month:'long',year:'numeric'});
 }
 
-async function loadFromCloud(){
-  if(!APPS_SCRIPT_URL) return;
-  setCloudStatus('⏳ Loading…');
-  try{
+async function loadFromCloud(silent=false){
+  const loadEl  = document.getElementById('app-loading');
+  const loadMsg = document.getElementById('loading-msg');
+
+  try {
+    if(loadMsg) loadMsg.textContent = 'Loading from cloud…';
+
+    // ── Fetch all App Data via JSONP GET ──────────────────────────────────────
     const json = await jsonpLoad();
-    if(!json||!json.ok||!json.data){
+    if(!json || !json.ok || !json.data){
       setCloudStatus('☁️ No data yet — press Save first');
       return;
     }
     const d = json.data;
-    const meta = d.scMeta||{};
-    const chunkCount = Number(meta.chunkCount)||0;
 
-    // Reassemble staff from chunks
-    let allStaff = [];
-    for(let i=0; i<chunkCount; i++) allStaff = allStaff.concat(d['sc'+i]||[]);
+    // ── Try new monthly format first, then fall back to old chunk format ──────
+    const now      = new Date();
+    const monthKey = `roster_${now.getFullYear()}_${String(now.getMonth()+1).padStart(2,'0')}`;
 
-    if(allStaff.length > 0){
-      // Reassemble extra workers from chunks
-      const extraChunkCount = Number(meta.extraChunkCount)||0;
-      let allExtra = [];
-      if(extraChunkCount > 0){
-        for(let j=0; j<extraChunkCount; j++) allExtra = allExtra.concat(d['ewc'+j]||[]);
-      } else {
-        // Fallback: try old scMeta.extra format
-        allExtra = meta.extra || [];
-      }
+    // Also check last month as fallback
+    const lastMonth = new Date(now.getFullYear(), now.getMonth()-1, 1);
+    const lastKey   = `roster_${lastMonth.getFullYear()}_${String(lastMonth.getMonth()+1).padStart(2,'0')}`;
+
+    const monthly = d[monthKey] || d[lastKey];
+
+    if(monthly && monthly.staff && monthly.staff.length > 0){
+      // ── New format: single monthly object ──────────────────────────────────
+      console.log(`☁️ Loaded from monthly key (${monthly.staff.length} staff)`);
       applyRosterData({
-        staff:      allStaff,
-        extra:      allExtra,
-        equip:      d.equip     || meta.equip   || [],
-        rentals:    (() => {
-          const rcCount = Number(meta.rentalChunkCount)||0;
-          if(rcCount > 0){
-            let all = [];
-            for(let j=0; j<rcCount; j++) all = all.concat(d['rc'+j]||[]);
-            return all;
-          }
-          return d.rentals || meta.rentals || [];
-        })(),
-        extraList:  d.extraList  || meta.extraList  || [],
-        staffList:  d.staffList  || meta.staffList  || [],
-        rentalList: d.rentalList || meta.rentalList || [],
-        equipList:  d.equipList  || meta.equipList  || [],
+        staff:      monthly.staff     || [],
+        extra:      monthly.extra     || [],
+        equip:      monthly.equip     || [],
+        rentals:    monthly.rentals   || [],
+        extraList:  monthly.extraList  || [],
+        staffList:  monthly.staffList  || [],
+        rentalList: monthly.rentalList || [],
+        equipList:  monthly.equipList  || [],
       });
-      console.log('☁️ Loaded '+allStaff.length+' staff from cloud');
+    } else {
+      // ── Legacy format: chunks (sc0, sc1, ewc0 etc) ─────────────────────────
+      const meta       = d.scMeta || {};
+      const chunkCount = Number(meta.chunkCount) || 0;
+
+      let allStaff = [];
+      for(let i=0; i<chunkCount; i++) allStaff = allStaff.concat(d['sc'+i]||[]);
+
+      if(allStaff.length > 0){
+        const extraChunkCount  = Number(meta.extraChunkCount) || 0;
+        const rentalChunkCount = Number(meta.rentalChunkCount) || 0;
+
+        let allExtra = [];
+        for(let j=0; j<extraChunkCount; j++)  allExtra  = allExtra.concat(d['ewc'+j]||[]);
+        if(!allExtra.length) allExtra = meta.extra || [];
+
+        let allRentals = [];
+        for(let j=0; j<rentalChunkCount; j++) allRentals = allRentals.concat(d['rc'+j]||[]);
+        if(!allRentals.length) allRentals = d.rentals || meta.rentals || [];
+
+        console.log(`☁️ Loaded legacy format (${allStaff.length} staff)`);
+        applyRosterData({
+          staff:      allStaff,
+          extra:      allExtra,
+          equip:      d.equip     || meta.equip   || [],
+          rentals:    allRentals,
+          extraList:  d.extraList  || [],
+          staffList:  d.staffList  || [],
+          rentalList: d.rentalList || [],
+          equipList:  d.equipList  || [],
+        });
+      } else {
+        console.log('☁️ No roster data found in cloud');
+      }
     }
 
+    // ── Load static data ──────────────────────────────────────────────────────
     if(d.orders && Array.isArray(d.orders)) DB.openOrders = d.orders;
     if(d.deletedProjects && Array.isArray(d.deletedProjects)){
-      if(!DB._deletedProjects) DB._deletedProjects=[];
-      d.deletedProjects.forEach(id=>{ if(!DB._deletedProjects.includes(id)) DB._deletedProjects.push(id); });
+      if(!DB._deletedProjects) DB._deletedProjects = [];
+      d.deletedProjects.forEach(id => { if(!DB._deletedProjects.includes(id)) DB._deletedProjects.push(id); });
     }
-
-    // ── Load custom project colors ────────────────────────────────────────
     if(d.projColors && typeof d.projColors === 'object'){
       Object.assign(PROJ_COLORS, d.projColors);
-      console.log('☁️ Loaded', Object.keys(d.projColors).length, 'custom project colors');
     }
-
-    // ── Load roster version history ───────────────────────────────────────────
     if(d.rosterHistory && Array.isArray(d.rosterHistory)){
       _persistedHistory = d.rosterHistory;
-      console.log('☁️ Loaded', _persistedHistory.length, 'history entries');
     }
-
     if(d.manualProjects && Array.isArray(d.manualProjects)){
-      d.manualProjects.forEach(p=>{
-        if(!DB.projects.find(x=>x.id===p.id)) DB.projects.push(p);
+      d.manualProjects.forEach(mp => {
+        if(!DB.projects.find(p=>p.id===mp.id) && !DB._deletedProjects?.includes(mp.id)){
+          DB.projects.push(mp);
+        }
       });
     }
 
-    if(d.gantt_data && typeof d.gantt_data==='object' && typeof GANTT!=='undefined'){
-      Object.assign(GANTT.tasks, d.gantt_data);
-      if(GANTT.projId && document.getElementById('gantt-body')) ganttRender();
-    }
+    setCloudStatus('✓ Synced');
+    renderRoster();
+    renderOverview();
 
-    const t = new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'});
-    setCloudStatus('✓ Synced '+t);
-    renderRoster(); renderProjTable(); renderOverview(); renderAnalytics();
-    toast('☁️ Loaded from cloud');
-  }catch(e){
-    console.error('☁️ Load error:',e);
-    setCloudStatus('✗ Load error');
-    showBanner('⚠️ Could not load from cloud: '+String(e).slice(0,60),'error');
+  } catch(err) {
+    console.error('loadFromCloud error:', err);
+    setCloudStatus('⚠ Load error');
+    if(loadMsg) loadMsg.textContent = 'Load error — check connection';
+    throw err;
   }
 }
 
@@ -6850,6 +6778,69 @@ function exitWeeklyView() {
     if(b.textContent.trim() === 'Month') b.classList.add('active');
   });
   renderRoster();
+}
+
+
+// ── Export full backup as JSON ────────────────────────────────────────────────
+function exportBackup() {
+  const now      = new Date();
+  const rd       = buildRosterData();
+  const backup   = {
+    version:   '2.0',
+    exportedAt: now.toISOString(),
+    month:     `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`,
+    staff:     rd.staff,
+    extra:     rd.extra,
+    equip:     rd.equip,
+    rentals:   rd.rentals,
+    extraList: rd.extraList,
+    staffList: rd.staffList,
+    rentalList:rd.rentalList,
+    equipList: rd.equipList,
+    projColors: PROJ_COLORS,
+    orders:    DB.openOrders || [],
+    manualProjects: DB.projects.filter(p=>p._manual) || [],
+  };
+  const blob = new Blob([JSON.stringify(backup, null, 2)], {type:'application/json'});
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href     = url;
+  a.download = `ZLC_Roster_Backup_${backup.month}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+  toast('✓ Backup downloaded');
+}
+
+// ── Import backup from JSON file ──────────────────────────────────────────────
+function importBackup(input) {
+  const file = input.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const data = JSON.parse(e.target.result);
+      if(!data.staff) { toast('⚠ Invalid backup file'); return; }
+      applyRosterData({
+        staff:      data.staff     || [],
+        extra:      data.extra     || [],
+        equip:      data.equip     || [],
+        rentals:    data.rentals   || [],
+        extraList:  data.extraList  || [],
+        staffList:  data.staffList  || [],
+        rentalList: data.rentalList || [],
+        equipList:  data.equipList  || [],
+      });
+      if(data.projColors) Object.assign(PROJ_COLORS, data.projColors);
+      saveLocal();
+      renderRoster();
+      renderOverview();
+      toast(`✓ Backup imported (${data.exportedAt?.slice(0,10)||'unknown date'})`);
+    } catch(err) {
+      toast('⚠ Error reading backup: ' + err.message);
+    }
+    input.value = '';
+  };
+  reader.readAsText(file);
 }
 
 // ─── INIT ─────────────────────────────────────────────────────────────────────
