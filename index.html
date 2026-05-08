@@ -853,9 +853,15 @@ const DEFAULT_CONFIG = {
 function getRuntimeConfig() {
   try {
     const localCfg = JSON.parse(localStorage.getItem('zlc_app_config') || '{}');
-    return { ...DEFAULT_CONFIG, ...(window.ZLC_CONFIG || {}), ...localCfg };
+    // Never let localStorage override critical URLs/keys — always use DEFAULT_CONFIG
+    // (localStorage may be empty in incognito or on new devices)
+    const merged = { ...DEFAULT_CONFIG, ...(window.ZLC_CONFIG || {}), ...localCfg };
+    // Always enforce hardcoded critical values
+    merged.SHEET_ID       = DEFAULT_CONFIG.SHEET_ID;
+    merged.API_KEY        = DEFAULT_CONFIG.API_KEY;
+    merged.APPS_SCRIPT_URL = DEFAULT_CONFIG.APPS_SCRIPT_URL;
+    return merged;
   } catch (err) {
-    console.warn('Could not parse zlc_app_config from localStorage:', err);
     return { ...DEFAULT_CONFIG, ...(window.ZLC_CONFIG || {}) };
   }
 }
