@@ -5088,28 +5088,26 @@ async function loadFromCloud(){
 function jsonpSave(key, value){
   return new Promise((resolve,reject)=>{
     if(!APPS_SCRIPT_URL){ reject('No Apps Script URL configured'); return; }
-    const body    = JSON.stringify({action:'saveAppData', key, value});
+    const body = JSON.stringify({action:'saveAppData', key, value});
     const encoded = encodeURIComponent(body);
-    const kb      = Math.round(encoded.length / 1024 * 10) / 10;
+    const kb = Math.round(encoded.length / 1024 * 10) / 10;
     if(encoded.length > 14000){
-      const err = `Payload too large for key="${key}": ${kb}KB (limit ~14KB). Try fewer assignments per person.`;
-      console.error('☁️', err);
-      reject(err);
-      return;
+      const err = `Payload too large for key="${key}": ${kb}KB (limit ~14KB).`;
+      console.error('☁️', err); reject(err); return;
     }
     console.log(`☁️ jsonpSave key=${key} size=${kb}KB`);
-    const cbName  = '_zlcSave_'+Date.now()+'_'+Math.random().toString(36).slice(2,5);
-    const scriptId= '_zlcScript_'+key.replace(/[^a-zA-Z0-9]/g,'_');
-    const old     = document.getElementById(scriptId); if(old) old.remove();
-    let done = false;
-    const cleanup = ()=>{ done=true; delete window[cbName]; const el=document.getElementById(scriptId); if(el)el.remove(); };
-    window[cbName] = (r)=>{ cleanup(); if(r&&r.ok) resolve(r); else reject('Apps Script error for key='+key+': '+JSON.stringify(r)); };
-    const script   = document.createElement('script');
-    script.id      = scriptId;
-    script.src     = APPS_SCRIPT_URL+'?data='+encoded+'&callback='+cbName;
-    script.onerror = ()=>{ cleanup(); reject('Network error saving key='+key+'. Check internet connection.'); };
-    document.head.appendChild(script);
-    setTimeout(()=>{ if(!done){ cleanup(); reject('Timeout (30s) saving key='+key+'. Apps Script may be slow — try again.'); }}, 30000);
+    const usePost = encoded.length > 5000;
+    if(usePost){
+      fetch(APPS_SCRIPT_URL, {method:'POST', body})
+        .then(r=>r.json())
+        .then(d=>{ if(d&&d.ok) resolve(d); else reject('Apps Script error: '+JSON.stringify(d)); })
+        .catch(()=>reject('Network error saving key='+key+'. Check internet connection.'));
+    } else {
+      fetch(APPS_SCRIPT_URL+'?data='+encoded)
+        .then(r=>r.json())
+        .then(d=>{ if(d&&d.ok) resolve(d); else reject('Apps Script error: '+JSON.stringify(d)); })
+        .catch(()=>reject('Network error saving key='+key+'. Check internet connection.'));
+    }
   });
 }
 
@@ -6865,29 +6863,6 @@ setInterval(() => {
   try {
     if (loadMsg) loadMsg.textContent = 'Loading data from cloud…';
     await loadFromCloud();
-    if (loadMsg) loadMsg.textContent = 'Saving…';
-    // Migrate: ensure item lists are saved as dedicated keys
-    try {
-      const rd = buildRosterData();
-      const c  = compressRoster(rd);
-      // Save extra workers as chunks
-      const exChunks = [];
-      for(let j=0; j<c.extra.length; j+=3) exChunks.push(c.extra.slice(j,j+3));
-      for(let j=0; j<exChunks.length; j++){
-        await jsonpSave('ewc'+j, exChunks[j]);
-      }
-      await jsonpSave('rentals',    c.rentals    || []);
-      await jsonpSave('equip',      c.equip      || []);
-      await jsonpSave('extraList',  c.extraList  || []);
-      await jsonpSave('staffList',  c.staffList  || []);
-      await jsonpSave('rentalList', c.rentalList || []);
-      await jsonpSave('equipList',  c.equipList  || []);
-      await jsonpSave('scMeta', {
-        chunkCount: (c.staff ? Math.ceil(c.staff.length) : 0),
-        extraChunkCount: exChunks.length,
-      });
-      console.log('☁️ Migration save complete');
-    } catch(e) { console.warn('Migration save failed:', e); }
     if (loadMsg) loadMsg.textContent = 'Ready!';
   } catch(e) {
     if (loadMsg) loadMsg.textContent = 'Loaded from cache';
