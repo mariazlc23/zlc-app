@@ -5094,20 +5094,37 @@ async function loadFromCloud(){
 function jsonpSave(key, value){
   return new Promise((resolve,reject)=>{
     if(!APPS_SCRIPT_URL){ reject('No Apps Script URL configured'); return; }
-    const body = JSON.stringify({action:'saveAppData', key, value});
+    const body    = JSON.stringify({action:'saveAppData', key, value});
     const encoded = encodeURIComponent(body);
-    const kb = Math.round(encoded.length / 1024 * 10) / 10;
-    if(encoded.length > 14000){
-      const err = `Payload too large for key="${key}": ${kb}KB (limit ~14KB).`;
-      console.error('☁️', err); reject(err); return;
-    }
+    const kb      = Math.round(encoded.length / 1024 * 10) / 10;
     console.log(`☁️ jsonpSave key=${key} size=${kb}KB`);
-    // Always use GET — Apps Script handles CORS for GET automatically
-    // For POST, preflight OPTIONS fails on Apps Script (no CORS header support)
-    fetch(APPS_SCRIPT_URL + '?data=' + encoded)
-      .then(r => r.json())
-      .then(d => { if(d && d.ok) resolve(d); else reject('Save error: ' + JSON.stringify(d)); })
-      .catch(err => reject('Network error saving "' + key + '": ' + err));
+    if(encoded.length > 13000){
+      console.error(`☁️ Payload too large for key="${key}": ${kb}KB`);
+      reject(`Payload too large: ${kb}KB`); return;
+    }
+    const cbName  = '_zlcSave_' + Date.now() + '_' + Math.random().toString(36).slice(2,5);
+    const scriptId= '_zlcScript_' + key.replace(/[^a-zA-Z0-9]/g,'_');
+    const old     = document.getElementById(scriptId); if(old) old.remove();
+    let done = false;
+    const cleanup = () => {
+      done = true;
+      delete window[cbName];
+      const el = document.getElementById(scriptId);
+      if(el) el.remove();
+    };
+    window[cbName] = (d) => {
+      cleanup();
+      if(d && d.ok) resolve(d);
+      else reject('Save failed for key=' + key + ': ' + JSON.stringify(d));
+    };
+    const timer = setTimeout(() => {
+      if(!done){ cleanup(); reject('Timeout saving key=' + key); }
+    }, 15000);
+    const script  = document.createElement('script');
+    script.id     = scriptId;
+    script.src    = APPS_SCRIPT_URL + '?callback=' + cbName + '&data=' + encoded;
+    script.onerror = () => { clearTimeout(timer); cleanup(); reject('Script load error saving key=' + key); };
+    document.head.appendChild(script);
   });
 }
 
