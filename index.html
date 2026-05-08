@@ -4808,9 +4808,13 @@ async function _doCloudSave(rosterData){
         await jsonpSave('ewc'+j, extraChunks[j]);
         if(j < extraChunks.length-1) await delay(150);
       }
-      // Save rentals and equip as single keys (usually small)
+      // Save rentals as chunks (same safe logic)
+      let rentalChunks = makeChunks(c.rentals || [], 5);
       await delay(150);
-      await jsonpSave('rentals', c.rentals || []);
+      for(let j=0; j<rentalChunks.length; j++){
+        await jsonpSave('rc'+j, rentalChunks[j]);
+        if(j < rentalChunks.length-1) await delay(150);
+      }
       await delay(150);
       await jsonpSave('equip',   c.equip   || []);
       await delay(150);
@@ -4825,8 +4829,9 @@ async function _doCloudSave(rosterData){
       await delay(150);
       // scMeta is now just chunk count + extra chunk count
       await jsonpSave('scMeta', {
-        chunkCount:      chunks.length,
-        extraChunkCount: extraChunks.length,
+        chunkCount:        chunks.length,
+        extraChunkCount:   extraChunks.length,
+        rentalChunkCount:  rentalChunks.length,
       });
       _metaSaved = true;
       } catch(_me) {
@@ -5041,7 +5046,15 @@ async function loadFromCloud(){
         staff:      allStaff,
         extra:      allExtra,
         equip:      d.equip     || meta.equip   || [],
-        rentals:    d.rentals   || meta.rentals || [],
+        rentals:    (() => {
+          const rcCount = Number(meta.rentalChunkCount)||0;
+          if(rcCount > 0){
+            let all = [];
+            for(let j=0; j<rcCount; j++) all = all.concat(d['rc'+j]||[]);
+            return all;
+          }
+          return d.rentals || meta.rentals || [];
+        })(),
         extraList:  d.extraList  || meta.extraList  || [],
         staffList:  d.staffList  || meta.staffList  || [],
         rentalList: d.rentalList || meta.rentalList || [],
