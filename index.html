@@ -947,7 +947,7 @@ async function _sheetWriteWithRetry(action, payload, maxRetries=3){
       // Success
       console.log(`✓ sheetWrite '${action}' succeeded on attempt ${attempt}`);
       const log = document.getElementById('write-log');
-      if(log){ log.style.display='block'; log.textContent=`✓ ${action} saved to Sheet`; log.style.color='#3DAA6E'; }
+      if(log && false){ log.style.display='block'; log.textContent=`✓ ${action} saved to Sheet`; log.style.color='#3DAA6E'; }
       if(attempt > 1) toast(`✓ Saved to Google Sheet (attempt ${attempt})`);
       return; // done
     } catch(err){
@@ -1368,7 +1368,7 @@ async function syncFromSheets(silent=false) {
         }
         DB.total2026 = total;
         DB.codes2026 = codes;
-        console.log('2026 total:', total, 'codes:', codes, 'rows scanned:', rows.length);
+        // console.log('2026 total:', total, 'codes:', codes, 'rows scanned:', rows.length);
       }
     } catch(e) { console.warn('2026 fetch error:', e); }
 
@@ -4711,7 +4711,7 @@ function saveToCloud(rosterData){
   if(!APPS_SCRIPT_URL) return;
   _cloudPendingSnapshot = rosterData;
   clearTimeout(_cloudTimer);
-  _cloudTimer = setTimeout(()=>flushPendingCloudSave(), 5000); // 5s debounce — batches rapid edits
+  _cloudTimer = setTimeout(()=>flushPendingCloudSave(), 20000); // 5s debounce — batches rapid edits
 }
 
 async function flushPendingCloudSave(force=false, _retryCount=0){
@@ -4772,12 +4772,12 @@ async function _doCloudSave(rosterData){
                         batch.manualProjects   = DB.projects.filter(p=>p._manual)||[]; _projsDirty = false; }
     if(_colorsDirty)  { batch.projColors       = PROJ_COLORS;                 _colorsDirty  = false; }
     if(_historyDirty && _persistedHistory.length > 0) {
-                        batch.rosterHistory    = _persistedHistory.slice(0,500); _historyDirty = false; }
+                        batch.rosterHistory    = _persistedHistory.slice(0,150); _historyDirty = false; }
 
     // ── Single POST call ──────────────────────────────────────────────────────
     const body = JSON.stringify({ action: 'saveBulk', batch });
     const kb   = Math.round(body.length / 1024 * 10) / 10;
-    console.log(`☁️ saveBulk POST ${kb}KB (${Object.keys(batch).join(', ')})`);
+    // console.log(`☁️ saveBulk POST ${kb}KB (${Object.keys(batch).join(', ')})`);
 
     const resp = await fetch(APPS_SCRIPT_URL, {
       method:  'POST',
@@ -5055,7 +5055,7 @@ function jsonpSave(key, value){
     const body    = JSON.stringify({action:'saveAppData', key, value});
     const encoded = encodeURIComponent(body);
     const kb      = Math.round(encoded.length / 1024 * 10) / 10;
-    console.log(`☁️ jsonpSave key=${key} size=${kb}KB`);
+    // console.log(`☁️ jsonpSave key=${key} size=${kb}KB`);
     if(encoded.length > 13000){
       console.error(`☁️ Payload too large for key="${key}": ${kb}KB`);
       reject(`Payload too large: ${kb}KB`); return;
@@ -6915,12 +6915,12 @@ setInterval(async ()=>{
       }
     }
   } catch(e){ /* silent */ }
-}, 2 * 60 * 1000); // every 2 minutes
+}, 10 * 60 * 1000); // every 2 minutes
 
 // Auto-sync from Sheets every 5 minutes in background
 setInterval(() => {
   syncFromSheets(true); // true = silent mode
-}, 5 * 60 * 1000);
+}, 15 * 60 * 1000); // 15 min
 
 // Show loading screen while cloud data loads
 (async () => {
@@ -6974,7 +6974,7 @@ async function loadHistoryFromCloud(){
     const json = await jsonpLoad();
     if(json?.data?.rosterHistory && Array.isArray(json.data.rosterHistory)){
       _persistedHistory = json.data.rosterHistory;
-      console.log('☁️ Loaded', _persistedHistory.length, 'history entries');
+      // console.log('☁️ Loaded', _persistedHistory.length, 'history entries');
     }
   } catch(e) { console.warn('History load failed:', e); }
 }
