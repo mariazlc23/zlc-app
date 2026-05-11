@@ -259,6 +259,7 @@
   .loading-bar-wrap { width:200px; height:3px; background:var(--bg3); border-radius:2px; overflow:hidden; }
   .loading-bar { height:100%; width:30%; background:var(--blue); border-radius:2px; animation:loadSlide 1.2s ease-in-out infinite; }
   @keyframes loadSlide { 0%{transform:translateX(-100%)} 100%{transform:translateX(400%)} }
+  @keyframes fadeInUp { from{opacity:0;transform:translateX(-50%) translateY(8px)} to{opacity:1;transform:translateX(-50%) translateY(0)} }
   .loading-msg { font-size:12px; color:var(--text3); }
 
   /* ── Mobile bottom nav ── */
@@ -4855,11 +4856,6 @@ async function runSaveDiag(){
 
   // ── 2. Staff payload sizes ───────────────────────────────────────────────
   const CHUNK = 2;
-  function makeChunks(arr, size){
-    const out=[];
-    for(let i=0;i<arr.length;i+=size) out.push(arr.slice(i,i+size));
-    return out;
-  }
   const chunks = makeChunks(c.staff, CHUNK);
   let bigChunks = 0;
   let maxChunkKB = 0;
@@ -6853,6 +6849,13 @@ function importBackup(input) {
 
 
 // ── Legacy cloud save (JSONP chunks) — used until Apps Script is updated ──────
+// ── makeChunks — splits an array into chunks of a given size ──────────────────
+function makeChunks(arr, size){
+  const out=[];
+  for(let i=0;i<arr.length;i+=size) out.push(arr.slice(i,i+size));
+  return out;
+}
+
 async function _doCloudSaveLegacy(rosterData){
   const c = compressRoster(rosterData);
   // Save staff 1 per chunk
@@ -7244,6 +7247,42 @@ function updateCOBadge() {
 // ─── UNDO ──────────────────────────────────────────────────────────────────────
 const _undoStack = [];
 const UNDO_LIMIT = 50;
+
+// showUndo — shows a toast with an "Undo" button that calls the given callback
+let _showUndoTimer = null;
+function showUndo(label, undoFn) {
+  // Remove any existing undo toast
+  const existing = document.getElementById('undo-toast');
+  if (existing) existing.remove();
+  clearTimeout(_showUndoTimer);
+
+  const el = document.createElement('div');
+  el.id = 'undo-toast';
+  el.style.cssText = `
+    position:fixed; bottom:24px; left:50%; transform:translateX(-50%);
+    background:#1a1a18; color:#fff; border-radius:8px;
+    padding:10px 16px; font-size:13px; display:flex; align-items:center; gap:12px;
+    box-shadow:0 4px 16px rgba(0,0,0,.25); z-index:9999;
+    animation: fadeInUp .2s ease;
+  `;
+  el.innerHTML = `
+    <span>${label}</span>
+    <button id="undo-toast-btn" style="
+      background:rgba(255,255,255,.15); border:1px solid rgba(255,255,255,.3);
+      color:#fff; border-radius:5px; padding:3px 10px; font-size:12px; cursor:pointer;
+      font-weight:600; white-space:nowrap;
+    ">Undo</button>
+  `;
+  document.body.appendChild(el);
+
+  el.querySelector('#undo-toast-btn').addEventListener('click', () => {
+    el.remove();
+    clearTimeout(_showUndoTimer);
+    if (undoFn) undoFn();
+  });
+
+  _showUndoTimer = setTimeout(() => { if(el.parentNode) el.remove(); }, 6000);
+}
 
 function undoPush(entry) {
   _undoStack.push(entry);
