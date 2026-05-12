@@ -1946,7 +1946,7 @@ function renderOverview(){
         const asgn=item.a?.[key];
         if(!asgn)continue;
         getAsgnPids(asgn).forEach(pid=>{
-          if(pid&&pid!=='OFF'&&pid!=='Warehouse') projDays[pid]=(projDays[pid]||0)+1;
+          if(pid&&pid!=='OFF'&&pid!=='Warehouse'&&pid!=='000') projDays[pid]=(projDays[pid]||0)+1;
         });
       }
     });
@@ -1958,7 +1958,7 @@ function renderOverview(){
       if(budgetDays>0&&projVal>0) moVal+=Math.min(days/budgetDays,1)*projVal;
       else if(projVal>0&&days>0) moVal+=days*500;
     });
-    schedMonths.push({label:lbl,value:moVal,projCount:Object.keys(projDays).length});
+    schedMonths.push({label:lbl,yr,m,value:moVal,projCount:Object.keys(projDays).length});
   }
   window._lastSchedMonths = schedMonths;
   const maxSchedVal=Math.max(...schedMonths.map(s=>s.value),1);
@@ -6888,20 +6888,36 @@ function showMonthDetail(schedIdx) {
   const s = (window._lastSchedMonths || [])[schedIdx];
   if(!s) return;
 
+  // Always recompute projDays live from current STAFF/EXTRA data (avoids stale snapshot)
+  const yr  = s.yr  !== undefined ? s.yr  : new Date().getFullYear();
+  const m   = s.m   !== undefined ? s.m   : new Date().getMonth();
+  const dim = new Date(yr, m+1, 0).getDate();
+  const projDaysLive = {};
+  [...STAFF,...EXTRA].forEach(item => {
+    for(let dd=1; dd<=dim; dd++){
+      const key = `${yr}-${m+1}-${dd}`;
+      const asgn = item.a?.[key];
+      if(!asgn) continue;
+      getAsgnPids(asgn).forEach(pid => {
+        if(pid && pid!=='OFF' && pid!=='Warehouse' && pid!=='000') projDaysLive[pid]=(projDaysLive[pid]||0)+1;
+      });
+    }
+  });
+
   // Build project breakdown for this month
-  const rows = Object.entries(s.projDays || {})
+  const rows = Object.entries(projDaysLive)
     .map(([pid, days]) => {
       const proj = DB.projects.find(p => p.id === pid);
       if(!proj) return null;
       const budgetDays = (proj.codes||[]).reduce((a,c)=>a+(c.foremanDays||0)+(c.laborerDays||0),0);
-      const projVal    = proj.value || proj.contractAmt || 0;
-      const earned     = budgetDays>0 ? Math.min(days/budgetDays,1)*projVal 
+      const projVal    = tv(proj) || bv(proj) || 0; // sum of code values + approved COs
+      const earned     = budgetDays>0 ? Math.min(days/budgetDays,1)*projVal
                        : projVal>0&&days>0 ? days*500 : 0;
       // Count teams working
       const teams = new Set();
       [...STAFF,...EXTRA].forEach(m => {
-        for(let d=1;d<=new Date(s.yr,s.m+1,0).getDate();d++){
-          const key=`${s.yr}-${s.m+1}-${d}`;
+        for(let dd=1; dd<=dim; dd++){
+          const key=`${yr}-${m+1}-${dd}`;
           if((m.a||{})[key] && getAsgnPids((m.a||{})[key]).includes(pid)){
             teams.add(m.team||m.name);
           }
@@ -6914,16 +6930,24 @@ function showMonthDetail(schedIdx) {
 
   const totalEarned = rows.reduce((a,r) => a+r.earned, 0);
 
-  const rowsHtml = rows.map(r => `
+  const rowsHtml = rows.map(r => {
+    const codesHtml = (r.proj.codes||[]).map(c => {
+      const col = CODE_COLORS[c.code] || '#888';
+      return `<span style="display:inline-flex;align-items:center;gap:3px;font-size:10px;font-weight:600;padding:1px 6px;border-radius:99px;background:${col}22;color:${col};margin-right:3px">
+        <span style="width:6px;height:6px;border-radius:50%;background:${col};flex-shrink:0;display:inline-block"></span>${c.code}</span>`;
+    }).join('');
+    return `
     <div style="display:grid;grid-template-columns:90px 1fr auto auto;gap:8px;align-items:start;padding:8px 0;border-bottom:1px solid var(--border)">
       <span style="font-weight:700;font-size:12px;color:var(--blue)">${r.proj.id}</span>
       <div>
         <div style="font-size:12px;font-weight:600">${r.proj.name}</div>
         <div style="font-size:10px;color:var(--text2);margin-top:2px">${r.teams.slice(0,4).join(', ')}${r.teams.length>4?' +more':''}</div>
+        ${codesHtml ? `<div style="margin-top:4px">${codesHtml}</div>` : ''}
       </div>
       <div style="text-align:right;font-size:11px;color:var(--text2)">${r.days} days</div>
       <div style="text-align:right;font-size:12px;font-weight:700;color:var(--green);min-width:80px">${fmt(r.earned)}</div>
-    </div>`).join('');
+    </div>`;
+  }).join('');
 
   showModal(`
     <div class="modal-title">📅 ${s.label} — Roster Activity</div>
@@ -6932,7 +6956,7 @@ function showMonthDetail(schedIdx) {
       <div><div style="font-size:10px;color:var(--text2)">ESTIMATED VALUE</div><div style="font-size:20px;font-weight:700;color:var(--blue)">${fmt(totalEarned)}</div></div>
     </div>
     <div style="font-size:10px;color:var(--text3);margin-bottom:8px;display:grid;grid-template-columns:90px 1fr auto auto;gap:8px;font-weight:700;padding-bottom:4px;border-bottom:2px solid var(--border)">
-      <span>PROJECT</span><span>NAME / TEAMS</span><span>DAYS</span><span style="text-align:right">VALUE</span>
+      <span>PROJECT</span><span>NAME / TEAMS / CODES</span><span>DAYS</span><span style="text-align:right">VALUE</span>
     </div>
     ${rowsHtml || '<div style="padding:20px;text-align:center;color:var(--text3)">No roster assignments this month</div>'}
   `);
@@ -7248,39 +7272,18 @@ function updateCOBadge() {
 const _undoStack = [];
 const UNDO_LIMIT = 50;
 
-// showUndo — shows a toast with an "Undo" button that calls the given callback
+// showUndo — toast with an Undo button that fires the callback
 let _showUndoTimer = null;
 function showUndo(label, undoFn) {
-  // Remove any existing undo toast
   const existing = document.getElementById('undo-toast');
   if (existing) existing.remove();
   clearTimeout(_showUndoTimer);
-
   const el = document.createElement('div');
   el.id = 'undo-toast';
-  el.style.cssText = `
-    position:fixed; bottom:24px; left:50%; transform:translateX(-50%);
-    background:#1a1a18; color:#fff; border-radius:8px;
-    padding:10px 16px; font-size:13px; display:flex; align-items:center; gap:12px;
-    box-shadow:0 4px 16px rgba(0,0,0,.25); z-index:9999;
-    animation: fadeInUp .2s ease;
-  `;
-  el.innerHTML = `
-    <span>${label}</span>
-    <button id="undo-toast-btn" style="
-      background:rgba(255,255,255,.15); border:1px solid rgba(255,255,255,.3);
-      color:#fff; border-radius:5px; padding:3px 10px; font-size:12px; cursor:pointer;
-      font-weight:600; white-space:nowrap;
-    ">Undo</button>
-  `;
+  el.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#1a1a18;color:#fff;border-radius:8px;padding:10px 16px;font-size:13px;display:flex;align-items:center;gap:12px;box-shadow:0 4px 16px rgba(0,0,0,.25);z-index:9999;animation:fadeInUp .2s ease;white-space:nowrap;';
+  el.innerHTML = '<span>'+label+'</span><button id="undo-toast-btn" style="background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.3);color:#fff;border-radius:5px;padding:3px 10px;font-size:12px;cursor:pointer;font-weight:600;">Undo</button>';
   document.body.appendChild(el);
-
-  el.querySelector('#undo-toast-btn').addEventListener('click', () => {
-    el.remove();
-    clearTimeout(_showUndoTimer);
-    if (undoFn) undoFn();
-  });
-
+  el.querySelector('#undo-toast-btn').addEventListener('click', () => { el.remove(); clearTimeout(_showUndoTimer); if(undoFn) undoFn(); });
   _showUndoTimer = setTimeout(() => { if(el.parentNode) el.remove(); }, 6000);
 }
 
