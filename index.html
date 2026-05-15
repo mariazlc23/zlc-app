@@ -852,7 +852,7 @@ const CAT_COLORS={staff:'#185FA5',extra:'#BA7517',equip:'#3B6D11',rental:'#88878
 const DEFAULT_CONFIG = {
   SHEET_ID: '1Y35oa2ebgCisj3PzVs2dTMUN5dY2Hhci4RIt55Kn44Y',
   API_KEY: 'AIzaSyCCuKyfurmT2w-L2dn6-XbvupaOmlHufUE',
-  APPS_SCRIPT_URL: 'https://script.google.com/macros/s/AKfycbyoiqJzVpKqRRd7uDH4Ycn1lq8-wOHsmJ6A4HPTWbwaAld00I6OGeBRKk6gO8ne6ROiOA/exec'
+  APPS_SCRIPT_URL: 'https://script.google.com/macros/s/AKfycby6JunFbUqaEL9-OPQvTXAE-kBtYXghEjA4pMx_y_rr_QPWAgmgBUnQJr9GAvGK1y-ZNA/exec'
 };
 
 function getRuntimeConfig() {
@@ -4780,10 +4780,26 @@ async function _doCloudSave(rosterData){
       }
     };
 
-    // Staff — 500ms between saves to avoid throttling
+    // Staff — save with auto-split if payload too large
     for(let i=0;i<c.staff.length;i++){
-      await saveWithRetry(`m${mp}se${c.staff[i].id}`, c.staff[i]);
-      await delay(500);
+      const person = c.staff[i];
+      const enc = encodeURIComponent(JSON.stringify({action:'saveAppData',key:'x',value:person}));
+      if(enc.length > 6000){
+        // Payload too large — save assignments only, notes separately
+        const slim = {id:person.id, name:person.name, a:person.a||{}, 
+                      cc:person.cc||{}, co:person.co||{}, 
+                      confirmed:person.confirmed||{}, pour:person.pour||{}};
+        await saveWithRetry(`m${mp}se${person.id}`, slim);
+        await delay(400);
+        // Save notes+wh separately
+        if(Object.keys(person.notes||{}).length || Object.keys(person.wh||{}).length){
+          await saveWithRetry(`m${mp}sn${person.id}`, {id:person.id, notes:person.notes||{}, wh:person.wh||{}});
+          await delay(400);
+        }
+      } else {
+        await saveWithRetry(`m${mp}se${person.id}`, person);
+        await delay(400);
+      }
     }
     // Extra workers
     for(let i=0;i<c.extra.length;i++){
@@ -5008,7 +5024,8 @@ async function loadFromCloud(silent=false){
         const staff=[],extra=[],equip=[],rentals=[];
         // Load by ID-based keys (e.g. m2606se1, m2606ewe1)
         Object.keys(d).forEach(k => {
-          if(k.startsWith(`${mp}s`))  { const v=d[k]; if(v&&v.id) staff.push(v); }
+          if(k.startsWith(`${mp}sn`)) { /* notes key - merged below */ }
+          else if(k.startsWith(`${mp}s`))  { const v=d[k]; if(v&&v.id) staff.push(v); }
           else if(k.startsWith(`${mp}ew`)) { const v=d[k]; if(v&&v.id) extra.push(v); }
           else if(k.startsWith(`${mp}eq`)) { const v=d[k]; if(v&&v.id) equip.push(v); }
           else if(k.startsWith(`${mp}r`))  { const v=d[k]; if(v&&v.id) rentals.push(v); }
