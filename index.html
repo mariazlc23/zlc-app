@@ -5095,25 +5095,40 @@ async function loadFromCloud(silent=false){
 }
 
 // jsonpSave — POST first (no size limit, handles special chars), JSONP fallback
-function jsonpSave(key, value){
-  return new Promise((resolve,reject)=>{
-    if(!APPS_SCRIPT_URL){ reject('No Apps Script URL'); return; }
-    const body    = JSON.stringify({action:'saveAppData', key, value});
-    const encoded = encodeURIComponent(body);
-    if(encoded.length > 14000){ reject('Payload too large: '+Math.round(encoded.length/1024)+'KB'); return; }
-    const cbName  = '_zlcSave_'+Date.now()+'_'+Math.random().toString(36).slice(2,5);
-    const scriptId= '_zlcScript_'+key.replace(/[^a-zA-Z0-9]/g,'_');
-    const old     = document.getElementById(scriptId); if(old) old.remove();
-    let done = false;
-    const cleanup = ()=>{ done=true; delete window[cbName]; const el=document.getElementById(scriptId); if(el) el.remove(); };
-    window[cbName] = (d)=>{ cleanup(); if(d&&d.ok){ console.log('✓ cloud saved', key); resolve(d); } else reject('Save failed: '+JSON.stringify(d)); };
-    const timer = setTimeout(()=>{ if(!done){ cleanup(); reject('Timeout saving key='+key); }}, 15000);
-    const script  = document.createElement('script');
-    script.id     = scriptId;
-    script.src    = APPS_SCRIPT_URL+'?callback='+cbName+'&data='+encoded;
-    script.onerror= ()=>{ clearTimeout(timer); cleanup(); reject('Script error key='+key); };
-    document.head.appendChild(script);
-  });
+// ── Cloud save: uses fetch() with no-cors (fire-and-forget, no CORS issues) ──
+// Falls back to JSONP if fetch unavailable
+async function jsonpSave(key, value){
+  if(!APPS_SCRIPT_URL) throw new Error('No Apps Script URL');
+  const body    = JSON.stringify({action:'saveAppData', key, value});
+  const encoded = encodeURIComponent(body);
+  if(encoded.length > 14000) throw new Error('Payload too large: '+Math.round(encoded.length/1024)+'KB');
+
+  // Primary: fetch with no-cors (no CORS preflight, works from GitHub Pages)
+  // We can't read the response in no-cors mode but the save goes through
+  try {
+    await fetch(APPS_SCRIPT_URL+'?data='+encoded, {
+      method: 'GET',
+      mode: 'no-cors',
+    });
+    console.log('✓ cloud saved', key);
+    return {ok:true};
+  } catch(fetchErr) {
+    // Fallback: JSONP script injection
+    return new Promise((resolve,reject)=>{
+      const cbName  = '_zlcSave_'+Date.now()+'_'+Math.random().toString(36).slice(2,5);
+      const scriptId= '_zlcScript_'+key.replace(/[^a-zA-Z0-9]/g,'_');
+      const old     = document.getElementById(scriptId); if(old) old.remove();
+      let done = false;
+      const cleanup = ()=>{ done=true; delete window[cbName]; const el=document.getElementById(scriptId); if(el) el.remove(); };
+      window[cbName] = (d)=>{ cleanup(); clearTimeout(timer); if(d&&d.ok){ console.log('✓ cloud saved (jsonp)', key); resolve(d); } else reject('Save failed'); };
+      const timer = setTimeout(()=>{ if(!done){ cleanup(); reject('Timeout key='+key); }}, 15000);
+      const script  = document.createElement('script');
+      script.id     = scriptId;
+      script.src    = APPS_SCRIPT_URL+'?callback='+cbName+'&data='+encoded;
+      script.onerror= ()=>{ clearTimeout(timer); cleanup(); reject('Script error key='+key); };
+      document.head.appendChild(script);
+    });
+  }
 }
 
 
