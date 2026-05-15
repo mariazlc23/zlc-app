@@ -852,7 +852,7 @@ const CAT_COLORS={staff:'#185FA5',extra:'#BA7517',equip:'#3B6D11',rental:'#88878
 const DEFAULT_CONFIG = {
   SHEET_ID: '1Y35oa2ebgCisj3PzVs2dTMUN5dY2Hhci4RIt55Kn44Y',
   API_KEY: 'AIzaSyCCuKyfurmT2w-L2dn6-XbvupaOmlHufUE',
-  APPS_SCRIPT_URL: 'https://script.google.com/macros/s/AKfycbylgsY5Nd3F3DlPQijFjwlNz3D11i2Jz2lET4F5QfjCuPbuTxCEqLlGWrcSArfmf9dGrQ/exec'
+  APPS_SCRIPT_URL: 'https://script.google.com/macros/s/AKfycbyoiqJzVpKqRRd7uDH4Ycn1lq8-wOHsmJ6A4HPTWbwaAld00I6OGeBRKk6gO8ne6ROiOA/exec'
 };
 
 function getRuntimeConfig() {
@@ -1518,28 +1518,32 @@ let DB = {
 // Sync badge will be updated after load
 
 let STAFF=[
-  {id:'e1',role:'foreman',name:'Carlos #15',team:'Xolos',role:'foreman',certs:['H','RFT','EO'],veh:'Good',a:{},notes:{}},
-  {id:'e2',role:'laborer',name:'Victor',team:'Xolos',role:'laborer',certs:['EO'],veh:'',a:{},notes:{}},
-  {id:'e3',role:'laborer',name:'Juan Alejo',team:'Xolos',role:'laborer',certs:['H','RFT'],veh:'',a:{},notes:{}},
-  {id:'e4',role:'foreman',name:'Chuy #14',team:'Chingones',role:'foreman',certs:['H','RFT','SSO'],veh:'Needs attention',a:{},notes:{}},
-  {id:'e5',role:'laborer',name:'Luis',team:'Chingones',role:'laborer',certs:[],veh:'',a:{},notes:{}},
-  {id:'e6',role:'laborer',name:'Santos',team:'Chingones',role:'laborer',certs:['H','RFT'],veh:'',a:{},notes:{}},
-  {id:'e7',role:'foreman',name:'JRod #12',team:'Poblanos',role:'foreman',certs:['H'],veh:'Needs attention',a:{},notes:{}},
-  {id:'e8',role:'laborer',name:'Daniel',team:'Poblanos',role:'laborer',certs:[],veh:'',a:{},notes:{}},
-  {id:'e9',role:'laborer',name:'Fernando',team:'Poblanos',role:'laborer',certs:[],veh:'',a:{},notes:{}},
-  {id:'e10',role:'foreman',name:'Temo #9',team:'Guerreros Z',role:'foreman',certs:[],veh:'',a:{},notes:{}},
-  {id:'e11',role:'laborer',name:'Cabrera',team:'Guerreros Z',role:'laborer',certs:[],veh:'Good',a:{},notes:{}},
-  {id:'e12',role:'laborer',name:'Rigo',team:'Guerreros Z',role:'laborer',certs:[],veh:'',a:{},notes:{}},
-  {id:'e13',role:'foreman',name:'Miguel #11',team:'Lobos',role:'foreman',certs:[],veh:'',a:{},notes:{}},
-  {id:'e19',role:'laborer',name:'Joaquin',team:'Aguilas',certs:[],veh:'',a:{},notes:{}},
-  {id:'e17',role:'driver',name:'Francisco #5',team:'Driver',certs:['CPR'],veh:'Good',a:{},notes:{},wh:{},multi:true},
-  {id:'e18',role:'driver',name:'Driver 2',team:'Driver',certs:[],veh:'Good',a:{},notes:{},wh:{},multi:true},
+  {id:'e1', role:'foreman', name:'Carlos #15',  team:'Xolos',      certs:['H','RFT','EO'], veh:'Good',           a:{},notes:{},wh:{},cc:{},co:{},confirmed:{},pour:{}},
+  {id:'e2', role:'laborer', name:'Victor',       team:'Xolos',      certs:['EO'],           veh:'',               a:{},notes:{},wh:{},cc:{},co:{},confirmed:{},pour:{}},
+  {id:'e3', role:'laborer', name:'Juan Alejo',   team:'Xolos',      certs:['H','RFT'],      veh:'',               a:{},notes:{},wh:{},cc:{},co:{},confirmed:{},pour:{}},
+  {id:'e4', role:'foreman', name:'Chuy #14',     team:'Chingones',  certs:['H','RFT','SSO'],veh:'Needs attention',a:{},notes:{},wh:{},cc:{},co:{},confirmed:{},pour:{}},
+  {id:'e5', role:'laborer', name:'Luis',         team:'Chingones',  certs:[],               veh:'',               a:{},notes:{},wh:{},cc:{},co:{},confirmed:{},pour:{}},
+  {id:'e6', role:'laborer', name:'Santos',       team:'Chingones',  certs:['H','RFT'],      veh:'',               a:{},notes:{},wh:{},cc:{},co:{},confirmed:{},pour:{}},
+  {id:'e7', role:'foreman', name:'JRod #12',     team:'Poblanos',   certs:['H'],            veh:'Needs attention',a:{},notes:{},wh:{},cc:{},co:{},confirmed:{},pour:{}},
+  {id:'e8', role:'laborer', name:'Daniel',       team:'Poblanos',   certs:[],               veh:'',               a:{},notes:{},wh:{},cc:{},co:{},confirmed:{},pour:{}},
+  {id:'e9', role:'laborer', name:'Fernando',     team:'Poblanos',   certs:[],               veh:'',               a:{},notes:{},wh:{},cc:{},co:{},confirmed:{},pour:{}},
+  {id:'e10',role:'foreman', name:'Temo #9',      team:'Guerreros Z',certs:[],               veh:'',               a:{},notes:{},wh:{},cc:{},co:{},confirmed:{},pour:{}},
+  {id:'e11',role:'laborer', name:'Cabrera',      team:'Guerreros Z',certs:[],               veh:'Good',           a:{},notes:{},wh:{},cc:{},co:{},confirmed:{},pour:{}},
+  {id:'e12',role:'laborer', name:'Rigo',         team:'Guerreros Z',certs:[],               veh:'',               a:{},notes:{},wh:{},cc:{},co:{},confirmed:{},pour:{}},
+  {id:'e13',role:'foreman', name:'Miguel #11',   team:'Lobos',      certs:[],               veh:'',               a:{},notes:{},wh:{},cc:{},co:{},confirmed:{},pour:{}},
+  {id:'e19',role:'laborer', name:'Joaquin',      team:'Aguilas',    certs:[],               veh:'',               a:{},notes:{},wh:{},cc:{},co:{},confirmed:{},pour:{}},
+  {id:'e17',role:'driver',  name:'Francisco #5', team:'Driver',     certs:['CPR'],          veh:'Good',           a:{},notes:{},wh:{},cc:{},co:{},confirmed:{},pour:{},multi:true},
+  {id:'e18',role:'driver',  name:'Driver 2',     team:'Driver',     certs:[],               veh:'Good',           a:{},notes:{},wh:{},cc:{},co:{},confirmed:{},pour:{},multi:true},
 ];
 let EXTRA=[
-  {id:'ew1',name:'Lazaro',project:'25-061',a:{},notes:{}},{id:'ew2',name:'Jose Ines',project:'25-103',a:{},notes:{}},
-  {id:'ew3',name:'Alberto',project:'',a:{},notes:{}},{id:'ew4',name:'Catarino',project:'',a:{},notes:{}},
-  {id:'ew5',name:'Dennis',project:'',a:{},notes:{}},{id:'ew6',name:'Concrete laborer 1',project:'',a:{},notes:{}},
-  {id:'ew7',name:'Concrete laborer 2',project:'',a:{},notes:{}},{id:'ew8',name:'Miguel',project:'',a:{},notes:{}},
+  {id:'ew1',name:'Lazaro',            project:'25-061',a:{},notes:{},wh:{},cc:{},co:{},confirmed:{},pour:{}},
+  {id:'ew2',name:'Jose Ines',         project:'25-103',a:{},notes:{},wh:{},cc:{},co:{},confirmed:{},pour:{}},
+  {id:'ew3',name:'Alberto',           project:'',      a:{},notes:{},wh:{},cc:{},co:{},confirmed:{},pour:{}},
+  {id:'ew4',name:'Catarino',          project:'',      a:{},notes:{},wh:{},cc:{},co:{},confirmed:{},pour:{}},
+  {id:'ew5',name:'Dennis',            project:'',      a:{},notes:{},wh:{},cc:{},co:{},confirmed:{},pour:{}},
+  {id:'ew6',name:'Concrete laborer 1',project:'',      a:{},notes:{},wh:{},cc:{},co:{},confirmed:{},pour:{}},
+  {id:'ew7',name:'Concrete laborer 2',project:'',      a:{},notes:{},wh:{},cc:{},co:{},confirmed:{},pour:{}},
+  {id:'ew8',name:'Miguel',            project:'',      a:{},notes:{},wh:{},cc:{},co:{},confirmed:{},pour:{}},
 ];
 const EQUIP=[
   {id:'ss1',cat:'Skid steer',name:'SS1',status:'Good',note:'#5 or #16',a:{},notes:{}},
@@ -4714,7 +4718,7 @@ function saveToCloud(rosterData){
   if(!APPS_SCRIPT_URL) return;
   _cloudPendingSnapshot = rosterData;
   clearTimeout(_cloudTimer);
-  _cloudTimer = setTimeout(()=>flushPendingCloudSave(), 20000); // 5s debounce — batches rapid edits
+  _cloudTimer = setTimeout(()=>flushPendingCloudSave(), 1500); // 1.5s debounce — saves quickly after edits
 }
 
 async function flushPendingCloudSave(force=false, _retryCount=0){
@@ -4750,65 +4754,65 @@ async function _doCloudSave(rosterData){
   try {
     const c = compressRoster(rosterData);
 
-    // ── Build monthly key ─────────────────────────────────────────────────────
-    const now     = new Date();
-    const monthKey= `roster_${now.getFullYear()}_${String(now.getMonth()+1).padStart(2,'0')}`;
+    // Monthly prefix from VIEWED month (calYear/calMonth)
+    const now      = new Date();
+    const saveYear = (typeof calYear  !== 'undefined') ? calYear  : now.getFullYear();
+    const saveMon  = (typeof calMonth !== 'undefined') ? calMonth : now.getMonth();
+    // e.g. "2606" = June 2026
+    const mp = `${String(saveYear).slice(-2)}${String(saveMon+1).padStart(2,'0')}`;
 
-    // ── Build batch payload: one object with ALL data ─────────────────────────
-    const batch = {
-      [monthKey]: {
-        staff:      c.staff,
-        extra:      c.extra,
-        equip:      c.equip,
-        rentals:    c.rentals,
-        extraList:  c.extraList  || [],
-        staffList:  c.staffList  || [],
-        rentalList: c.rentalList || [],
-        equipList:  c.equipList  || [],
-        savedAt:    now.toISOString(),
-      },
-    };
-
-    // ── Add static data (only when dirty) ─────────────────────────────────────
-    if(_ordersDirty)  { batch.orders          = DB.openOrders||[];            _ordersDirty  = false; }
-    if(_projsDirty)   { batch.deletedProjects  = DB._deletedProjects||[];
-                        batch.manualProjects   = DB.projects.filter(p=>p._manual)||[]; _projsDirty = false; }
-    if(_colorsDirty)  { batch.projColors       = PROJ_COLORS;                 _colorsDirty  = false; }
-    if(_historyDirty && _persistedHistory.length > 0) {
-                        batch.rosterHistory    = _persistedHistory.slice(0,150); _historyDirty = false; }
-
-    // ── Single POST call ──────────────────────────────────────────────────────
-    const body = JSON.stringify({ action: 'saveBulk', batch });
-    const kb   = Math.round(body.length / 1024 * 10) / 10;
-    // console.log(`☁️ saveBulk POST ${kb}KB (${Object.keys(batch).join(', ')})`);
-
-    const resp = await fetch(APPS_SCRIPT_URL, {
-      method:  'POST',
-      headers: { 'Content-Type': 'text/plain' }, // text/plain avoids CORS preflight
-      body,
-    });
-
-    if(!resp.ok) throw new Error(`HTTP ${resp.status}`);
-    const result = await resp.json();
-    // If Apps Script doesn't know saveBulk yet, fall back to JSONP chunk saves
-    if(result && result.error && result.error.includes('Unknown: saveBulk')){
-      console.warn('☁️ saveBulk not deployed yet — falling back to JSONP chunks');
-      await _doCloudSaveLegacy(rosterData);
-      return;
+    // Save each staff member individually: m2606s0, m2606s1 …
+    let ok=0, fail=0;
+    for(let i=0;i<c.staff.length;i++){
+      try{ await jsonpSave(`m${mp}s${c.staff[i].id}`, c.staff[i]); await delay(150); ok++; }
+      catch(e){ console.warn(`m${mp}s${i} failed`,e); fail++; }
     }
-    if(!result.ok) throw new Error('Apps Script error: ' + JSON.stringify(result));
+    // Extra workers
+    for(let i=0;i<c.extra.length;i++){
+      try{ await jsonpSave(`m${mp}ew${c.extra[i].id}`, c.extra[i]); await delay(120); ok++; }
+      catch(e){ console.warn(`m${mp}ew${i} failed`,e); fail++; }
+    }
+    // Equipment
+    for(let i=0;i<(c.equip||[]).length;i++){
+      try{ await jsonpSave(`m${mp}eq${c.equip[i].id}`, c.equip[i]); await delay(120); ok++; }
+      catch(e){ console.warn(`m${mp}eq${i} failed`,e); fail++; }
+    }
+    // Rentals
+    for(let i=0;i<(c.rentals||[]).length;i++){
+      try{ await jsonpSave(`m${mp}r${c.rentals[i].id}`, c.rentals[i]); await delay(120); ok++; }
+      catch(e){ console.warn(`m${mp}r${i} failed`,e); fail++; }
+    }
+    // Meta key — counts so loader knows how many keys to read
+    try{ await jsonpSave(`m${mp}meta`,{
+      sc:c.staff.length, ew:c.extra.length,
+      eq:(c.equip||[]).length, r:(c.rentals||[]).length,
+      extraList: c.extraList||[], staffList: c.staffList||[],
+      rentalList:c.rentalList||[], equipList:c.equipList||[],
+      savedAt:now.toISOString(),
+    }); ok++; } catch(e){ console.warn('meta failed',e); fail++; }
 
-    _saveFailCount = 0;
-    setCloudStatus('✓ Saved');
-    showSaveIndicator && showSaveIndicator('ok', '✓ Saved');
+    // Static data
+    if(_ordersDirty) { try{ await jsonpSave('orders',DB.openOrders||[]); _ordersDirty=false; }catch(e){} }
+    if(_projsDirty)  { try{ await jsonpSave('deletedProjects',DB._deletedProjects||[]);
+                            await jsonpSave('manualProjects',DB.projects.filter(p=>p._manual)||[]);
+                            _projsDirty=false; }catch(e){} }
+    if(_colorsDirty) { try{ await jsonpSave('projColors',PROJ_COLORS); _colorsDirty=false; }catch(e){} }
 
-  } catch(err) {
+    if(fail>0){
+      setCloudStatus(`⚠ ${fail} sin guardar`);
+      showSaveIndicator&&showSaveIndicator('error',`⚠ ${fail} sin guardar`);
+    } else {
+      _saveFailCount=0;
+      setCloudStatus('✓ Guardado');
+      showSaveIndicator&&showSaveIndicator('ok','✓ Guardado');
+    }
+  } catch(err){
     _saveFailCount++;
-    console.error('☁️ saveBulk failed:', err);
-    setCloudStatus('⚠ Save error');
-    showSaveIndicator && showSaveIndicator('error','⚠ Save error — check connection');
+    console.error('☁️ save failed:',err);
+    setCloudStatus('⚠ Error');
+    showSaveIndicator&&showSaveIndicator('error','⚠ Error al guardar');
   } finally {
-    _cloudSaveInProgress = false;
+    _cloudSaveInProgress=false;
   }
 }
 
@@ -4820,7 +4824,14 @@ async function forceSaveToCloud(){
   if(_cloudSaveInProgress){ toast('☁️ Save queued…'); return; }
   toast('☁️ Saving to cloud…');
   hideSaveDiag();
-  await flushPendingCloudSave(true);
+  try{
+    await flushPendingCloudSave(true);
+    console.log('✓ forceSaveToCloud finished');
+  }catch(e){
+    console.error('forceSaveToCloud failed', e);
+    showSaveIndicator && showSaveIndicator('error','⚠ Error al guardar');
+    toast('⚠ Error al guardar', {error:true});
+  }
 }
 
 function hideSaveDiag(){
@@ -4955,62 +4966,99 @@ async function loadFromCloud(silent=false){
     }
     const d = json.data;
 
-    // ── Try new monthly format first, then fall back to old chunk format ──────
-    const now      = new Date();
-    const monthKey = `roster_${now.getFullYear()}_${String(now.getMonth()+1).padStart(2,'0')}`;
+    // ── Detect which save format is present and load accordingly ─────────────
+    const now       = new Date();
 
-    // Also check last month as fallback
-    const lastMonth = new Date(now.getFullYear(), now.getMonth()-1, 1);
-    const lastKey   = `roster_${lastMonth.getFullYear()}_${String(lastMonth.getMonth()+1).padStart(2,'0')}`;
+    // New format keys look like m2605meta (YY+MM prefix)
+    const newFmtMetas = Object.keys(d).filter(k => /^m\d{4}meta$/.test(k)).sort();
 
-    const monthly = d[monthKey] || d[lastKey];
-
-    if(monthly && monthly.staff && monthly.staff.length > 0){
-      // ── New format: single monthly object ──────────────────────────────────
-      console.log(`☁️ Loaded from monthly key (${monthly.staff.length} staff)`);
+    if(newFmtMetas.length > 0){
+      // ── NEW FORMAT: m{YY}{MM}s0, m{YY}{MM}ew0, m{YY}{MM}eq0 etc ────────────
+      // Apply static lists from newest meta first
+      const newestMeta = d[newFmtMetas[newFmtMetas.length-1]] || {};
       applyRosterData({
-        staff:      monthly.staff     || [],
-        extra:      monthly.extra     || [],
-        equip:      monthly.equip     || [],
-        rentals:    monthly.rentals   || [],
-        extraList:  monthly.extraList  || [],
-        staffList:  monthly.staffList  || [],
-        rentalList: monthly.rentalList || [],
-        equipList:  monthly.equipList  || [],
+        staff:[], extra:[], equip:[], rentals:[],
+        extraList:  newestMeta.extraList  || [],
+        staffList:  newestMeta.staffList  || [],
+        rentalList: newestMeta.rentalList || [],
+        equipList:  newestMeta.equipList  || [],
       });
-    } else {
-      // ── Legacy format: chunks (sc0, sc1, ewc0 etc) ─────────────────────────
-      const meta       = d.scMeta || {};
-      const chunkCount = Number(meta.chunkCount) || 0;
 
-      let allStaff = [];
-      for(let i=0; i<chunkCount; i++) allStaff = allStaff.concat(d['sc'+i]||[]);
-
-      if(allStaff.length > 0){
-        const extraChunkCount  = Number(meta.extraChunkCount) || 0;
-        const rentalChunkCount = Number(meta.rentalChunkCount) || 0;
-
-        let allExtra = [];
-        for(let j=0; j<extraChunkCount; j++)  allExtra  = allExtra.concat(d['ewc'+j]||[]);
-        if(!allExtra.length) allExtra = meta.extra || [];
-
-        let allRentals = [];
-        for(let j=0; j<rentalChunkCount; j++) allRentals = allRentals.concat(d['rc'+j]||[]);
-        if(!allRentals.length) allRentals = d.rentals || meta.rentals || [];
-
-        console.log(`☁️ Loaded legacy format (${allStaff.length} staff)`);
-        applyRosterData({
-          staff:      allStaff,
-          extra:      allExtra,
-          equip:      d.equip     || meta.equip   || [],
-          rentals:    allRentals,
-          extraList:  d.extraList  || [],
-          staffList:  d.staffList  || [],
-          rentalList: d.rentalList || [],
-          equipList:  d.equipList  || [],
+      newFmtMetas.forEach(metaKey => {
+        const mp   = metaKey.replace('meta',''); // e.g. "m2605"
+        const meta = d[metaKey] || {};
+        const staff=[],extra=[],equip=[],rentals=[];
+        // Load by ID-based keys (e.g. m2606se1, m2606ewe1)
+        Object.keys(d).forEach(k => {
+          if(k.startsWith(`${mp}s`))  { const v=d[k]; if(v&&v.id) staff.push(v); }
+          else if(k.startsWith(`${mp}ew`)) { const v=d[k]; if(v&&v.id) extra.push(v); }
+          else if(k.startsWith(`${mp}eq`)) { const v=d[k]; if(v&&v.id) equip.push(v); }
+          else if(k.startsWith(`${mp}r`))  { const v=d[k]; if(v&&v.id) rentals.push(v); }
         });
+        applyRosterData({staff,extra,equip,rentals,extraList:[],staffList:[],rentalList:[],equipList:[]});
+      });
+      console.log(`☁️ Loaded new format: ${newFmtMetas.length} month(s)`);
+
+    } else {
+      // ── LEGACY: per-person keys person_roster_YYYY_MM_id ────────────────────
+      const personKeys = Object.keys(d).filter(k => /^person_roster_\d{4}_\d{2}_/.test(k));
+      if(personKeys.length > 0){
+        const monthsFound = [...new Set(personKeys.map(k => k.match(/^person_(roster_\d{4}_\d{2})_/)?.[1]).filter(Boolean))].sort();
+        const newestMo    = monthsFound[monthsFound.length-1];
+        const newestLists = d[`lists_${newestMo}`] || {};
+        applyRosterData({ staff:[],extra:[],equip:[],rentals:[],
+          extraList:newestLists.extraList||[], staffList:newestLists.staffList||[],
+          rentalList:newestLists.rentalList||[], equipList:newestLists.equipList||[] });
+        const byMonth = {};
+        personKeys.forEach(k=>{
+          const m=k.match(/^person_(roster_\d{4}_\d{2})_(.+)$/); if(!m) return;
+          const mo=m[1]; if(!byMonth[mo]) byMonth[mo]={staff:[],extra:[],equip:[],rentals:[]};
+          const p=d[k]; if(!p||!p.id) return;
+          const cat=p._cat||'staff';
+          if(cat==='staff') byMonth[mo].staff.push(p);
+          else if(cat==='extra') byMonth[mo].extra.push(p);
+          else if(cat==='equip') byMonth[mo].equip.push(p);
+          else if(cat==='rental') byMonth[mo].rentals.push(p);
+        });
+        Object.keys(byMonth).sort().forEach(mo=>{
+          applyRosterData({...byMonth[mo],extraList:[],staffList:[],rentalList:[],equipList:[]});
+        });
+        console.log(`☁️ Loaded person-key format: ${personKeys.length} records`);
+
       } else {
-        console.log('☁️ No roster data found in cloud');
+        // ── OLDEST LEGACY: roster_YYYY_MM monthly blobs ──────────────────────
+        const allMonthlyKeys = Object.keys(d).filter(k=>/^roster_\d{4}_\d{2}$/.test(k)).sort();
+        if(allMonthlyKeys.length > 0){
+          const nm = d[allMonthlyKeys[allMonthlyKeys.length-1]] || {};
+          applyRosterData({staff:[],extra:[],equip:[],rentals:[],
+            extraList:nm.extraList||[], staffList:nm.staffList||[],
+            rentalList:nm.rentalList||[], equipList:nm.equipList||[]});
+          allMonthlyKeys.forEach(k=>{
+            const mo=d[k]; if(!mo) return;
+            applyRosterData({staff:mo.staff||[],extra:mo.extra||[],equip:mo.equip||[],
+              rentals:mo.rentals||[],extraList:[],staffList:[],rentalList:[],equipList:[]});
+          });
+          console.log(`☁️ Loaded monthly blob format: ${allMonthlyKeys.length} month(s)`);
+
+        } else {
+          // ── OLDEST LEGACY: chunks sc0, sc1, ewc0 … ─────────────────────────
+          const monthKey  = `roster_${now.getFullYear()}_${String(now.getMonth()+1).padStart(2,'0')}`;
+          const lastMonth = new Date(now.getFullYear(), now.getMonth()-1, 1);
+          const lastKey   = `roster_${lastMonth.getFullYear()}_${String(lastMonth.getMonth()+1).padStart(2,'0')}`;
+          const meta       = d.scMeta || {};
+          const chunkCount = Number(meta.chunkCount) || 0;
+          let allStaff=[]; for(let i=0;i<chunkCount;i++) allStaff=allStaff.concat(d['sc'+i]||[]);
+          if(allStaff.length > 0){
+            const ecn=Number(meta.extraChunkCount)||0, rcn=Number(meta.rentalChunkCount)||0;
+            let allExtra=[]; for(let j=0;j<ecn;j++) allExtra=allExtra.concat(d['ewc'+j]||[]);
+            if(!allExtra.length) allExtra=meta.extra||[];
+            let allRentals=[]; for(let j=0;j<rcn;j++) allRentals=allRentals.concat(d['rc'+j]||[]);
+            if(!allRentals.length) allRentals=d.rentals||meta.rentals||[];
+            console.log(`☁️ Loaded oldest legacy chunk format (${allStaff.length} staff)`);
+            applyRosterData({staff:allStaff,extra:allExtra,equip:d.equip||meta.equip||[],rentals:allRentals,
+              extraList:d.extraList||[],staffList:d.staffList||[],rentalList:d.rentalList||[],equipList:d.equipList||[]});
+          } else { console.log('☁️ No roster data found in cloud'); }
+        }
       }
     }
 
@@ -5046,40 +5094,24 @@ async function loadFromCloud(silent=false){
   }
 }
 
-// jsonpSave — write one key/value to App Data sheet
+// jsonpSave — POST first (no size limit, handles special chars), JSONP fallback
 function jsonpSave(key, value){
   return new Promise((resolve,reject)=>{
-    if(!APPS_SCRIPT_URL){ reject('No Apps Script URL configured'); return; }
+    if(!APPS_SCRIPT_URL){ reject('No Apps Script URL'); return; }
     const body    = JSON.stringify({action:'saveAppData', key, value});
     const encoded = encodeURIComponent(body);
-    const kb      = Math.round(encoded.length / 1024 * 10) / 10;
-    // console.log(`☁️ jsonpSave key=${key} size=${kb}KB`);
-    if(encoded.length > 13000){
-      console.error(`☁️ Payload too large for key="${key}": ${kb}KB`);
-      reject(`Payload too large: ${kb}KB`); return;
-    }
-    const cbName  = '_zlcSave_' + Date.now() + '_' + Math.random().toString(36).slice(2,5);
-    const scriptId= '_zlcScript_' + key.replace(/[^a-zA-Z0-9]/g,'_');
+    if(encoded.length > 14000){ reject('Payload too large: '+Math.round(encoded.length/1024)+'KB'); return; }
+    const cbName  = '_zlcSave_'+Date.now()+'_'+Math.random().toString(36).slice(2,5);
+    const scriptId= '_zlcScript_'+key.replace(/[^a-zA-Z0-9]/g,'_');
     const old     = document.getElementById(scriptId); if(old) old.remove();
     let done = false;
-    const cleanup = () => {
-      done = true;
-      delete window[cbName];
-      const el = document.getElementById(scriptId);
-      if(el) el.remove();
-    };
-    window[cbName] = (d) => {
-      cleanup();
-      if(d && d.ok) resolve(d);
-      else reject('Save failed for key=' + key + ': ' + JSON.stringify(d));
-    };
-    const timer = setTimeout(() => {
-      if(!done){ cleanup(); reject('Timeout saving key=' + key); }
-    }, 15000);
+    const cleanup = ()=>{ done=true; delete window[cbName]; const el=document.getElementById(scriptId); if(el) el.remove(); };
+    window[cbName] = (d)=>{ cleanup(); if(d&&d.ok){ console.log('✓ cloud saved', key); resolve(d); } else reject('Save failed: '+JSON.stringify(d)); };
+    const timer = setTimeout(()=>{ if(!done){ cleanup(); reject('Timeout saving key='+key); }}, 15000);
     const script  = document.createElement('script');
     script.id     = scriptId;
-    script.src    = APPS_SCRIPT_URL + '?callback=' + cbName + '&data=' + encoded;
-    script.onerror = () => { clearTimeout(timer); cleanup(); reject('Script load error saving key=' + key); };
+    script.src    = APPS_SCRIPT_URL+'?callback='+cbName+'&data='+encoded;
+    script.onerror= ()=>{ clearTimeout(timer); cleanup(); reject('Script error key='+key); };
     document.head.appendChild(script);
   });
 }
@@ -5087,17 +5119,25 @@ function jsonpSave(key, value){
 
 // applyRosterData — apply cloud-loaded data back to in-memory STAFF/EXTRA/EQUIP/RENTALS
 function applyRosterData(rd) {
+  // MERGE (Object.assign) date-keyed dicts instead of replacing them.
+  // This lets multiple months coexist: each month's day-keys are added
+  // without wiping out the keys loaded from other months.
+  const mergeField = (item, field, src) => {
+    if (!src || typeof src !== 'object') return;
+    if (!item[field] || typeof item[field] !== 'object') item[field] = {};
+    Object.assign(item[field], src);
+  };
   const apply = (arr, source) => (arr||[]).forEach(saved => {
     const item = source.find(e => e.id === saved.id);
     if (item) {
-      if(saved.a)         item.a         = saved.a;
-      if(saved.notes)     item.notes     = saved.notes;
-      if(saved.wh)        item.wh        = saved.wh;
-      if(saved.cc)        item.cc        = saved.cc;
-      if(saved.co)        item.co        = saved.co;
-      if(saved.confirmed) item.confirmed = saved.confirmed;
-      if(saved.pour)      item.pour      = saved.pour;
-      if(saved.name)      item.name      = saved.name;
+      mergeField(item, 'a',         saved.a);
+      mergeField(item, 'notes',     saved.notes);
+      mergeField(item, 'wh',        saved.wh);
+      mergeField(item, 'cc',        saved.cc);
+      mergeField(item, 'co',        saved.co);
+      mergeField(item, 'confirmed', saved.confirmed);
+      mergeField(item, 'pour',      saved.pour);
+      if(saved.name)      item.name    = saved.name;
       if(saved.project !== undefined) item.project = saved.project;
     }
   });
@@ -5161,11 +5201,22 @@ function showBanner(msg, type='error', duration=6000){
 }
 
 function showSaveIndicator(state, msg){
-  // Optional UI indicator — safe no-op if element not present
+  // Visible save badge: saving / saved / error
   const el = document.getElementById('save-indicator');
   if(!el) return;
-  el.textContent = msg;
+  el.textContent = msg || '';
   el.style.display = msg ? 'block' : 'none';
+  el.classList.remove('visible','saving','saved','error');
+  if(msg){
+    el.classList.add('visible');
+    if(state === 'saving') el.classList.add('saving');
+    else if(state === 'error') el.classList.add('error');
+    else el.classList.add('saved');
+  }
+  clearTimeout(el._hideTimer);
+  if(state !== 'saving' && msg){
+    el._hideTimer = setTimeout(()=>el.classList.remove('visible'), 4500);
+  }
 }
 
 // jsonpLoad — read all keys from App Data sheet
@@ -6725,7 +6776,7 @@ function printWeeklySchedule() {
   const win = window.open('','_blank','width=1400,height=800');
   win.document.write(`<html><head><title>Weekly Logistics Schedule</title>
     <style>body{font-family:Arial,sans-serif;margin:20px}@media print{body{margin:0}}</style>
-    </head><body>${body.outerHTML}<script>window.onload=()=>window.print()<\/script></body></html>`);
+    </head><body>${body.outerHTML}<scr"+"ipt>window.onload=()=>window.print()<\/script></body></html>`);
   win.document.close();
 }
 
@@ -6913,17 +6964,20 @@ function showMonthDetail(schedIdx) {
       const projVal    = tv(proj) || bv(proj) || 0; // sum of code values + approved COs
       const earned     = budgetDays>0 ? Math.min(days/budgetDays,1)*projVal
                        : projVal>0&&days>0 ? days*500 : 0;
-      // Count teams working
+      // Count teams working + collect actual classcodes assigned this month
       const teams = new Set();
-      [...STAFF,...EXTRA].forEach(m => {
+      const usedCodes = new Set();
+      [...STAFF,...EXTRA].forEach(person => {
         for(let dd=1; dd<=dim; dd++){
           const key=`${yr}-${m+1}-${dd}`;
-          if((m.a||{})[key] && getAsgnPids((m.a||{})[key]).includes(pid)){
-            teams.add(m.team||m.name);
+          if((person.a||{})[key] && getAsgnPids((person.a||{})[key]).includes(pid)){
+            teams.add(person.team||person.name);
+            const cc = (person.cc||{})[key];
+            if(cc) usedCodes.add(cc);
           }
         }
       });
-      return { proj, days, earned, teams: [...teams] };
+      return { proj, days, earned, teams: [...teams], usedCodes: [...usedCodes] };
     })
     .filter(Boolean)
     .sort((a,b) => b.earned - a.earned);
@@ -6931,10 +6985,11 @@ function showMonthDetail(schedIdx) {
   const totalEarned = rows.reduce((a,r) => a+r.earned, 0);
 
   const rowsHtml = rows.map(r => {
-    const codesHtml = (r.proj.codes||[]).map(c => {
-      const col = CODE_COLORS[c.code] || '#888';
-      return `<span style="display:inline-flex;align-items:center;gap:3px;font-size:10px;font-weight:600;padding:1px 6px;border-radius:99px;background:${col}22;color:${col};margin-right:3px">
-        <span style="width:6px;height:6px;border-radius:50%;background:${col};flex-shrink:0;display:inline-block"></span>${c.code}</span>`;
+    const codesHtml = r.usedCodes.sort().map(code => {
+      const col = CODE_COLORS[code] || '#888';
+      const name = CODES_MAP[code] || code;
+      return `<span title="${name}" style="display:inline-flex;align-items:center;gap:3px;font-size:10px;font-weight:600;padding:1px 6px;border-radius:99px;background:${col}22;color:${col};margin-right:3px">
+        <span style="width:6px;height:6px;border-radius:50%;background:${col};flex-shrink:0;display:inline-block"></span>${code}</span>`;
     }).join('');
     return `
     <div style="display:grid;grid-template-columns:90px 1fr auto auto;gap:8px;align-items:start;padding:8px 0;border-bottom:1px solid var(--border)">
@@ -7001,6 +7056,16 @@ setInterval(async ()=>{
     }
   } catch(e){ /* silent */ }
 }, 10 * 60 * 1000); // every 2 minutes
+
+
+// Best-effort save before closing/reloading the tab
+window.addEventListener('beforeunload', () => {
+  try {
+    if (_cloudPendingSnapshot && !_cloudSaveInProgress) {
+      flushPendingCloudSave(true);
+    }
+  } catch(e) {}
+});
 
 // Auto-sync from Sheets every 5 minutes in background
 setInterval(() => {
