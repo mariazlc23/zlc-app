@@ -259,6 +259,7 @@
   .loading-bar-wrap { width:200px; height:3px; background:var(--bg3); border-radius:2px; overflow:hidden; }
   .loading-bar { height:100%; width:30%; background:var(--blue); border-radius:2px; animation:loadSlide 1.2s ease-in-out infinite; }
   @keyframes loadSlide { 0%{transform:translateX(-100%)} 100%{transform:translateX(400%)} }
+  @keyframes fadeInUp { from{opacity:0;transform:translateX(-50%) translateY(8px)} to{opacity:1;transform:translateX(-50%) translateY(0)} }
   .loading-msg { font-size:12px; color:var(--text3); }
 
   /* ── Mobile bottom nav ── */
@@ -494,6 +495,10 @@ body.select-mode .day-cell:hover { filter: brightness(1.15) !important; }
     <button id="sync-badge" onclick="throttledSync()" style="width:100%;font-size:11px;font-weight:600;padding:7px 12px;border-radius:var(--radius);border:0.5px solid var(--border2);cursor:pointer;transition:all .15s;background:#f0eeea;color:#9e9c97">↻ Sync from Sheets</button>
     <button onclick="forceSaveToCloud()" id="cloud-save-btn" title="Save roster to cloud" style="width:100%;margin-top:6px;font-size:11px;font-weight:600;padding:6px 12px;border-radius:var(--radius);border:0.5px solid #185FA5;cursor:pointer;background:#E8F0FE;color:#185FA5">☁ Save to cloud</button>
     <button onclick="loadFromCloud()" style="width:100%;margin-top:4px;font-size:11px;font-weight:600;padding:6px 12px;border-radius:var(--radius);border:0.5px solid var(--border2);cursor:pointer;background:var(--bg3);color:var(--text2)">↻ Load from cloud</button>
+    <div style="display:flex;gap:5px;margin-top:5px">
+      <button onclick="exportBackup()" style="flex:1;padding:5px;font-size:11px;border-radius:6px;border:0.5px solid var(--border2);background:var(--bg);cursor:pointer;color:var(--text2)" title="Download backup JSON">⬇ Export</button>
+      <label style="flex:1;padding:5px;font-size:11px;border-radius:6px;border:0.5px solid var(--border2);background:var(--bg);cursor:pointer;color:var(--text2);text-align:center" title="Import backup JSON">⬆ Import<input type="file" accept=".json" style="display:none" onchange="importBackup(this)"></label>
+    </div>
     <div id="cloud-status" style="font-size:10px;color:var(--text3);text-align:center;margin-top:4px"></div>
     <!-- Save diagnostics panel — shows on save errors -->
     <div id="save-diag" style="display:none;margin-top:6px;font-size:10px;background:#FAEEDA;border:0.5px solid #F0C879;border-radius:4px;padding:6px 8px;color:#854F0B;line-height:1.5">
@@ -847,15 +852,21 @@ const CAT_COLORS={staff:'#185FA5',extra:'#BA7517',equip:'#3B6D11',rental:'#88878
 const DEFAULT_CONFIG = {
   SHEET_ID: '1Y35oa2ebgCisj3PzVs2dTMUN5dY2Hhci4RIt55Kn44Y',
   API_KEY: 'AIzaSyCCuKyfurmT2w-L2dn6-XbvupaOmlHufUE',
-  APPS_SCRIPT_URL: 'https://script.google.com/macros/s/AKfycbylgsY5Nd3F3DlPQijFjwlNz3D11i2Jz2lET4F5QfjCuPbuTxCEqLlGWrcSArfmf9dGrQ/exec'
+  APPS_SCRIPT_URL: 'https://script.google.com/macros/s/AKfycbyoiqJzVpKqRRd7uDH4Ycn1lq8-wOHsmJ6A4HPTWbwaAld00I6OGeBRKk6gO8ne6ROiOA/exec'
 };
 
 function getRuntimeConfig() {
   try {
     const localCfg = JSON.parse(localStorage.getItem('zlc_app_config') || '{}');
-    return { ...DEFAULT_CONFIG, ...(window.ZLC_CONFIG || {}), ...localCfg };
+    // Never let localStorage override critical URLs/keys — always use DEFAULT_CONFIG
+    // (localStorage may be empty in incognito or on new devices)
+    const merged = { ...DEFAULT_CONFIG, ...(window.ZLC_CONFIG || {}), ...localCfg };
+    // Always enforce hardcoded critical values
+    merged.SHEET_ID       = DEFAULT_CONFIG.SHEET_ID;
+    merged.API_KEY        = DEFAULT_CONFIG.API_KEY;
+    merged.APPS_SCRIPT_URL = DEFAULT_CONFIG.APPS_SCRIPT_URL;
+    return merged;
   } catch (err) {
-    console.warn('Could not parse zlc_app_config from localStorage:', err);
     return { ...DEFAULT_CONFIG, ...(window.ZLC_CONFIG || {}) };
   }
 }
@@ -937,7 +948,7 @@ async function _sheetWriteWithRetry(action, payload, maxRetries=3){
       // Success
       console.log(`✓ sheetWrite '${action}' succeeded on attempt ${attempt}`);
       const log = document.getElementById('write-log');
-      if(log){ log.style.display='block'; log.textContent=`✓ ${action} saved to Sheet`; log.style.color='#3DAA6E'; }
+      if(log && false){ log.style.display='block'; log.textContent=`✓ ${action} saved to Sheet`; log.style.color='#3DAA6E'; }
       if(attempt > 1) toast(`✓ Saved to Google Sheet (attempt ${attempt})`);
       return; // done
     } catch(err){
@@ -1358,7 +1369,7 @@ async function syncFromSheets(silent=false) {
         }
         DB.total2026 = total;
         DB.codes2026 = codes;
-        console.log('2026 total:', total, 'codes:', codes, 'rows scanned:', rows.length);
+        // console.log('2026 total:', total, 'codes:', codes, 'rows scanned:', rows.length);
       }
     } catch(e) { console.warn('2026 fetch error:', e); }
 
@@ -1507,28 +1518,32 @@ let DB = {
 // Sync badge will be updated after load
 
 let STAFF=[
-  {id:'e1',role:'foreman',name:'Carlos #15',team:'Xolos',role:'foreman',certs:['H','RFT','EO'],veh:'Good',a:{},notes:{}},
-  {id:'e2',role:'laborer',name:'Victor',team:'Xolos',role:'laborer',certs:['EO'],veh:'',a:{},notes:{}},
-  {id:'e3',role:'laborer',name:'Juan Alejo',team:'Xolos',role:'laborer',certs:['H','RFT'],veh:'',a:{},notes:{}},
-  {id:'e4',role:'foreman',name:'Chuy #14',team:'Chingones',role:'foreman',certs:['H','RFT','SSO'],veh:'Needs attention',a:{},notes:{}},
-  {id:'e5',role:'laborer',name:'Luis',team:'Chingones',role:'laborer',certs:[],veh:'',a:{},notes:{}},
-  {id:'e6',role:'laborer',name:'Santos',team:'Chingones',role:'laborer',certs:['H','RFT'],veh:'',a:{},notes:{}},
-  {id:'e7',role:'foreman',name:'JRod #12',team:'Poblanos',role:'foreman',certs:['H'],veh:'Needs attention',a:{},notes:{}},
-  {id:'e8',role:'laborer',name:'Daniel',team:'Poblanos',role:'laborer',certs:[],veh:'',a:{},notes:{}},
-  {id:'e9',role:'laborer',name:'Fernando',team:'Poblanos',role:'laborer',certs:[],veh:'',a:{},notes:{}},
-  {id:'e10',role:'foreman',name:'Temo #9',team:'Guerreros Z',role:'foreman',certs:[],veh:'',a:{},notes:{}},
-  {id:'e11',role:'laborer',name:'Cabrera',team:'Guerreros Z',role:'laborer',certs:[],veh:'Good',a:{},notes:{}},
-  {id:'e12',role:'laborer',name:'Rigo',team:'Guerreros Z',role:'laborer',certs:[],veh:'',a:{},notes:{}},
-  {id:'e13',role:'foreman',name:'Miguel #11',team:'Lobos',role:'foreman',certs:[],veh:'',a:{},notes:{}},
-  {id:'e19',role:'laborer',name:'Joaquin',team:'Aguilas',certs:[],veh:'',a:{},notes:{}},
-  {id:'e17',role:'driver',name:'Francisco #5',team:'Driver',certs:['CPR'],veh:'Good',a:{},notes:{},wh:{},multi:true},
-  {id:'e18',role:'driver',name:'Driver 2',team:'Driver',certs:[],veh:'Good',a:{},notes:{},wh:{},multi:true},
+  {id:'e1', role:'foreman', name:'Carlos #15',  team:'Xolos',      certs:['H','RFT','EO'], veh:'Good',           a:{},notes:{},wh:{},cc:{},co:{},confirmed:{},pour:{}},
+  {id:'e2', role:'laborer', name:'Victor',       team:'Xolos',      certs:['EO'],           veh:'',               a:{},notes:{},wh:{},cc:{},co:{},confirmed:{},pour:{}},
+  {id:'e3', role:'laborer', name:'Juan Alejo',   team:'Xolos',      certs:['H','RFT'],      veh:'',               a:{},notes:{},wh:{},cc:{},co:{},confirmed:{},pour:{}},
+  {id:'e4', role:'foreman', name:'Chuy #14',     team:'Chingones',  certs:['H','RFT','SSO'],veh:'Needs attention',a:{},notes:{},wh:{},cc:{},co:{},confirmed:{},pour:{}},
+  {id:'e5', role:'laborer', name:'Luis',         team:'Chingones',  certs:[],               veh:'',               a:{},notes:{},wh:{},cc:{},co:{},confirmed:{},pour:{}},
+  {id:'e6', role:'laborer', name:'Santos',       team:'Chingones',  certs:['H','RFT'],      veh:'',               a:{},notes:{},wh:{},cc:{},co:{},confirmed:{},pour:{}},
+  {id:'e7', role:'foreman', name:'JRod #12',     team:'Poblanos',   certs:['H'],            veh:'Needs attention',a:{},notes:{},wh:{},cc:{},co:{},confirmed:{},pour:{}},
+  {id:'e8', role:'laborer', name:'Daniel',       team:'Poblanos',   certs:[],               veh:'',               a:{},notes:{},wh:{},cc:{},co:{},confirmed:{},pour:{}},
+  {id:'e9', role:'laborer', name:'Fernando',     team:'Poblanos',   certs:[],               veh:'',               a:{},notes:{},wh:{},cc:{},co:{},confirmed:{},pour:{}},
+  {id:'e10',role:'foreman', name:'Temo #9',      team:'Guerreros Z',certs:[],               veh:'',               a:{},notes:{},wh:{},cc:{},co:{},confirmed:{},pour:{}},
+  {id:'e11',role:'laborer', name:'Cabrera',      team:'Guerreros Z',certs:[],               veh:'Good',           a:{},notes:{},wh:{},cc:{},co:{},confirmed:{},pour:{}},
+  {id:'e12',role:'laborer', name:'Rigo',         team:'Guerreros Z',certs:[],               veh:'',               a:{},notes:{},wh:{},cc:{},co:{},confirmed:{},pour:{}},
+  {id:'e13',role:'foreman', name:'Miguel #11',   team:'Lobos',      certs:[],               veh:'',               a:{},notes:{},wh:{},cc:{},co:{},confirmed:{},pour:{}},
+  {id:'e19',role:'laborer', name:'Joaquin',      team:'Aguilas',    certs:[],               veh:'',               a:{},notes:{},wh:{},cc:{},co:{},confirmed:{},pour:{}},
+  {id:'e17',role:'driver',  name:'Francisco #5', team:'Driver',     certs:['CPR'],          veh:'Good',           a:{},notes:{},wh:{},cc:{},co:{},confirmed:{},pour:{},multi:true},
+  {id:'e18',role:'driver',  name:'Driver 2',     team:'Driver',     certs:[],               veh:'Good',           a:{},notes:{},wh:{},cc:{},co:{},confirmed:{},pour:{},multi:true},
 ];
 let EXTRA=[
-  {id:'ew1',name:'Lazaro',project:'25-061',a:{},notes:{}},{id:'ew2',name:'Jose Ines',project:'25-103',a:{},notes:{}},
-  {id:'ew3',name:'Alberto',project:'',a:{},notes:{}},{id:'ew4',name:'Catarino',project:'',a:{},notes:{}},
-  {id:'ew5',name:'Dennis',project:'',a:{},notes:{}},{id:'ew6',name:'Concrete laborer 1',project:'',a:{},notes:{}},
-  {id:'ew7',name:'Concrete laborer 2',project:'',a:{},notes:{}},{id:'ew8',name:'Miguel',project:'',a:{},notes:{}},
+  {id:'ew1',name:'Lazaro',            project:'25-061',a:{},notes:{},wh:{},cc:{},co:{},confirmed:{},pour:{}},
+  {id:'ew2',name:'Jose Ines',         project:'25-103',a:{},notes:{},wh:{},cc:{},co:{},confirmed:{},pour:{}},
+  {id:'ew3',name:'Alberto',           project:'',      a:{},notes:{},wh:{},cc:{},co:{},confirmed:{},pour:{}},
+  {id:'ew4',name:'Catarino',          project:'',      a:{},notes:{},wh:{},cc:{},co:{},confirmed:{},pour:{}},
+  {id:'ew5',name:'Dennis',            project:'',      a:{},notes:{},wh:{},cc:{},co:{},confirmed:{},pour:{}},
+  {id:'ew6',name:'Concrete laborer 1',project:'',      a:{},notes:{},wh:{},cc:{},co:{},confirmed:{},pour:{}},
+  {id:'ew7',name:'Concrete laborer 2',project:'',      a:{},notes:{},wh:{},cc:{},co:{},confirmed:{},pour:{}},
+  {id:'ew8',name:'Miguel',            project:'',      a:{},notes:{},wh:{},cc:{},co:{},confirmed:{},pour:{}},
 ];
 const EQUIP=[
   {id:'ss1',cat:'Skid steer',name:'SS1',status:'Good',note:'#5 or #16',a:{},notes:{}},
@@ -1935,7 +1950,7 @@ function renderOverview(){
         const asgn=item.a?.[key];
         if(!asgn)continue;
         getAsgnPids(asgn).forEach(pid=>{
-          if(pid&&pid!=='OFF'&&pid!=='Warehouse') projDays[pid]=(projDays[pid]||0)+1;
+          if(pid&&pid!=='OFF'&&pid!=='Warehouse'&&pid!=='000') projDays[pid]=(projDays[pid]||0)+1;
         });
       }
     });
@@ -1947,8 +1962,9 @@ function renderOverview(){
       if(budgetDays>0&&projVal>0) moVal+=Math.min(days/budgetDays,1)*projVal;
       else if(projVal>0&&days>0) moVal+=days*500;
     });
-    schedMonths.push({label:lbl,value:moVal,projCount:Object.keys(projDays).length});
+    schedMonths.push({label:lbl,yr,m,value:moVal,projCount:Object.keys(projDays).length});
   }
+  window._lastSchedMonths = schedMonths;
   const maxSchedVal=Math.max(...schedMonths.map(s=>s.value),1);
 
   document.getElementById('dash-metrics').innerHTML=`
@@ -1965,14 +1981,15 @@ function renderOverview(){
     </div>`;
 
   // ── Scheduled value chart ────────────────────────────────────────────────────
-  const chartRows=schedMonths.map(s=>`
-    <div style="display:flex;align-items:center;gap:10px;margin-bottom:8px">
-      <div style="font-size:11px;color:var(--text2);width:64px;flex-shrink:0">${s.label}</div>
+  const chartRows=schedMonths.map((s,si)=>`
+    <div onclick="showMonthDetail(${si})" style="display:flex;align-items:center;gap:10px;margin-bottom:6px;cursor:pointer;border-radius:6px;padding:4px 6px;transition:background .15s" 
+         onmouseover="this.style.background='var(--bg3)'" onmouseout="this.style.background=''">
+      <div style="font-size:11px;color:var(--text2);width:64px;flex-shrink:0;font-weight:600">${s.label}</div>
       <div style="flex:1;background:var(--bg3);border-radius:4px;height:20px;overflow:hidden;position:relative">
         <div style="height:100%;background:linear-gradient(90deg,#185FA5,#4A9EFF);border-radius:4px;width:${Math.round(s.value/maxSchedVal*100)}%;min-width:${s.value>0?'3px':'0'};transition:width .4s"></div>
       </div>
       <div style="font-size:11px;font-weight:700;width:74px;text-align:right;color:var(--text)">${fmt(s.value)}</div>
-      <div style="font-size:10px;color:var(--text3);width:50px">${s.projCount} proj.</div>
+      <div style="font-size:10px;color:var(--text3);width:50px">${s.projCount} proj. ›</div>
     </div>`).join('');
 
   // Inject chart — create the section if it doesn't exist
@@ -4659,7 +4676,7 @@ function buildRosterData(){
 function compressRoster(rd){
   const c=arr=>(arr||[]).map(e=>{
     const o={id:e.id};
-    if(e.name)     o.name=e.name;
+    o.name = e.name || ''; // always include name so item is never filtered
     if(e.project)  o.project=e.project;
     if(e.a         && Object.keys(e.a).length)         o.a=e.a;
     if(e.notes     && Object.keys(e.notes).length)     o.notes=e.notes;
@@ -4669,7 +4686,7 @@ function compressRoster(rd){
     if(e.confirmed && Object.keys(e.confirmed).length) o.confirmed=e.confirmed;
     if(e.pour      && Object.keys(e.pour).length)      o.pour=e.pour;
     return o;
-  }).filter(e=>Object.keys(e).length>1);
+  }); // keep all items, even unassigned ones
   return{
     staff:     c(rd.staff),
     extra:     c(rd.extra),
@@ -4701,7 +4718,7 @@ function saveToCloud(rosterData){
   if(!APPS_SCRIPT_URL) return;
   _cloudPendingSnapshot = rosterData;
   clearTimeout(_cloudTimer);
-  _cloudTimer = setTimeout(()=>flushPendingCloudSave(), 5000); // 5s debounce — batches rapid edits
+  _cloudTimer = setTimeout(()=>flushPendingCloudSave(), 1500); // 1.5s debounce — saves quickly after edits
 }
 
 async function flushPendingCloudSave(force=false, _retryCount=0){
@@ -4733,141 +4750,69 @@ async function _doCloudSave(rosterData){
   _cloudSaveInProgress = true;
   setCloudStatus('⏳ Saving…');
   showSaveIndicator && showSaveIndicator('saving','⏳ Saving…');
-  try{
+
+  try {
     const c = compressRoster(rosterData);
 
-    // ── Dynamic chunk sizing ──────────────────────────────────────────────
-    // Start with chunks of 2 staff. If any chunk exceeds the URL limit,
-    // split down to 1 per chunk automatically. This handles employees with
-    // many assigned days whose serialized data grows large.
-    const LIMIT = 13000; // Apps Script safe URL cap (conservative)
-    function makeChunks(arr, size){
-      const out = [];
-      for(let i=0;i<arr.length;i+=size) out.push(arr.slice(i,i+size));
-      return out;
-    }
-    let chunks = makeChunks(c.staff, 3); // 3 people per chunk = fewer API calls
-    // Re-split any chunk that's too large into size-1
-    const safeChunks = [];
-    for(const ch of chunks){
-      const encoded = encodeURIComponent(JSON.stringify({action:'saveAppData',key:'_test',value:ch}));
-      if(encoded.length > LIMIT && ch.length > 1){
-        // Split this chunk further — one staff per chunk
-        for(const s of ch) safeChunks.push([s]);
-      } else {
-        safeChunks.push(ch);
-      }
-    }
-    chunks = safeChunks;
+    // Monthly prefix from VIEWED month (calYear/calMonth)
+    const now      = new Date();
+    const saveYear = (typeof calYear  !== 'undefined') ? calYear  : now.getFullYear();
+    const saveMon  = (typeof calMonth !== 'undefined') ? calMonth : now.getMonth();
+    // e.g. "2606" = June 2026
+    const mp = `${String(saveYear).slice(-2)}${String(saveMon+1).padStart(2,'0')}`;
 
-    // ── Save each staff chunk with per-chunk error reporting ──────────────
-    const failedChunks = [];
-    for(let i=0; i<chunks.length; i++){
-      try{
-        await jsonpSave('sc'+i, chunks[i]);
-        if(i < chunks.length-1) await delay(300);
-      } catch(chunkErr){
-        failedChunks.push({i, err: String(chunkErr)});
-        console.error('☁️ Chunk sc'+i+' failed:', chunkErr);
-      }
+    // Save each staff member individually: m2606s0, m2606s1 …
+    let ok=0, fail=0;
+    for(let i=0;i<c.staff.length;i++){
+      try{ await jsonpSave(`m${mp}s${c.staff[i].id}`, c.staff[i]); await delay(150); ok++; }
+      catch(e){ console.warn(`m${mp}s${i} failed`,e); fail++; }
     }
+    // Extra workers
+    for(let i=0;i<c.extra.length;i++){
+      try{ await jsonpSave(`m${mp}ew${c.extra[i].id}`, c.extra[i]); await delay(120); ok++; }
+      catch(e){ console.warn(`m${mp}ew${i} failed`,e); fail++; }
+    }
+    // Equipment
+    for(let i=0;i<(c.equip||[]).length;i++){
+      try{ await jsonpSave(`m${mp}eq${c.equip[i].id}`, c.equip[i]); await delay(120); ok++; }
+      catch(e){ console.warn(`m${mp}eq${i} failed`,e); fail++; }
+    }
+    // Rentals
+    for(let i=0;i<(c.rentals||[]).length;i++){
+      try{ await jsonpSave(`m${mp}r${c.rentals[i].id}`, c.rentals[i]); await delay(120); ok++; }
+      catch(e){ console.warn(`m${mp}r${i} failed`,e); fail++; }
+    }
+    // Meta key — counts so loader knows how many keys to read
+    try{ await jsonpSave(`m${mp}meta`,{
+      sc:c.staff.length, ew:c.extra.length,
+      eq:(c.equip||[]).length, r:(c.rentals||[]).length,
+      extraList: c.extraList||[], staffList: c.staffList||[],
+      rentalList:c.rentalList||[], equipList:c.equipList||[],
+      savedAt:now.toISOString(),
+    }); ok++; } catch(e){ console.warn('meta failed',e); fail++; }
 
-    if(failedChunks.length > 0){
-      // Some chunks failed — let the user know which ones and why
-      const msg = `⚠️ ${failedChunks.length} of ${chunks.length} save chunk(s) failed. Data may be incomplete. Check console for details.`;
-      console.error('Failed chunks:', failedChunks);
-      showBanner(msg, 'error', 0); // 0 = don't auto-hide, stays until dismissed
-      setCloudStatus('✗ Partial save — click "Run full check"');
-      showSaveIndicator && showSaveIndicator('error','✗ Not fully saved');
-      // Only show diagnostics panel after persistent failures (not transient)
-      _saveFailCount = (_saveFailCount||0) + 1;
-      if(_saveFailCount >= 2) {
-        const diagLines = failedChunks.map(f => `❌ Chunk ${f.i}: ${f.err}`);
-        diagLines.push('👆 Click "Run full check" for full analysis and fix instructions.');
-        showSaveDiag(diagLines.join('<br>'));
-      } else {
-        console.warn('☁️ Save had failures (attempt', _saveFailCount, ') — will retry');
-      }
-      // Still try to save metadata with what we have
-    }
+    // Static data
+    if(_ordersDirty) { try{ await jsonpSave('orders',DB.openOrders||[]); _ordersDirty=false; }catch(e){} }
+    if(_projsDirty)  { try{ await jsonpSave('deletedProjects',DB._deletedProjects||[]);
+                            await jsonpSave('manualProjects',DB.projects.filter(p=>p._manual)||[]);
+                            _projsDirty=false; }catch(e){} }
+    if(_colorsDirty) { try{ await jsonpSave('projColors',PROJ_COLORS); _colorsDirty=false; }catch(e){} }
 
-    // ── Save metadata: chunk count + extra/equip/rentals ─────────────────
-    // Save metadata with retry
-    let _metaSaved = false;
-    for(let _mr=0; _mr<2 && !_metaSaved; _mr++){
-      try { // Save extra workers as separate chunks (like staff)
-      const extraChunks = [];
-      for(let j=0; j<c.extra.length; j+=3) extraChunks.push(c.extra.slice(j,j+3));
-      for(let j=0; j<extraChunks.length; j++){
-        await jsonpSave('ex'+j, extraChunks[j]);
-        if(j < extraChunks.length-1) await delay(150);
-      }
-      // Save rentals and equip as single keys (usually small)
-      await delay(150);
-      await jsonpSave('rentals', c.rentals || []);
-      await delay(150);
-      await jsonpSave('equip',   c.equip   || []);
-      await delay(150);
-      // Save item lists (new items added by user)
-      await jsonpSave('extraList',  c.extraList  || []);
-      await delay(150);
-      await jsonpSave('staffList',  c.staffList  || []);
-      await delay(150);
-      await jsonpSave('rentalList', c.rentalList || []);
-      await delay(150);
-      await jsonpSave('equipList',  c.equipList  || []);
-      await delay(150);
-      // scMeta is now just chunk count + extra chunk count
-      await jsonpSave('scMeta', {
-        chunkCount:      chunks.length,
-        extraChunkCount: extraChunks.length,
-      });
-      _metaSaved = true;
-      } catch(_me) {
-        console.warn('scMeta save attempt', _mr+1, 'failed:', _me);
-        if(_mr === 0) await delay(1000); // wait 1s before retry
-      }
-    }    await delay(300);
-
-    // ── Save static data only when dirty ─────────────────────────────────────
-    if(_ordersDirty) {
-      await jsonpSave('orders', DB.openOrders||[]);
-      await delay(150);
-      _ordersDirty = false;
+    if(fail>0){
+      setCloudStatus(`⚠ ${fail} sin guardar`);
+      showSaveIndicator&&showSaveIndicator('error',`⚠ ${fail} sin guardar`);
+    } else {
+      _saveFailCount=0;
+      setCloudStatus('✓ Guardado');
+      showSaveIndicator&&showSaveIndicator('ok','✓ Guardado');
     }
-    if(_projsDirty) {
-      await jsonpSave('deletedProjects', DB._deletedProjects||[]);
-      await jsonpSave('manualProjects', DB.projects.filter(p=>p._manual)||[]);
-      await delay(150);
-      _projsDirty = false;
-    }
-    if(_colorsDirty) {
-      await jsonpSave('projColors', PROJ_COLORS);
-      await delay(150);
-      _colorsDirty = false;
-    }
-    if(_historyDirty && _persistedHistory.length > 0) {
-      await jsonpSave('rosterHistory', _persistedHistory.slice(0,500));
-      await delay(150);
-      _historyDirty = false;
-    }
-
-    if(failedChunks.length === 0){
-      _saveFailCount = 0; // reset on success
-    const t = new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'});
-      setCloudStatus('✓ Saved '+t);
-      showSaveIndicator && showSaveIndicator('saved','✓ Saved');
-      console.log('☁️ Saved to cloud at', t, '·', chunks.length, 'chunks ·', c.staff.length, 'staff');
-    }
-  }catch(e){
-    console.error('☁️ Save failed:',e);
-    setCloudStatus('✗ Save failed — retrying…');
-    showBanner('⚠️ Roster not saved to cloud. Retrying in 15s…', 'error', 0);
-    showSaveDiag('❌ Save error: '+String(e).slice(0,120)+'<br>👆 Click "Run full check" for diagnosis.<br>🔄 Auto-retrying in 15s…');
-    // Auto-retry once after 15 seconds
-    setTimeout(()=>{ saveToCloud(buildRosterData()); }, 15000);
-  }finally{
-    _cloudSaveInProgress = false;
+  } catch(err){
+    _saveFailCount++;
+    console.error('☁️ save failed:',err);
+    setCloudStatus('⚠ Error');
+    showSaveIndicator&&showSaveIndicator('error','⚠ Error al guardar');
+  } finally {
+    _cloudSaveInProgress=false;
   }
 }
 
@@ -4879,7 +4824,14 @@ async function forceSaveToCloud(){
   if(_cloudSaveInProgress){ toast('☁️ Save queued…'); return; }
   toast('☁️ Saving to cloud…');
   hideSaveDiag();
-  await flushPendingCloudSave(true);
+  try{
+    await flushPendingCloudSave(true);
+    console.log('✓ forceSaveToCloud finished');
+  }catch(e){
+    console.error('forceSaveToCloud failed', e);
+    showSaveIndicator && showSaveIndicator('error','⚠ Error al guardar');
+    toast('⚠ Error al guardar', {error:true});
+  }
 }
 
 function hideSaveDiag(){
@@ -4915,11 +4867,6 @@ async function runSaveDiag(){
 
   // ── 2. Staff payload sizes ───────────────────────────────────────────────
   const CHUNK = 2;
-  function makeChunks(arr, size){
-    const out=[];
-    for(let i=0;i<arr.length;i+=size) out.push(arr.slice(i,i+size));
-    return out;
-  }
   const chunks = makeChunks(c.staff, CHUNK);
   let bigChunks = 0;
   let maxChunkKB = 0;
@@ -5004,129 +4951,196 @@ function getPrevMonthLabel(){
   return d.toLocaleString('en-US',{month:'long',year:'numeric'});
 }
 
-async function loadFromCloud(){
-  if(!APPS_SCRIPT_URL) return;
-  setCloudStatus('⏳ Loading…');
-  try{
+async function loadFromCloud(silent=false){
+  const loadEl  = document.getElementById('app-loading');
+  const loadMsg = document.getElementById('loading-msg');
+
+  try {
+    if(loadMsg) loadMsg.textContent = 'Loading from cloud…';
+
+    // ── Fetch all App Data via JSONP GET ──────────────────────────────────────
     const json = await jsonpLoad();
-    if(!json||!json.ok||!json.data){
+    if(!json || !json.ok || !json.data){
       setCloudStatus('☁️ No data yet — press Save first');
       return;
     }
     const d = json.data;
-    const meta = d.scMeta||{};
-    const chunkCount = Number(meta.chunkCount)||0;
 
-    // Reassemble staff from chunks
-    let allStaff = [];
-    for(let i=0; i<chunkCount; i++) allStaff = allStaff.concat(d['sc'+i]||[]);
+    // ── Detect which save format is present and load accordingly ─────────────
+    const now       = new Date();
 
-    if(allStaff.length > 0){
-      // Reassemble extra workers from chunks
-      const extraChunkCount = Number(meta.extraChunkCount)||0;
-      let allExtra = [];
-      if(extraChunkCount > 0){
-        for(let j=0; j<extraChunkCount; j++) allExtra = allExtra.concat(d['ex'+j]||[]);
-      } else {
-        // Fallback: try old scMeta.extra format
-        allExtra = meta.extra || [];
-      }
+    // New format keys look like m2605meta (YY+MM prefix)
+    const newFmtMetas = Object.keys(d).filter(k => /^m\d{4}meta$/.test(k)).sort();
+
+    if(newFmtMetas.length > 0){
+      // ── NEW FORMAT: m{YY}{MM}s0, m{YY}{MM}ew0, m{YY}{MM}eq0 etc ────────────
+      // Apply static lists from newest meta first
+      const newestMeta = d[newFmtMetas[newFmtMetas.length-1]] || {};
       applyRosterData({
-        staff:      allStaff,
-        extra:      allExtra,
-        equip:      d.equip     || meta.equip   || [],
-        rentals:    d.rentals   || meta.rentals || [],
-        extraList:  d.extraList  || meta.extraList  || [],
-        staffList:  d.staffList  || meta.staffList  || [],
-        rentalList: d.rentalList || meta.rentalList || [],
-        equipList:  d.equipList  || meta.equipList  || [],
+        staff:[], extra:[], equip:[], rentals:[],
+        extraList:  newestMeta.extraList  || [],
+        staffList:  newestMeta.staffList  || [],
+        rentalList: newestMeta.rentalList || [],
+        equipList:  newestMeta.equipList  || [],
       });
-      console.log('☁️ Loaded '+allStaff.length+' staff from cloud');
+
+      newFmtMetas.forEach(metaKey => {
+        const mp   = metaKey.replace('meta',''); // e.g. "m2605"
+        const meta = d[metaKey] || {};
+        const staff=[],extra=[],equip=[],rentals=[];
+        // Load by ID-based keys (e.g. m2606se1, m2606ewe1)
+        Object.keys(d).forEach(k => {
+          if(k.startsWith(`${mp}s`))  { const v=d[k]; if(v&&v.id) staff.push(v); }
+          else if(k.startsWith(`${mp}ew`)) { const v=d[k]; if(v&&v.id) extra.push(v); }
+          else if(k.startsWith(`${mp}eq`)) { const v=d[k]; if(v&&v.id) equip.push(v); }
+          else if(k.startsWith(`${mp}r`))  { const v=d[k]; if(v&&v.id) rentals.push(v); }
+        });
+        applyRosterData({staff,extra,equip,rentals,extraList:[],staffList:[],rentalList:[],equipList:[]});
+      });
+      console.log(`☁️ Loaded new format: ${newFmtMetas.length} month(s)`);
+
+    } else {
+      // ── LEGACY: per-person keys person_roster_YYYY_MM_id ────────────────────
+      const personKeys = Object.keys(d).filter(k => /^person_roster_\d{4}_\d{2}_/.test(k));
+      if(personKeys.length > 0){
+        const monthsFound = [...new Set(personKeys.map(k => k.match(/^person_(roster_\d{4}_\d{2})_/)?.[1]).filter(Boolean))].sort();
+        const newestMo    = monthsFound[monthsFound.length-1];
+        const newestLists = d[`lists_${newestMo}`] || {};
+        applyRosterData({ staff:[],extra:[],equip:[],rentals:[],
+          extraList:newestLists.extraList||[], staffList:newestLists.staffList||[],
+          rentalList:newestLists.rentalList||[], equipList:newestLists.equipList||[] });
+        const byMonth = {};
+        personKeys.forEach(k=>{
+          const m=k.match(/^person_(roster_\d{4}_\d{2})_(.+)$/); if(!m) return;
+          const mo=m[1]; if(!byMonth[mo]) byMonth[mo]={staff:[],extra:[],equip:[],rentals:[]};
+          const p=d[k]; if(!p||!p.id) return;
+          const cat=p._cat||'staff';
+          if(cat==='staff') byMonth[mo].staff.push(p);
+          else if(cat==='extra') byMonth[mo].extra.push(p);
+          else if(cat==='equip') byMonth[mo].equip.push(p);
+          else if(cat==='rental') byMonth[mo].rentals.push(p);
+        });
+        Object.keys(byMonth).sort().forEach(mo=>{
+          applyRosterData({...byMonth[mo],extraList:[],staffList:[],rentalList:[],equipList:[]});
+        });
+        console.log(`☁️ Loaded person-key format: ${personKeys.length} records`);
+
+      } else {
+        // ── OLDEST LEGACY: roster_YYYY_MM monthly blobs ──────────────────────
+        const allMonthlyKeys = Object.keys(d).filter(k=>/^roster_\d{4}_\d{2}$/.test(k)).sort();
+        if(allMonthlyKeys.length > 0){
+          const nm = d[allMonthlyKeys[allMonthlyKeys.length-1]] || {};
+          applyRosterData({staff:[],extra:[],equip:[],rentals:[],
+            extraList:nm.extraList||[], staffList:nm.staffList||[],
+            rentalList:nm.rentalList||[], equipList:nm.equipList||[]});
+          allMonthlyKeys.forEach(k=>{
+            const mo=d[k]; if(!mo) return;
+            applyRosterData({staff:mo.staff||[],extra:mo.extra||[],equip:mo.equip||[],
+              rentals:mo.rentals||[],extraList:[],staffList:[],rentalList:[],equipList:[]});
+          });
+          console.log(`☁️ Loaded monthly blob format: ${allMonthlyKeys.length} month(s)`);
+
+        } else {
+          // ── OLDEST LEGACY: chunks sc0, sc1, ewc0 … ─────────────────────────
+          const monthKey  = `roster_${now.getFullYear()}_${String(now.getMonth()+1).padStart(2,'0')}`;
+          const lastMonth = new Date(now.getFullYear(), now.getMonth()-1, 1);
+          const lastKey   = `roster_${lastMonth.getFullYear()}_${String(lastMonth.getMonth()+1).padStart(2,'0')}`;
+          const meta       = d.scMeta || {};
+          const chunkCount = Number(meta.chunkCount) || 0;
+          let allStaff=[]; for(let i=0;i<chunkCount;i++) allStaff=allStaff.concat(d['sc'+i]||[]);
+          if(allStaff.length > 0){
+            const ecn=Number(meta.extraChunkCount)||0, rcn=Number(meta.rentalChunkCount)||0;
+            let allExtra=[]; for(let j=0;j<ecn;j++) allExtra=allExtra.concat(d['ewc'+j]||[]);
+            if(!allExtra.length) allExtra=meta.extra||[];
+            let allRentals=[]; for(let j=0;j<rcn;j++) allRentals=allRentals.concat(d['rc'+j]||[]);
+            if(!allRentals.length) allRentals=d.rentals||meta.rentals||[];
+            console.log(`☁️ Loaded oldest legacy chunk format (${allStaff.length} staff)`);
+            applyRosterData({staff:allStaff,extra:allExtra,equip:d.equip||meta.equip||[],rentals:allRentals,
+              extraList:d.extraList||[],staffList:d.staffList||[],rentalList:d.rentalList||[],equipList:d.equipList||[]});
+          } else { console.log('☁️ No roster data found in cloud'); }
+        }
+      }
     }
 
+    // ── Load static data ──────────────────────────────────────────────────────
     if(d.orders && Array.isArray(d.orders)) DB.openOrders = d.orders;
     if(d.deletedProjects && Array.isArray(d.deletedProjects)){
-      if(!DB._deletedProjects) DB._deletedProjects=[];
-      d.deletedProjects.forEach(id=>{ if(!DB._deletedProjects.includes(id)) DB._deletedProjects.push(id); });
+      if(!DB._deletedProjects) DB._deletedProjects = [];
+      d.deletedProjects.forEach(id => { if(!DB._deletedProjects.includes(id)) DB._deletedProjects.push(id); });
     }
-
-    // ── Load custom project colors ────────────────────────────────────────
     if(d.projColors && typeof d.projColors === 'object'){
       Object.assign(PROJ_COLORS, d.projColors);
-      console.log('☁️ Loaded', Object.keys(d.projColors).length, 'custom project colors');
     }
-
-    // ── Load roster version history ───────────────────────────────────────────
     if(d.rosterHistory && Array.isArray(d.rosterHistory)){
       _persistedHistory = d.rosterHistory;
-      console.log('☁️ Loaded', _persistedHistory.length, 'history entries');
     }
-
     if(d.manualProjects && Array.isArray(d.manualProjects)){
-      d.manualProjects.forEach(p=>{
-        if(!DB.projects.find(x=>x.id===p.id)) DB.projects.push(p);
+      d.manualProjects.forEach(mp => {
+        if(!DB.projects.find(p=>p.id===mp.id) && !DB._deletedProjects?.includes(mp.id)){
+          DB.projects.push(mp);
+        }
       });
     }
 
-    if(d.gantt_data && typeof d.gantt_data==='object' && typeof GANTT!=='undefined'){
-      Object.assign(GANTT.tasks, d.gantt_data);
-      if(GANTT.projId && document.getElementById('gantt-body')) ganttRender();
-    }
+    setCloudStatus('✓ Synced');
+    renderRoster();
+    renderOverview();
 
-    const t = new Date().toLocaleTimeString('en-US',{hour:'2-digit',minute:'2-digit'});
-    setCloudStatus('✓ Synced '+t);
-    renderRoster(); renderProjTable(); renderOverview(); renderAnalytics();
-    toast('☁️ Loaded from cloud');
-  }catch(e){
-    console.error('☁️ Load error:',e);
-    setCloudStatus('✗ Load error');
-    showBanner('⚠️ Could not load from cloud: '+String(e).slice(0,60),'error');
+  } catch(err) {
+    console.error('loadFromCloud error:', err);
+    setCloudStatus('⚠ Load error');
+    if(loadMsg) loadMsg.textContent = 'Load error — check connection';
+    throw err;
   }
 }
 
-// jsonpSave — write one key/value to App Data sheet
+// jsonpSave — POST first (no size limit, handles special chars), JSONP fallback
 function jsonpSave(key, value){
-  return new Promise((resolve,reject)=>{
-    if(!APPS_SCRIPT_URL){ reject('No Apps Script URL configured'); return; }
-    const body    = JSON.stringify({action:'saveAppData', key, value});
-    const encoded = encodeURIComponent(body);
-    const kb      = Math.round(encoded.length / 1024 * 10) / 10;
-    if(encoded.length > 14000){
-      const err = `Payload too large for key="${key}": ${kb}KB (limit ~14KB). Try fewer assignments per person.`;
-      console.error('☁️', err);
-      reject(err);
-      return;
-    }
-    console.log(`☁️ jsonpSave key=${key} size=${kb}KB`);
-    const cbName  = '_zlcSave_'+Date.now()+'_'+Math.random().toString(36).slice(2,5);
-    const scriptId= '_zlcScript_'+key.replace(/[^a-zA-Z0-9]/g,'_');
-    const old     = document.getElementById(scriptId); if(old) old.remove();
-    let done = false;
-    const cleanup = ()=>{ done=true; delete window[cbName]; const el=document.getElementById(scriptId); if(el)el.remove(); };
-    window[cbName] = (r)=>{ cleanup(); if(r&&r.ok) resolve(r); else reject('Apps Script error for key='+key+': '+JSON.stringify(r)); };
-    const script   = document.createElement('script');
-    script.id      = scriptId;
-    script.src     = APPS_SCRIPT_URL+'?data='+encoded+'&callback='+cbName;
-    script.onerror = ()=>{ cleanup(); reject('Network error saving key='+key+'. Check internet connection.'); };
-    document.head.appendChild(script);
-    setTimeout(()=>{ if(!done){ cleanup(); reject('Timeout (30s) saving key='+key+'. Apps Script may be slow — try again.'); }}, 30000);
-  });
+  if(!APPS_SCRIPT_URL) return Promise.reject('No Apps Script URL');
+  const body = JSON.stringify({action:'saveAppData', key, value});
+  return fetch(APPS_SCRIPT_URL, {method:'POST', headers:{'Content-Type':'text/plain'}, body})
+    .then(r => r.json())
+    .then(j => { if(j && j.ok){ console.log('✓ cloud saved', key); return j; } throw new Error(JSON.stringify(j)); })
+    .catch(() => new Promise((resolve, reject) => {
+      const encoded = encodeURIComponent(body);
+      if(encoded.length > 13000){ reject('Payload too large: ' + key); return; }
+      const cbName   = '_zlcSave_' + Date.now() + '_' + Math.random().toString(36).slice(2,5);
+      const scriptId = '_zlcScript_' + key.replace(/[^a-zA-Z0-9]/g,'_');
+      const old = document.getElementById(scriptId); if(old) old.remove();
+      let done = false;
+      const cleanup = () => { done=true; delete window[cbName]; const el=document.getElementById(scriptId); if(el)el.remove(); };
+      window[cbName] = (d) => { cleanup(); if(d&&d.ok){ console.log('✓ cloud saved', key); resolve(d); } else reject('Save failed key='+key); };
+      const timer = setTimeout(()=>{ if(!done){ cleanup(); reject('Timeout key='+key); }}, 15000);
+      const script = document.createElement('script');
+      script.id = scriptId;
+      script.src = APPS_SCRIPT_URL + '?callback=' + cbName + '&data=' + encoded;
+      script.onerror = ()=>{ clearTimeout(timer); cleanup(); reject('Script error key='+key); };
+      document.head.appendChild(script);
+    }));
 }
 
 
 // applyRosterData — apply cloud-loaded data back to in-memory STAFF/EXTRA/EQUIP/RENTALS
 function applyRosterData(rd) {
+  // MERGE (Object.assign) date-keyed dicts instead of replacing them.
+  // This lets multiple months coexist: each month's day-keys are added
+  // without wiping out the keys loaded from other months.
+  const mergeField = (item, field, src) => {
+    if (!src || typeof src !== 'object') return;
+    if (!item[field] || typeof item[field] !== 'object') item[field] = {};
+    Object.assign(item[field], src);
+  };
   const apply = (arr, source) => (arr||[]).forEach(saved => {
     const item = source.find(e => e.id === saved.id);
     if (item) {
-      if(saved.a)         item.a         = saved.a;
-      if(saved.notes)     item.notes     = saved.notes;
-      if(saved.wh)        item.wh        = saved.wh;
-      if(saved.cc)        item.cc        = saved.cc;
-      if(saved.co)        item.co        = saved.co;
-      if(saved.confirmed) item.confirmed = saved.confirmed;
-      if(saved.pour)      item.pour      = saved.pour;
-      if(saved.name)      item.name      = saved.name;
+      mergeField(item, 'a',         saved.a);
+      mergeField(item, 'notes',     saved.notes);
+      mergeField(item, 'wh',        saved.wh);
+      mergeField(item, 'cc',        saved.cc);
+      mergeField(item, 'co',        saved.co);
+      mergeField(item, 'confirmed', saved.confirmed);
+      mergeField(item, 'pour',      saved.pour);
+      if(saved.name)      item.name    = saved.name;
       if(saved.project !== undefined) item.project = saved.project;
     }
   });
@@ -5190,11 +5204,22 @@ function showBanner(msg, type='error', duration=6000){
 }
 
 function showSaveIndicator(state, msg){
-  // Optional UI indicator — safe no-op if element not present
+  // Visible save badge: saving / saved / error
   const el = document.getElementById('save-indicator');
   if(!el) return;
-  el.textContent = msg;
+  el.textContent = msg || '';
   el.style.display = msg ? 'block' : 'none';
+  el.classList.remove('visible','saving','saved','error');
+  if(msg){
+    el.classList.add('visible');
+    if(state === 'saving') el.classList.add('saving');
+    else if(state === 'error') el.classList.add('error');
+    else el.classList.add('saved');
+  }
+  clearTimeout(el._hideTimer);
+  if(state !== 'saving' && msg){
+    el._hideTimer = setTimeout(()=>el.classList.remove('visible'), 4500);
+  }
 }
 
 // jsonpLoad — read all keys from App Data sheet
@@ -5641,7 +5666,7 @@ function bulkCopySelected(){
   });
   const pasteBtn=document.getElementById('bulk-paste-btn');
   if(pasteBtn) pasteBtn.style.display='inline-block';
-  toast(`📋 Copied ${_bulkClipboard.length} cell${_bulkClipboard.length!==1?'s':''}  — click destination cell then Ctrl+V to paste`);
+  toast(`📋 Copied ${_bulkClipboard.length} cell${_bulkClipboard.length!==1?'s':''}. Click "Paste to date…" to paste.`);
 }
 
 function bulkEnterPasteMode(){
@@ -6752,11 +6777,9 @@ function printWeeklySchedule() {
   const body = document.getElementById('weekly-sched-body');
   if(!body) return;
   const win = window.open('','_blank','width=1400,height=800');
-  win.document.write('<html><head><title>Weekly Logistics Schedule</title>'
-    + '<style>body{font-family:Arial,sans-serif;margin:20px}@media print{body{margin:0}}</style>'
-    + '</head><body>' + body.outerHTML
-    + '<scr' + 'ipt>window.onload=()=>window.print()</scr' + 'ipt>'
-    + '</body></html>');
+  win.document.write(`<html><head><title>Weekly Logistics Schedule</title>
+    <style>body{font-family:Arial,sans-serif;margin:20px}@media print{body{margin:0}}</style>
+    </head><body>${body.outerHTML}<script>window.onload=()=>window.print()<\/script></body></html>`);
   win.document.close();
 }
 
@@ -6815,6 +6838,188 @@ function exitWeeklyView() {
   renderRoster();
 }
 
+
+// ── Export full backup as JSON ────────────────────────────────────────────────
+function exportBackup() {
+  const now      = new Date();
+  const rd       = buildRosterData();
+  const backup   = {
+    version:   '2.0',
+    exportedAt: now.toISOString(),
+    month:     `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`,
+    staff:     rd.staff,
+    extra:     rd.extra,
+    equip:     rd.equip,
+    rentals:   rd.rentals,
+    extraList: rd.extraList,
+    staffList: rd.staffList,
+    rentalList:rd.rentalList,
+    equipList: rd.equipList,
+    projColors: PROJ_COLORS,
+    orders:    DB.openOrders || [],
+    manualProjects: DB.projects.filter(p=>p._manual) || [],
+  };
+  const blob = new Blob([JSON.stringify(backup, null, 2)], {type:'application/json'});
+  const url  = URL.createObjectURL(blob);
+  const a    = document.createElement('a');
+  a.href     = url;
+  a.download = `ZLC_Roster_Backup_${backup.month}.json`;
+  a.click();
+  URL.revokeObjectURL(url);
+  toast('✓ Backup downloaded');
+}
+
+// ── Import backup from JSON file ──────────────────────────────────────────────
+function importBackup(input) {
+  const file = input.files[0];
+  if(!file) return;
+  const reader = new FileReader();
+  reader.onload = e => {
+    try {
+      const data = JSON.parse(e.target.result);
+      if(!data.staff) { toast('⚠ Invalid backup file'); return; }
+      applyRosterData({
+        staff:      data.staff     || [],
+        extra:      data.extra     || [],
+        equip:      data.equip     || [],
+        rentals:    data.rentals   || [],
+        extraList:  data.extraList  || [],
+        staffList:  data.staffList  || [],
+        rentalList: data.rentalList || [],
+        equipList:  data.equipList  || [],
+      });
+      if(data.projColors) Object.assign(PROJ_COLORS, data.projColors);
+      saveLocal();
+      renderRoster();
+      renderOverview();
+      toast(`✓ Backup imported (${data.exportedAt?.slice(0,10)||'unknown date'})`);
+    } catch(err) {
+      toast('⚠ Error reading backup: ' + err.message);
+    }
+    input.value = '';
+  };
+  reader.readAsText(file);
+}
+
+
+// ── Legacy cloud save (JSONP chunks) — used until Apps Script is updated ──────
+// ── makeChunks — splits an array into chunks of a given size ──────────────────
+function makeChunks(arr, size){
+  const out=[];
+  for(let i=0;i<arr.length;i+=size) out.push(arr.slice(i,i+size));
+  return out;
+}
+
+async function _doCloudSaveLegacy(rosterData){
+  const c = compressRoster(rosterData);
+  // Save staff 1 per chunk
+  let chunks = makeChunks(c.staff, 1);
+  for(let i=0; i<chunks.length; i++){
+    try { await jsonpSave('sc'+i, chunks[i]); await delay(300); } catch(e){ console.warn('sc'+i+' failed',e); }
+  }
+  // Save extras 1 per chunk
+  let exChunks = makeChunks(c.extra, 1);
+  for(let j=0; j<exChunks.length; j++){
+    try { await jsonpSave('ewc'+j, exChunks[j]); await delay(200); } catch(e){ console.warn('ewc'+j+' failed',e); }
+  }
+  // Save other data
+  try { await jsonpSave('rentals',    c.rentals || []);    await delay(150); } catch(e){}
+  try { await jsonpSave('equip',      c.equip   || []);    await delay(150); } catch(e){}
+  try { await jsonpSave('extraList',  c.extraList || []);  await delay(150); } catch(e){}
+  try { await jsonpSave('rentalList', c.rentalList || []); await delay(150); } catch(e){}
+  try { await jsonpSave('equipList',  c.equipList || []);  await delay(150); } catch(e){}
+  try { await jsonpSave('scMeta', {
+    chunkCount: chunks.length,
+    extraChunkCount: exChunks.length,
+  }); } catch(e){}
+  setCloudStatus('✓ Saved (legacy)');
+  showSaveIndicator && showSaveIndicator('ok','✓ Saved');
+}
+
+
+// ── Month detail modal: shows roster projects + values for a month ─────────────
+function showMonthDetail(schedIdx) {
+  const s = (window._lastSchedMonths || [])[schedIdx];
+  if(!s) return;
+
+  // Always recompute projDays live from current STAFF/EXTRA data (avoids stale snapshot)
+  const yr  = s.yr  !== undefined ? s.yr  : new Date().getFullYear();
+  const m   = s.m   !== undefined ? s.m   : new Date().getMonth();
+  const dim = new Date(yr, m+1, 0).getDate();
+  const projDaysLive = {};
+  [...STAFF,...EXTRA].forEach(item => {
+    for(let dd=1; dd<=dim; dd++){
+      const key = `${yr}-${m+1}-${dd}`;
+      const asgn = item.a?.[key];
+      if(!asgn) continue;
+      getAsgnPids(asgn).forEach(pid => {
+        if(pid && pid!=='OFF' && pid!=='Warehouse' && pid!=='000') projDaysLive[pid]=(projDaysLive[pid]||0)+1;
+      });
+    }
+  });
+
+  // Build project breakdown for this month
+  const rows = Object.entries(projDaysLive)
+    .map(([pid, days]) => {
+      const proj = DB.projects.find(p => p.id === pid);
+      if(!proj) return null;
+      const budgetDays = (proj.codes||[]).reduce((a,c)=>a+(c.foremanDays||0)+(c.laborerDays||0),0);
+      const projVal    = tv(proj) || bv(proj) || 0; // sum of code values + approved COs
+      const earned     = budgetDays>0 ? Math.min(days/budgetDays,1)*projVal
+                       : projVal>0&&days>0 ? days*500 : 0;
+      // Count teams working + collect actual classcodes assigned this month
+      const teams = new Set();
+      const usedCodes = new Set();
+      [...STAFF,...EXTRA].forEach(person => {
+        for(let dd=1; dd<=dim; dd++){
+          const key=`${yr}-${m+1}-${dd}`;
+          if((person.a||{})[key] && getAsgnPids((person.a||{})[key]).includes(pid)){
+            teams.add(person.team||person.name);
+            const cc = (person.cc||{})[key];
+            if(cc) usedCodes.add(cc);
+          }
+        }
+      });
+      return { proj, days, earned, teams: [...teams], usedCodes: [...usedCodes] };
+    })
+    .filter(Boolean)
+    .sort((a,b) => b.earned - a.earned);
+
+  const totalEarned = rows.reduce((a,r) => a+r.earned, 0);
+
+  const rowsHtml = rows.map(r => {
+    const codesHtml = r.usedCodes.sort().map(code => {
+      const col = CODE_COLORS[code] || '#888';
+      const name = CODES_MAP[code] || code;
+      return `<span title="${name}" style="display:inline-flex;align-items:center;gap:3px;font-size:10px;font-weight:600;padding:1px 6px;border-radius:99px;background:${col}22;color:${col};margin-right:3px">
+        <span style="width:6px;height:6px;border-radius:50%;background:${col};flex-shrink:0;display:inline-block"></span>${code}</span>`;
+    }).join('');
+    return `
+    <div style="display:grid;grid-template-columns:90px 1fr auto auto;gap:8px;align-items:start;padding:8px 0;border-bottom:1px solid var(--border)">
+      <span style="font-weight:700;font-size:12px;color:var(--blue)">${r.proj.id}</span>
+      <div>
+        <div style="font-size:12px;font-weight:600">${r.proj.name}</div>
+        <div style="font-size:10px;color:var(--text2);margin-top:2px">${r.teams.slice(0,4).join(', ')}${r.teams.length>4?' +more':''}</div>
+        ${codesHtml ? `<div style="margin-top:4px">${codesHtml}</div>` : ''}
+      </div>
+      <div style="text-align:right;font-size:11px;color:var(--text2)">${r.days} days</div>
+      <div style="text-align:right;font-size:12px;font-weight:700;color:var(--green);min-width:80px">${fmt(r.earned)}</div>
+    </div>`;
+  }).join('');
+
+  showModal(`
+    <div class="modal-title">📅 ${s.label} — Roster Activity</div>
+    <div style="margin-bottom:12px;padding:10px;background:var(--bg3);border-radius:8px;display:flex;gap:20px">
+      <div><div style="font-size:10px;color:var(--text2)">PROJECTS ACTIVE</div><div style="font-size:20px;font-weight:700">${rows.length}</div></div>
+      <div><div style="font-size:10px;color:var(--text2)">ESTIMATED VALUE</div><div style="font-size:20px;font-weight:700;color:var(--blue)">${fmt(totalEarned)}</div></div>
+    </div>
+    <div style="font-size:10px;color:var(--text3);margin-bottom:8px;display:grid;grid-template-columns:90px 1fr auto auto;gap:8px;font-weight:700;padding-bottom:4px;border-bottom:2px solid var(--border)">
+      <span>PROJECT</span><span>NAME / TEAMS / CODES</span><span>DAYS</span><span style="text-align:right">VALUE</span>
+    </div>
+    ${rowsHtml || '<div style="padding:20px;text-align:center;color:var(--text3)">No roster assignments this month</div>'}
+  `);
+}
+
 // ─── INIT ─────────────────────────────────────────────────────────────────────
 loadLocal();
 renderAnalytics();
@@ -6853,12 +7058,22 @@ setInterval(async ()=>{
       }
     }
   } catch(e){ /* silent */ }
-}, 2 * 60 * 1000); // every 2 minutes
+}, 10 * 60 * 1000); // every 2 minutes
+
+
+// Best-effort save before closing/reloading the tab
+window.addEventListener('beforeunload', () => {
+  try {
+    if (_cloudPendingSnapshot && !_cloudSaveInProgress) {
+      flushPendingCloudSave(true);
+    }
+  } catch(e) {}
+});
 
 // Auto-sync from Sheets every 5 minutes in background
 setInterval(() => {
   syncFromSheets(true); // true = silent mode
-}, 5 * 60 * 1000);
+}, 15 * 60 * 1000); // 15 min
 
 // Show loading screen while cloud data loads
 (async () => {
@@ -6867,29 +7082,6 @@ setInterval(() => {
   try {
     if (loadMsg) loadMsg.textContent = 'Loading data from cloud…';
     await loadFromCloud();
-    if (loadMsg) loadMsg.textContent = 'Saving…';
-    // Migrate: ensure item lists are saved as dedicated keys
-    try {
-      const rd = buildRosterData();
-      const c  = compressRoster(rd);
-      // Save extra workers as chunks
-      const exChunks = [];
-      for(let j=0; j<c.extra.length; j+=3) exChunks.push(c.extra.slice(j,j+3));
-      for(let j=0; j<exChunks.length; j++){
-        await jsonpSave('ex'+j, exChunks[j]);
-      }
-      await jsonpSave('rentals',    c.rentals    || []);
-      await jsonpSave('equip',      c.equip      || []);
-      await jsonpSave('extraList',  c.extraList  || []);
-      await jsonpSave('staffList',  c.staffList  || []);
-      await jsonpSave('rentalList', c.rentalList || []);
-      await jsonpSave('equipList',  c.equipList  || []);
-      await jsonpSave('scMeta', {
-        chunkCount: (c.staff ? Math.ceil(c.staff.length) : 0),
-        extraChunkCount: exChunks.length,
-      });
-      console.log('☁️ Migration save complete');
-    } catch(e) { console.warn('Migration save failed:', e); }
     if (loadMsg) loadMsg.textContent = 'Ready!';
   } catch(e) {
     if (loadMsg) loadMsg.textContent = 'Loaded from cache';
@@ -6935,7 +7127,7 @@ async function loadHistoryFromCloud(){
     const json = await jsonpLoad();
     if(json?.data?.rosterHistory && Array.isArray(json.data.rosterHistory)){
       _persistedHistory = json.data.rosterHistory;
-      console.log('☁️ Loaded', _persistedHistory.length, 'history entries');
+      // console.log('☁️ Loaded', _persistedHistory.length, 'history entries');
     }
   } catch(e) { console.warn('History load failed:', e); }
 }
@@ -7147,6 +7339,21 @@ function updateCOBadge() {
 // ─── UNDO ──────────────────────────────────────────────────────────────────────
 const _undoStack = [];
 const UNDO_LIMIT = 50;
+
+// showUndo — toast with an Undo button that fires the callback
+let _showUndoTimer = null;
+function showUndo(label, undoFn) {
+  const existing = document.getElementById('undo-toast');
+  if (existing) existing.remove();
+  clearTimeout(_showUndoTimer);
+  const el = document.createElement('div');
+  el.id = 'undo-toast';
+  el.style.cssText = 'position:fixed;bottom:24px;left:50%;transform:translateX(-50%);background:#1a1a18;color:#fff;border-radius:8px;padding:10px 16px;font-size:13px;display:flex;align-items:center;gap:12px;box-shadow:0 4px 16px rgba(0,0,0,.25);z-index:9999;animation:fadeInUp .2s ease;white-space:nowrap;';
+  el.innerHTML = '<span>'+label+'</span><button id="undo-toast-btn" style="background:rgba(255,255,255,.15);border:1px solid rgba(255,255,255,.3);color:#fff;border-radius:5px;padding:3px 10px;font-size:12px;cursor:pointer;font-weight:600;">Undo</button>';
+  document.body.appendChild(el);
+  el.querySelector('#undo-toast-btn').addEventListener('click', () => { el.remove(); clearTimeout(_showUndoTimer); if(undoFn) undoFn(); });
+  _showUndoTimer = setTimeout(() => { if(el.parentNode) el.remove(); }, 6000);
+}
 
 function undoPush(entry) {
   _undoStack.push(entry);
