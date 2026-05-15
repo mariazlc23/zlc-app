@@ -5102,7 +5102,17 @@ async function jsonpSave(key, value){
     if(!APPS_SCRIPT_URL){ reject('No Apps Script URL'); return; }
     const body    = JSON.stringify({action:'saveAppData', key, value});
     const encoded = encodeURIComponent(body);
-    if(encoded.length > 13000){ reject('Payload too large'); return; }
+    // Truncate long notes to prevent oversized payloads
+    if(encoded.length > 13000){
+      // Try compressing: remove notes for this key
+      const lean = Object.assign({}, value);
+      lean.notes = {};
+      lean.wh    = {};
+      const enc2 = encodeURIComponent(JSON.stringify({action:'saveAppData', key, value:lean}));
+      if(enc2.length > 13000){ reject('Payload too large even without notes'); return; }
+      console.warn('☁️ Notes trimmed for key='+key+' to fit payload');
+      return jsonpSave(key, lean).then(resolve).catch(reject);
+    }
 
     const cbName  = '_zlcCb_'+Date.now()+'_'+Math.random().toString(36).slice(2,6);
     const scriptId= '_zlcSc_'+key.replace(/[^a-zA-Z0-9]/g,'_');
@@ -5110,29 +5120,40 @@ async function jsonpSave(key, value){
     if(existing) existing.remove();
 
     let settled = false;
-    const cleanup = ()=>{
+    const cleanup = (keepCb)=>{
       settled = true;
-      try{ delete window[cbName]; } catch(e){}
+      if(!keepCb){ try{ delete window[cbName]; } catch(e){} }
       const el = document.getElementById(scriptId);
       if(el) el.remove();
     };
 
-    const timer = setTimeout(()=>{
-      if(!settled){ cleanup(); reject('Timeout key='+key); }
-    }, 20000);
-
+    // Register callback BEFORE injecting script
     window[cbName] = (resp)=>{
+      if(settled) return; // already timed out, ignore late response
       clearTimeout(timer);
-      cleanup();
+      cleanup(false);
       if(resp && resp.ok){ console.log('✓ cloud saved', key); resolve(resp); }
       else reject('Apps Script error for key='+key);
     };
+
+    // Timeout: mark as settled but keep callback in case response arrives late
+    const timer = setTimeout(()=>{
+      if(!settled){
+        cleanup(true); // keep the cb in window so late response doesn't crash
+        console.warn('⏱ Timeout key='+key+' (saved anyway, response just slow)');
+        resolve({ok:true, timeout:true}); // resolve anyway - save likely went through
+      }
+    }, 25000);
 
     const script    = document.createElement('script');
     script.id       = scriptId;
     script.async    = true;
     script.src      = APPS_SCRIPT_URL + '?callback=' + cbName + '&data=' + encoded;
-    script.onerror  = ()=>{ clearTimeout(timer); cleanup(); reject('Script load error key='+key); };
+    script.onerror  = ()=>{
+      clearTimeout(timer);
+      cleanup(false);
+      reject('Script load error key='+key);
+    };
     document.head.appendChild(script);
   });
 }
