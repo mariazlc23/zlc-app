@@ -852,7 +852,7 @@ const CAT_COLORS={staff:'#185FA5',extra:'#BA7517',equip:'#3B6D11',rental:'#88878
 const DEFAULT_CONFIG = {
   SHEET_ID: '1Y35oa2ebgCisj3PzVs2dTMUN5dY2Hhci4RIt55Kn44Y',
   API_KEY: 'AIzaSyCCuKyfurmT2w-L2dn6-XbvupaOmlHufUE',
-  APPS_SCRIPT_URL: 'https://script.google.com/macros/s/AKfycbyoiqJzVpKqRRd7uDH4Ycn1lq8-wOHsmJ6A4HPTWbwaAld00I6OGeBRKk6gO8ne6ROiOA/exec'
+  APPS_SCRIPT_URL: 'https://script.google.com/macros/s/AKfycby6JunFbUqaEL9-OPQvTXAE-kBtYXghEjA4pMx_y_rr_QPWAgmgBUnQJr9GAvGK1y-ZNA/exec'
 };
 
 function getRuntimeConfig() {
@@ -2425,12 +2425,13 @@ function renderOrders(){
 
 function markOrderDone(id){
   const o=(DB.openOrders||[]).find(x=>x.id===id);
-  if(o){o.status='Done';saveLocal();}
+  if(o){ o.status='Done'; _ordersDirty=true; saveLocal(); }
   renderOrders();
 }
 
 function deleteOrder(id){
   DB.openOrders=(DB.openOrders||[]).filter(x=>x.id!==id);
+  _ordersDirty=true;
   saveLocal();renderOrders();
 }
 
@@ -2458,6 +2459,7 @@ function saveOrder(){
   if(!DB.openOrders) DB.openOrders=[];
   const idx = DB.openOrders.findIndex(x=>x.id===id);
   if(idx>=0) DB.openOrders[idx]=o; else DB.openOrders.push(o);
+  _ordersDirty=true;
   saveLocal();closeModal();renderOrders();
   toast(`Order "${title}" saved`);
 }
@@ -2749,11 +2751,13 @@ function deleteProject(pid){
     document.getElementById('proj-detail-area').innerHTML='';
   }
 
+  _projsDirty=true;
   saveLocal();
   sheetWrite('deleteProject',{projectId:pid});
   showUndo(`Project ${pid} deleted — Undo?`, () => {
     DB.projects.push(_deleted);
     DB.projects.sort((a,b)=>String(a.id).localeCompare(String(b.id)));
+    _projsDirty=true;
     saveLocal(); renderProjTable(); renderOverview(); renderAnalytics();
     toast(`Project ${pid} restored`);
   });
@@ -4421,6 +4425,7 @@ function saveProject(){
   const fullDate=`${mi+1}/1/${yr}`;
   const newProj = {id:num,name,pm,pmEmail,address,client,codes,month,year:yr,status,notes:'',cos:[],rfis:[],subs:[],history:[{date:todate(),text:`Project created — ${name}`,type:'created'}],_manual:true,superInfo,acctInfo};
   DB.projects.push(newProj);
+  _projsDirty=true;
   saveLocal(); // saves to cloud (roster cloud) so all users see it immediately
   renderProjTable();renderOverview();selProject(num);
   closeModal();
@@ -4454,6 +4459,7 @@ function saveEditProject(pid){
   if(newCodes.length) p.codes=newCodes;
   p.history.push({date:todate(),text:`Project edited — ${p.name}`,type:'created'});
   p._manual=true;
+  _projsDirty=true;
   saveLocal();
   closeModal();
   toast(`${pid} updated`);
@@ -4718,7 +4724,7 @@ function saveToCloud(rosterData){
   if(!APPS_SCRIPT_URL) return;
   _cloudPendingSnapshot = rosterData;
   clearTimeout(_cloudTimer);
-  _cloudTimer = setTimeout(()=>flushPendingCloudSave(), 1500); // 1.5s debounce — saves quickly after edits
+  _cloudTimer = setTimeout(()=>flushPendingCloudSave(), 4000); // 4s debounce — reduce saves on rapid changes
 }
 
 async function flushPendingCloudSave(force=false, _retryCount=0){
@@ -4761,26 +4767,60 @@ async function _doCloudSave(rosterData){
     // e.g. "2606" = June 2026
     const mp = `${String(saveYear).slice(-2)}${String(saveMon+1).padStart(2,'0')}`;
 
-    // Save each staff member individually: m2606s0, m2606s1 …
+    // Save each item with retry on failure
     let ok=0, fail=0;
+    const saveWithRetry = async (key, val, retries=2) => {
+      for(let attempt=0; attempt<=retries; attempt++){
+        try{
+          await jsonpSave(key, val);
+          ok++;
+          return;
+        } catch(e){
+          if(attempt < retries){
+            await delay(1000 * (attempt+1)); // 1s, 2s backoff
+          } else {
+            console.warn(key+' failed after '+retries+' retries:', e);
+            fail++;
+          }
+        }
+      }
+    };
+
+    // Staff — save with auto-split if payload too large
     for(let i=0;i<c.staff.length;i++){
-      try{ await jsonpSave(`m${mp}s${c.staff[i].id}`, c.staff[i]); await delay(150); ok++; }
-      catch(e){ console.warn(`m${mp}s${i} failed`,e); fail++; }
+      const person = c.staff[i];
+      const enc = encodeURIComponent(JSON.stringify({action:'saveAppData',key:'x',value:person}));
+      if(enc.length > 6000){
+        // Payload too large — save assignments only, notes separately
+        const slim = {id:person.id, name:person.name, a:person.a||{}, 
+                      cc:person.cc||{}, co:person.co||{}, 
+                      confirmed:person.confirmed||{}, pour:person.pour||{}};
+        await saveWithRetry(`m${mp}se${person.id}`, slim);
+        await delay(400);
+        // Save notes+wh separately
+        if(Object.keys(person.notes||{}).length || Object.keys(person.wh||{}).length){
+          await saveWithRetry(`m${mp}sn${person.id}`, {id:person.id, notes:person.notes||{}, wh:person.wh||{}});
+          await delay(400);
+        }
+      } else {
+        await saveWithRetry(`m${mp}se${person.id}`, person);
+        await delay(400);
+      }
     }
     // Extra workers
     for(let i=0;i<c.extra.length;i++){
-      try{ await jsonpSave(`m${mp}ew${c.extra[i].id}`, c.extra[i]); await delay(120); ok++; }
-      catch(e){ console.warn(`m${mp}ew${i} failed`,e); fail++; }
+      await saveWithRetry(`m${mp}ewew${c.extra[i].id}`, c.extra[i]);
+      await delay(300);
     }
     // Equipment
     for(let i=0;i<(c.equip||[]).length;i++){
-      try{ await jsonpSave(`m${mp}eq${c.equip[i].id}`, c.equip[i]); await delay(120); ok++; }
-      catch(e){ console.warn(`m${mp}eq${i} failed`,e); fail++; }
+      await saveWithRetry(`m${mp}eq${c.equip[i].id}`, c.equip[i]);
+      await delay(300);
     }
     // Rentals
     for(let i=0;i<(c.rentals||[]).length;i++){
-      try{ await jsonpSave(`m${mp}r${c.rentals[i].id}`, c.rentals[i]); await delay(120); ok++; }
-      catch(e){ console.warn(`m${mp}r${i} failed`,e); fail++; }
+      await saveWithRetry(`m${mp}rr${c.rentals[i].id}`, c.rentals[i]);
+      await delay(300);
     }
     // Meta key — counts so loader knows how many keys to read
     try{ await jsonpSave(`m${mp}meta`,{
@@ -4805,6 +4845,8 @@ async function _doCloudSave(rosterData){
       _saveFailCount=0;
       setCloudStatus('✓ Guardado');
       showSaveIndicator&&showSaveIndicator('ok','✓ Guardado');
+      // Cloud save confirmed — clear the emergency local backup
+      try { localStorage.removeItem('zlc_roster_unsaved_backup'); } catch(e) {}
     }
   } catch(err){
     _saveFailCount++;
@@ -4988,12 +5030,25 @@ async function loadFromCloud(silent=false){
         const mp   = metaKey.replace('meta',''); // e.g. "m2605"
         const meta = d[metaKey] || {};
         const staff=[],extra=[],equip=[],rentals=[];
-        // Load by ID-based keys (e.g. m2606se1, m2606ewe1)
+        // Load by ID-based keys (e.g. m2606se1, m2606ewew1, m2606eq1, m2606rr1)
+        const staffNotes = {};
         Object.keys(d).forEach(k => {
-          if(k.startsWith(`${mp}s`))  { const v=d[k]; if(v&&v.id) staff.push(v); }
+          if(k.startsWith(`${mp}sn`)) {
+            const v = d[k];
+            if(v && v.id) staffNotes[v.id] = v;
+          }
+          else if(k.startsWith(`${mp}se`)) { const v=d[k]; if(v&&v.id) staff.push(v); }
           else if(k.startsWith(`${mp}ew`)) { const v=d[k]; if(v&&v.id) extra.push(v); }
           else if(k.startsWith(`${mp}eq`)) { const v=d[k]; if(v&&v.id) equip.push(v); }
-          else if(k.startsWith(`${mp}r`))  { const v=d[k]; if(v&&v.id) rentals.push(v); }
+          else if(k.startsWith(`${mp}rr`)) { const v=d[k]; if(v&&v.id) rentals.push(v); }
+        });
+        // Merge notes/warehouse notes back into staff records
+        staff.forEach(person => {
+          const n = staffNotes[person.id];
+          if(n) {
+            person.notes = { ...(person.notes || {}), ...(n.notes || {}) };
+            person.wh    = { ...(person.wh    || {}), ...(n.wh    || {}) };
+          }
         });
         applyRosterData({staff,extra,equip,rentals,extraList:[],staffList:[],rentalList:[],equipList:[]});
       });
@@ -5095,28 +5150,67 @@ async function loadFromCloud(silent=false){
 }
 
 // jsonpSave — POST first (no size limit, handles special chars), JSONP fallback
-function jsonpSave(key, value){
-  if(!APPS_SCRIPT_URL) return Promise.reject('No Apps Script URL');
-  const body = JSON.stringify({action:'saveAppData', key, value});
-  return fetch(APPS_SCRIPT_URL, {method:'POST', headers:{'Content-Type':'text/plain'}, body})
-    .then(r => r.json())
-    .then(j => { if(j && j.ok){ console.log('✓ cloud saved', key); return j; } throw new Error(JSON.stringify(j)); })
-    .catch(() => new Promise((resolve, reject) => {
-      const encoded = encodeURIComponent(body);
-      if(encoded.length > 13000){ reject('Payload too large: ' + key); return; }
-      const cbName   = '_zlcSave_' + Date.now() + '_' + Math.random().toString(36).slice(2,5);
-      const scriptId = '_zlcScript_' + key.replace(/[^a-zA-Z0-9]/g,'_');
-      const old = document.getElementById(scriptId); if(old) old.remove();
-      let done = false;
-      const cleanup = () => { done=true; delete window[cbName]; const el=document.getElementById(scriptId); if(el)el.remove(); };
-      window[cbName] = (d) => { cleanup(); if(d&&d.ok){ console.log('✓ cloud saved', key); resolve(d); } else reject('Save failed key='+key); };
-      const timer = setTimeout(()=>{ if(!done){ cleanup(); reject('Timeout key='+key); }}, 15000);
-      const script = document.createElement('script');
-      script.id = scriptId;
-      script.src = APPS_SCRIPT_URL + '?callback=' + cbName + '&data=' + encoded;
-      script.onerror = ()=>{ clearTimeout(timer); cleanup(); reject('Script error key='+key); };
-      document.head.appendChild(script);
-    }));
+// ── Cloud save: uses fetch() with no-cors (fire-and-forget, no CORS issues) ──
+// Falls back to JSONP if fetch unavailable
+async function jsonpSave(key, value){
+  return new Promise((resolve, reject)=>{
+    if(!APPS_SCRIPT_URL){ reject('No Apps Script URL'); return; }
+    const body    = JSON.stringify({action:'saveAppData', key, value});
+    const encoded = encodeURIComponent(body);
+    // Truncate long notes to prevent oversized payloads
+    if(encoded.length > 13000){
+      // Try compressing: remove notes for this key
+      const lean = Object.assign({}, value);
+      lean.notes = {};
+      lean.wh    = {};
+      const enc2 = encodeURIComponent(JSON.stringify({action:'saveAppData', key, value:lean}));
+      if(enc2.length > 13000){ reject('Payload too large even without notes'); return; }
+      console.warn('☁️ Notes trimmed for key='+key+' to fit payload');
+      return jsonpSave(key, lean).then(resolve).catch(reject);
+    }
+
+    const cbName  = '_zlcCb_'+Date.now()+'_'+Math.random().toString(36).slice(2,6);
+    const scriptId= '_zlcSc_'+key.replace(/[^a-zA-Z0-9]/g,'_');
+    const existing = document.getElementById(scriptId);
+    if(existing) existing.remove();
+
+    let settled = false;
+    const cleanup = (keepCb)=>{
+      settled = true;
+      if(!keepCb){ try{ delete window[cbName]; } catch(e){} }
+      const el = document.getElementById(scriptId);
+      if(el) el.remove();
+    };
+
+    // Register callback BEFORE injecting script
+    window[cbName] = (resp)=>{
+      if(settled) return; // already timed out, ignore late response
+      clearTimeout(timer);
+      cleanup(false);
+      if(resp && resp.ok){ console.log('✓ cloud saved', key); resolve(resp); }
+      else reject('Apps Script error for key='+key);
+    };
+
+    // Timeout: reject — do NOT report success without confirmation
+    const timer = setTimeout(()=>{
+      if(!settled){
+        cleanup(false);
+        console.warn('⏱ Timeout key=' + key + ' — NOT confirmed');
+        reject(new Error('Save timeout for key=' + key));
+      }
+    }, 25000);
+
+    const script    = document.createElement('script');
+    script.id       = scriptId;
+    script.async    = true;
+    script.src      = APPS_SCRIPT_URL + '?callback=' + cbName + '&data=' + encoded;
+    script.onerror  = ()=>{
+      clearTimeout(timer);
+      cleanup(false);
+      reject('Script load error key='+key);
+    };
+    document.head.appendChild(script);
+  });
 }
 
 
@@ -5245,6 +5339,17 @@ function jsonpLoad(){
 function saveLocal(){
   try{
     const rosterData = buildRosterData();
+
+    // Emergency local backup before cloud save — removed on successful cloud save
+    try {
+      localStorage.setItem('zlc_roster_unsaved_backup', JSON.stringify({
+        savedAt: new Date().toISOString(),
+        data: rosterData
+      }));
+    } catch(e) {
+      console.warn('Could not write emergency backup:', e);
+    }
+
     saveToCloud(rosterData);
     // Colors are now saved to cloud — localStorage is just a local fallback
     try { localStorage.setItem('zlc_proj_colors', JSON.stringify(PROJ_COLORS)); } catch(e){}
@@ -6779,7 +6884,7 @@ function printWeeklySchedule() {
   const win = window.open('','_blank','width=1400,height=800');
   win.document.write(`<html><head><title>Weekly Logistics Schedule</title>
     <style>body{font-family:Arial,sans-serif;margin:20px}@media print{body{margin:0}}</style>
-    </head><body>${body.outerHTML}<script>window.onload=()=>window.print()<\/script></body></html>`);
+    </head><body>${body.outerHTML}<scr"+"ipt>window.onload=()=>window.print()<\/script></body></html>`);
   win.document.close();
 }
 
